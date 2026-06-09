@@ -22,6 +22,8 @@ params:
   seed: 20260609
 ---
 
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
 ## Setup
 
 **Purpose**: Load packages, source stage functions, fix the seed.
