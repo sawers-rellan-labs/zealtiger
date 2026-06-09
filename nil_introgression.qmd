@@ -481,3 +481,50 @@ jsonlite::write_json(
   "results/run_metadata.json", pretty = TRUE, auto_unbox = TRUE
 )
 ```
+
+---
+
+## Benchmarking RTIGER
+
+**Purpose**: use the simulated NILs as ground truth to benchmark RTIGER's
+ancestry/segment calling at the real **SNP50K** regime (λ ≈ 0.43×, ~71% missing).
+
+**Approach**: `make_rtiger_benchmark.R` writes 100 NILs as RTIGER allele-count
+files with known truth; `fit_rtiger.R` fits RTIGER (Julia backend, fork
+`faustovrz/RTIGER@optimize-julia-core`) at a fixed rigidity; `score_rtiger.R`
+scores the calls against truth. A rigidity sweep selects the optimum **r = 3**
+(see `docs/06`–`docs/11`). The tables below are that r = 3 fit; reproduce with
+`Rscript fit_rtiger.R 0 3 0` then
+`Rscript score_rtiger.R --rtiger results/rtiger_benchmark/rtiger_out_r3/rtiger_result.rds`.
+
+**Expected outcome**: precision/recall by genotype class at the optimal rigidity.
+
+```{r rtiger_benchmark, echo=FALSE}
+# Headline r = 3 results on the 100-NIL SNP50K benchmark (save.results = FALSE).
+# Static (no Julia/RTIGER needed to render); see docs/08 and results/rtiger_benchmark/scoring/.
+marker <- tibble::tribble(
+  ~state,                   ~recall, ~precision,
+  "0 homozygous recurrent",   1.000,     0.999,
+  "1 heterozygous",           0.974,     0.990,
+  "2 homozygous donor",       0.998,     0.997
+)
+segment <- tibble::tribble(
+  ~class,             ~n_truth, ~precision, ~recall,   ~F1,  ~FDR, ~boundary_kb,
+  "homozygous_donor",      884,      0.987,   0.920, 0.952, 0.013,          85,
+  "donor_present",        1400,      0.981,   0.869, 0.921, 0.019,          85,
+  "heterozygous",          516,      0.962,   0.775, 0.858, 0.039,         127
+)
+knitr::kable(marker,
+  caption = "Marker-level (RTIGER, r = 3): overall accuracy 0.999, 0.36% uncovered.")
+knitr::kable(segment,
+  caption = paste("Segment-level, reciprocal overlap >= 0.5.",
+                  "Crossovers: 19.4 called vs 21.8 true (bias -2.4)."))
+```
+
+**Takeaways**: marker-level genotyping is near-perfect (**99.9%**); donor-segment
+**precision ≥ 0.98 (FDR ≤ 2%)** — almost no false introgressions; **recall
+~0.87–0.92**, the missing ~8–13% being sub-Mb segments below the SNP50K detection
+floor (`docs/09`), not a tuning shortfall. Boundaries land within ~2 marker
+spacings (~85 kb; ~127 kb for het). RTIGER ran on the **fast path**
+(`save.results = FALSE`, ~30 s / 100 samples) and was scored from the saved
+object.
