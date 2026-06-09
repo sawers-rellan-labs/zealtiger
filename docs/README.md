@@ -3,6 +3,12 @@
 Step-by-step record of the pipeline, the decisions made, and the gotchas hit.
 Read in order; each file maps to one stage of the work.
 
+**Rendered notebook:** [`nil_introgression.html`](nil_introgression.html) —
+self-contained HTML of Stages 1–4 (map QC → 1400-NIL simulation → cM→Mb →
+size-distribution figures → interference comparison → crossovers) plus the
+RTIGER r=3 benchmark results. Regenerate with
+`quarto render nil_introgression.qmd` (the source `.qmd` is at the repo root).
+
 | Doc | Step |
 |---|---|
 | [00-original-spec.md](00-original-spec.md) | The handover specification (input; provenance) |

@@ -8,6 +8,7 @@ format:
     toc-depth: 3
     code-fold: show
     df-print: paged
+    embed-resources: true   # self-contained single file (publishable under docs/)
 execute:
   warning: false
   message: false
