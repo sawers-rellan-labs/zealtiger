@@ -48,8 +48,11 @@ Best-rigidity fit (`r=3`, the empirical optimum from the sweep —
 | class | n_truth | precision | recall | F1 | FDR | boundary err |
 |---|---|---|---|---|---|---|
 | homozygous donor | 884 | 0.987 | 0.920 | **0.952** | 0.013 | ~85 kb |
-| donor present (het+homo) | 1400 | 0.981 | 0.869 | **0.921** | 0.019 | ~85 kb |
 | heterozygous | 516 | 0.962 | 0.775 | **0.858** | 0.039 | ~127 kb |
+| **TOTAL (donor present)** | 1400 | 0.981 | 0.869 | **0.921** | 0.019 | ~85 kb |
+
+(`TOTAL (donor present)` = states 1+2 — any donor ancestry, regardless of
+zygosity; its `n_truth` is the sum of the two rows above.)
 
 **Crossovers:** true 21.8 vs called 19.4 per line (bias −2.4, RMSE 3.3).
 

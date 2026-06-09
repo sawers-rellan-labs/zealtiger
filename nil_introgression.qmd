@@ -509,10 +509,10 @@ marker <- tibble::tribble(
   "2 homozygous donor",       0.998,     0.997
 )
 segment <- tibble::tribble(
-  ~class,             ~n_truth, ~precision, ~recall,   ~F1,  ~FDR, ~boundary_kb,
-  "homozygous_donor",      884,      0.987,   0.920, 0.952, 0.013,          85,
-  "donor_present",        1400,      0.981,   0.869, 0.921, 0.019,          85,
-  "heterozygous",          516,      0.962,   0.775, 0.858, 0.039,         127
+  ~class,                   ~n_truth, ~precision, ~recall,   ~F1,  ~FDR, ~boundary_kb,
+  "homozygous donor",            884,      0.987,   0.920, 0.952, 0.013,          85,
+  "heterozygous",                516,      0.962,   0.775, 0.858, 0.039,         127,
+  "TOTAL (donor present)",      1400,      0.981,   0.869, 0.921, 0.019,          85
 )
 knitr::kable(marker,
   caption = "Marker-level (RTIGER, r = 3): overall accuracy 0.999, 0.36% uncovered.")

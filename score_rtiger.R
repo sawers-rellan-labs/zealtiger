@@ -38,10 +38,12 @@ if (demo || is.null(rtiger_in)) {
 score_one <- function(called, tag) {
   mk  <- assign_called_state(called, truth_markers)
   sm  <- score_markers(mk)
+  # zygosity classes first, then the donor-present TOTAL (states 1+2) as the
+  # aggregate row (its n_truth = homozygous_donor + heterozygous).
   seg <- dplyr::bind_rows(
-    score_segments(called, truth_seg, target = 2L,       label = "homozygous_donor")$summary,
-    score_segments(called, truth_seg, target = c(1L,2L), label = "donor_present")$summary,
-    score_segments(called, truth_seg, target = 1L,       label = "heterozygous")$summary
+    score_segments(called, truth_seg, target = 2L,        label = "homozygous_donor")$summary,
+    score_segments(called, truth_seg, target = 1L,        label = "heterozygous")$summary,
+    score_segments(called, truth_seg, target = c(1L, 2L), label = "donor_present")$summary
   )
   co  <- score_cos(called, truth_seg)
   list(tag = tag, markers = sm, segments = seg, cos = co,
