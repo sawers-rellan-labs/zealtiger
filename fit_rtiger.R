@@ -15,14 +15,15 @@ setupJulia(JULIA_HOME = JULIA_HOME)
 sourceJulia()
 
 # args: [n_samples] [rigidity] [save_results]
-#   n=0 -> all samples; rigidity default 10 (fixed); save_results default 0/FALSE.
+#   n=0 -> all samples; rigidity default 3 (empirical F1 optimum, docs/09);
+#   save_results default 0/FALSE.
 # save_results=FALSE skips the dominant per-sample export (bigWig tracks + genotype
 # PDFs ~ minutes for 100 samples) — those are visualization artifacts, not the
 # analysis. The fitted object is always saved to rtiger_result.rds, and the
 # scorer reads segments straight from it, so benchmark runs need save_results=0.
 args <- commandArgs(trailingOnly = TRUE)
 n <- if (length(args) >= 1) as.integer(args[1]) else 0L
-r <- if (length(args) >= 2) as.integer(args[2]) else 10L
+r <- if (length(args) >= 2) as.integer(args[2]) else 3L
 save_it <- if (length(args) >= 3) as.logical(as.integer(args[3])) else FALSE
 
 ed <- read_csv("results/rtiger_benchmark/expDesign.csv", show_col_types = FALSE)
