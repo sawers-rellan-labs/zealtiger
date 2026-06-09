@@ -39,14 +39,27 @@ heterozygote-excess and other discrepancies are diagnosed in `docs/12`.
 ├── make_rtiger_benchmark.R     # generate the 100-NIL RTIGER benchmark
 ├── fit_rtiger.R                # fit RTIGER (Julia backend) on the benchmark
 ├── score_rtiger.R              # score a fit against ground truth
-├── nil_introgression.qmd       # narrative notebook (Stages 1-4)
-├── docs/                       # step-by-step documentation (start at docs/README.md)
+├── nil_introgression.qmd       # narrative notebook source (Stages 1-4 + RTIGER benchmark)
+├── docs/                       # documentation — browsable at the Pages site
+│   ├── README.md                     # docs index
+│   ├── 01..05-*.md                   # simulation: map -> sim -> cM->Mb -> size distribution -> crossovers
+│   ├── 06..11-*.md                   # RTIGER benchmark: dataset, fit, scoring, rigidity, performance, other tools
+│   ├── 12-het-excess-diagnosis.md    # interpreting a heterozygote excess in real ancestry calls
+│   └── nil_introgression.html        # RENDERED notebook — the introgression-size distribution figures live here
 ├── data/        (untracked)    # input: MaizeGDB consensus map
-└── results/     (untracked)    # all generated output
+├── results/     (untracked)    # generated output: figures/, *.rds/*.csv, rtiger_benchmark/
+└── agent/       (untracked)    # internal roadmap / handoff notes
 ```
 
-`data/` and `results/` are git-ignored. See **[docs/README.md](docs/README.md)**
-for the pipeline, decisions, and how to reproduce each step.
+`data/`, `results/`, and `agent/` are git-ignored. See
+**[docs/README.md](docs/README.md)** for the pipeline and how to reproduce each
+step.
+
+**Where's the introgression-size distribution?** In the rendered notebook
+**[`docs/nil_introgression.html`](https://sawers-rellan-labs.github.io/zealtiger/nil_introgression.html)**
+(Stage 4 — per-line total donor Mb, per-segment Mb histogram, and the segment-size
+ECDF), summarized in **`docs/04-distribution-and-interference.md`**. The figure
+files are regenerated to `results/figures/introgression_size.{png,pdf}`.
 
 ## Quick start
 
