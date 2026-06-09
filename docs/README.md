@@ -26,6 +26,7 @@ RTIGER r=3 benchmark results. Regenerate with
 | [09-rigidity-selection.md](09-rigidity-selection.md) | Choosing the rigidity parameter from first principles |
 | [10-rtiger-fitting-performance.md](10-rtiger-fitting-performance.md) | Why fitting is slow (quadratic in rigidity), autotune cost, scaling |
 | [11-benchmarking-other-tools.md](11-benchmarking-other-tools.md) | Benchmark *your own* ancestry caller: scoring schema + input-adapter gotchas |
+| [12-het-excess-diagnosis.md](12-het-excess-diagnosis.md) | Diagnosing a heterozygote excess in real ancestry calls (selection vs heterosis vs paralogs vs caller) |
 
 ## Pipeline at a glance
 
