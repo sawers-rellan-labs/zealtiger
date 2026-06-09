@@ -3480,7 +3480,10 @@ window.onload = function() {
     <h2 id="toc-title">Table of contents</h2>
    
   <ul>
-  <li><a href="#setup" id="toc-setup" class="nav-link active" data-scroll-target="#setup">Setup</a></li>
+  <li><a href="#setup" id="toc-setup" class="nav-link active" data-scroll-target="#setup">Setup</a>
+  <ul class="collapse">
+  <li><a href="#input-data-maizegdb-consensus-map" id="toc-input-data-maizegdb-consensus-map" class="nav-link" data-scroll-target="#input-data-maizegdb-consensus-map">Input data — MaizeGDB consensus map</a></li>
+  </ul></li>
   <li><a href="#stage-1-compile-the-maize-map-v5-nam" id="toc-stage-1-compile-the-maize-map-v5-nam" class="nav-link" data-scroll-target="#stage-1-compile-the-maize-map-v5-nam">Stage 1 — Compile the maize map (v5 NAM)</a>
   <ul class="collapse">
   <li><a href="#parse-consensus-files" id="toc-parse-consensus-files" class="nav-link" data-scroll-target="#parse-consensus-files">1.1 Parse consensus files</a></li>
@@ -3572,7 +3575,12 @@ window.onload = function() {
 <pre><code>simcross: 0.8 | seed: 20260609 | target NILs: 1400 </code></pre>
 </div>
 </div>
+<section id="input-data-maizegdb-consensus-map" class="level3">
+<h3 class="anchored" data-anchor-id="input-data-maizegdb-consensus-map">Input data — MaizeGDB consensus map</h3>
+<p>The Stage-1 input was obtained <strong>once</strong> by running <code>download_consensus_map.sh</code> from the project root (<code>bash download_consensus_map.sh</code>), which fetches the ten MaizeGDB consensus genetic-map files (map ids 1203637–1203646) into <code>data/maizegdb_consensus_map/consensus_chr01.txt … consensus_chr10.txt</code>.</p>
+<p>Each <code>consensus_chrNN.txt</code> is a tab-separated MaizeGDB <em>map_text</em> export: line 1 is a free-text title (skipped), line 2 the header, then columns <code>Locus</code>, <code>Coordinate</code> (cM), <code>Bin</code>, followed by repeating 4-column blocks per assembly (<code>&lt;assembly&gt;_gene_model / _chr / _start / _end</code>). <code>parse_consensus_v5()</code> locates the <strong>B73 NAM v5</strong> block (<code>Zm-B73-REFERENCE-NAM-5.0_*</code>) <em>by name</em> — its column index differs between files — and keeps <code>Locus</code>, <code>Coordinate</code> (cM), and the v5 <code>chr / start / end</code>. <code>data/</code> is git-ignored; regenerate it any time with <code>bash download_consensus_map.sh</code>.</p>
 <hr>
+</section>
 </section>
 <section id="stage-1-compile-the-maize-map-v5-nam" class="level2">
 <h2 class="anchored" data-anchor-id="stage-1-compile-the-maize-map-v5-nam">Stage 1 — Compile the maize map (v5 NAM)</h2>

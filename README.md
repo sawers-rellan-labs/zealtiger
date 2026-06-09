@@ -35,6 +35,7 @@ heterozygote-excess and other discrepancies are diagnosed in `docs/12`.
 │   ├── 04_summarize.R          # distribution, CO summary, assertions
 │   ├── 05_make_rtiger_input.R  # simulate genotypes -> RTIGER allele counts
 │   └── 06_score_rtiger.R       # score RTIGER calls vs ground truth
+├── download_consensus_map.sh   # fetch MaizeGDB consensus map into data/ (run once)
 ├── run_all.R                   # Stages 1-4: map -> simulate -> Mb -> figures
 ├── make_rtiger_benchmark.R     # generate the 100-NIL RTIGER benchmark
 ├── fit_rtiger.R                # fit RTIGER (Julia backend) on the benchmark
