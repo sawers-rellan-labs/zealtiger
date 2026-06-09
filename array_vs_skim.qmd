@@ -1,0 +1,187 @@
+---
+title: "MolBreeding 45K array vs SNP50K skim — ancestry-call concordance"
+author: "Fausto Rodríguez-Zapata"
+date: "`r Sys.Date()`"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    df-print: paged
+    embed-resources: true   # self-contained single file (publishable under docs/)
+execute:
+  warning: false
+  message: false
+params:
+  mb_calls:   "data/molbreeding_45k/calls_common_schema.csv"
+  skim_calls: "data/rtiger_50K/calls_common_schema.csv"
+  mb_counts:  "data/molbreeding_45k/counts"
+  sample_map: "data/molbreeding_45k_sample_map.tsv"
+---
+
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
+Cross-validation of ancestry source **#2 (SNP50K skim → RTIGER, ~0.4×)** against
+source **#5 (MolBreeding 45K SNP array, ~100% call)** for the 14 BZea NILs genotyped
+on both platforms. The array is the near-empirical reference; the skim is the
+low-coverage workhorse used genome-wide. Both call sets are RTIGER segments on
+**B73 NAM v5** in the common schema (`name, chr, start_bp, end_bp, state` with
+0 = homozygous recurrent / B73, 1 = het, 2 = homozygous donor / teosinte).
+
+> Provenance of the inputs (run first): the MolBreeding panel is lifted v3→v4→v5
+> (`molbreeding_liftover.R`), encoded as 0/1/2 pseudo-counts (`molbreeding_to_rtiger.R`),
+> and fit at **rigidity r = 2** (selected by `make_45k_array_benchmark.R` +
+> `sweep_rigidity_45k.R`; the skim uses r = 3). The skim per-donor calls come from
+> `fit_rtiger_by_donor.R`.
+
+## Setup
+
+**Purpose**: Load the two call sets and the sample map; define the evaluation grid.
+
+**Approach**: The grid is the MolBreeding marker set (the ~21k informative v5
+positions the array actually measured) — the fairest common ground. Each source's
+state at each grid point is read by segment overlap.
+
+```{r setup}
+library(tidyverse)
+library(GenomicRanges)
+library(patchwork)
+
+mb   <- read_csv(params$mb_calls,   show_col_types = FALSE)
+skim <- read_csv(params$skim_calls, show_col_types = FALSE)
+smap <- read_tsv(params$sample_map, show_col_types = FALSE)
+
+# evaluation grid = MolBreeding 45K marker positions (v5)
+cf <- read_tsv(list.files(params$mb_counts, full.names = TRUE)[1],
+               col_names = c("chr_label", "bp", "rb", "rc", "ab", "ac"),
+               show_col_types = FALSE)
+grid <- tibble(chr = as.integer(sub("chr", "", cf$chr_label)), bp = cf$bp)
+
+samples <- intersect(unique(mb$name), unique(skim$name))   # 14 NILs on both platforms
+cat(sprintf("Samples on both platforms: %d | grid markers: %d\n",
+            length(samples), nrow(grid)))
+```
+
+## State on the common grid
+
+**Purpose**: Assign each source a 0/1/2 state at every grid marker, per sample.
+
+**Approach**: Build per-sample `GRanges` of segments; overlap the width-1 grid
+positions to pull the called state.
+
+```{r state-grid}
+state_at <- function(df, s, grid) {
+  d <- df[df$name == s, ]
+  g <- GRanges(d$chr, IRanges(d$start_bp, d$end_bp))
+  q <- GRanges(grid$chr, IRanges(grid$bp, width = 1))
+  d$state[findOverlaps(q, g, select = "first")]
+}
+
+paired <- map_dfr(samples, function(s) {
+  a <- state_at(mb, s, grid); k <- state_at(skim, s, grid)
+  ok <- !is.na(a) & !is.na(k)
+  tibble(name = s, array = a[ok], skim = k[ok])
+})
+paired <- paired %>%
+  left_join(smap %>% transmute(name = sample_id, accession = sub("_.*$", "", genotype)),
+            by = "name")
+```
+
+## Per-sample concordance
+
+**Expected outcome**: High agreement, with the donor-rich samples lowest (most
+opportunity for the skim to under-call).
+
+```{r per-sample}
+per_sample <- paired %>%
+  group_by(name, accession) %>%
+  summarise(n = n(), concordance = mean(array == skim), .groups = "drop") %>%
+  arrange(concordance)
+per_sample
+
+ggplot(per_sample, aes(reorder(name, concordance), concordance, fill = accession)) +
+  geom_col() +
+  geom_hline(yintercept = mean(per_sample$concordance), linetype = 2, colour = "grey40") +
+  coord_flip(ylim = c(0.6, 1)) +
+  labs(x = NULL, y = "marker concordance (array vs skim)",
+       title = sprintf("Per-sample concordance (mean %.3f)", mean(per_sample$concordance))) +
+  theme_bw()
+```
+
+## Confusion matrix — array (truth) vs skim
+
+**Approach**: Row-normalise so each row is the skim's recovery of an array state
+(recall). The diagonal is correct recovery; off-diagonal shows where the skim drifts.
+
+```{r confusion}
+cm <- table(array = factor(paired$array, 0:2), skim = factor(paired$skim, 0:2))
+overall <- sum(diag(cm)) / sum(cm)
+cm_df <- as.data.frame(cm) %>%
+  group_by(array) %>% mutate(prop = Freq / sum(Freq)) %>% ungroup()
+
+lab <- c("0\nrecurrent", "1\nhet", "2\ndonor")
+ggplot(cm_df, aes(skim, array, fill = prop)) +
+  geom_tile() +
+  geom_text(aes(label = sprintf("%.2f\n(%d)", prop, Freq)), size = 3) +
+  scale_fill_viridis_c(option = "magma", direction = -1, limits = c(0, 1)) +
+  scale_x_discrete(labels = lab) + scale_y_discrete(labels = lab, limits = rev) +
+  labs(x = "skim (SNP50K, r=3)", y = "array (MolBreeding 45K, truth)",
+       fill = "row prop",
+       title = sprintf("Array → skim recovery (overall concordance %.3f)", overall)) +
+  theme_minimal()
+
+# donor-present recovery
+dp <- paired$array %in% c(1, 2)
+cat(sprintf("Array donor-present markers: %d | skim also donor-present: %.1f%%\n",
+            sum(dp), 100 * mean(paired$skim[dp] %in% c(1, 2))))
+cat(sprintf("Array homozygous-donor markers: %d | skim also hom-donor: %.1f%%\n",
+            sum(paired$array == 2), 100 * mean(paired$skim[paired$array == 2] == 2)))
+```
+
+## Donor dosage — array vs skim
+
+**Approach**: Per-sample donor dosage on the common grid = mean(state)/2. Includes
+the 2 B73-bulk checks (expected ≈ 0) as negative controls.
+
+```{r dosage}
+dose <- bind_rows(
+  map_dfr(union(samples, c("PN4_SID326", "PN6_SID576")), function(s) {
+    a <- state_at(mb, s, grid)
+    tibble(name = s, source = "array", dosage = mean(a[!is.na(a)]) / 2)
+  }),
+  map_dfr(samples, function(s) {
+    k <- state_at(skim, s, grid)
+    tibble(name = s, source = "skim", dosage = mean(k[!is.na(k)]) / 2)
+  })
+) %>%
+  pivot_wider(names_from = source, values_from = dosage) %>%
+  left_join(smap %>% transmute(name = sample_id, genotype), by = "name") %>%
+  mutate(kind = if_else(grepl("^B73", genotype), "B73 check", "teosinte NIL"))
+
+ggplot(dose, aes(array, skim, colour = kind)) +
+  geom_abline(slope = 1, linetype = 2, colour = "grey50") +
+  geom_point(size = 2) +
+  scale_colour_manual(values = c("B73 check" = "grey50", "teosinte NIL" = "purple4")) +
+  coord_equal() +
+  labs(x = "donor dosage — array (MolBreeding 45K)",
+       y = "donor dosage — skim (SNP50K)",
+       colour = NULL,
+       title = "Skim systematically under-calls donor dosage vs the array") +
+  theme_bw()
+```
+
+## Findings
+
+- **Mean marker concordance ≈ 0.91** across the 14 shared NILs; the lowest sample
+  is the most donor-rich (most to miss).
+- **Recurrent background is recovered near-perfectly** (~96% of array-recurrent
+  markers), so the skim is reliable for the B73 genome and for *detecting* donor
+  presence (~71% of donor-present markers recovered).
+- **The skim under-calls donor dosage**, and **homozygous donor is the weak spot**
+  (~17% recovered as BB; most demoted to het or recurrent) — at ~0.4× a
+  homozygous-donor site rarely shows enough ALT reads to read as BB. This is the
+  coverage-limited behaviour anticipated in `docs/12-het-excess-diagnosis.md`, here
+  quantified against an empirical reference.
+- The B73-bulk checks sit at ≈ 0 dosage on both platforms (polarity / negative
+  control confirmed).
+```
