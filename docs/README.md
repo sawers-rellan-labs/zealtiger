@@ -16,6 +16,7 @@ Read in order; each file maps to one stage of the work.
 | [07-rtiger-fitting.md](07-rtiger-fitting.md) | Fit RTIGER (Julia backend) on the benchmark |
 | [08-scoring.md](08-scoring.md) | Score RTIGER calls vs ground truth |
 | [09-rigidity-selection.md](09-rigidity-selection.md) | Choosing the rigidity parameter from first principles |
+| [10-rtiger-fitting-performance.md](10-rtiger-fitting-performance.md) | Why fitting is slow (quadratic in rigidity), autotune cost, scaling |
 
 ## Pipeline at a glance
 

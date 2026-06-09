@@ -14,29 +14,31 @@ JULIA_HOME <- Sys.getenv("JULIA_HOME",
 setupJulia(JULIA_HOME = JULIA_HOME)
 sourceJulia()
 
+# args: [n_samples] [rigidity]   (n=0 -> all; rigidity default 10, fixed)
 args <- commandArgs(trailingOnly = TRUE)
 n <- if (length(args) >= 1) as.integer(args[1]) else 0L
+r <- if (length(args) >= 2) as.integer(args[2]) else 10L
 
 ed <- read_csv("results/rtiger_benchmark/expDesign.csv", show_col_types = FALSE)
 if (n > 0L) ed <- ed[seq_len(n), ]
 sl <- read_csv("results/rtiger_benchmark/seqlengths.csv", show_col_types = FALSE)
 seqv <- setNames(sl$len, sl$chr_label)
 
-outdir <- "results/rtiger_benchmark/rtiger_out"
+outdir <- sprintf("results/rtiger_benchmark/rtiger_out_r%d", r)
 if (n > 0L) outdir <- paste0(outdir, "_n", n)
 dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
 
-cat(sprintf("Fitting RTIGER on %d samples -> %s\n", nrow(ed), outdir))
+# Fixed rigidity (r informative markers; ~r/6.6 Mb resolution at SNP50K coverage,
+# see docs/09). autotune is slow/opaque on 100 samples; sweep r instead.
+cat(sprintf("Fitting RTIGER on %d samples at rigidity=%d -> %s\n", nrow(ed), r, outdir))
 res <- RTIGER(
-  expDesign        = ed,
-  outputdir        = outdir,
-  seqlengths       = seqv,
-  rigidity         = 10,      # initial guess; autotune refines (low for sparse data)
-  autotune         = TRUE,
-  max_rigidity     = 128,     # cap so 2*R stays below the sparsest chr's markers
-  average_coverage = 0.43,    # SNP50K mean (known)
-  save.results     = TRUE,
-  verbose          = TRUE
+  expDesign    = ed,
+  outputdir    = outdir,
+  seqlengths   = seqv,
+  rigidity     = r,
+  autotune     = FALSE,
+  save.results = TRUE,
+  verbose      = TRUE
 )
 saveRDS(res, file.path(outdir, "rtiger_result.rds"))
 cat("DONE. samples fitted:", length(res@Viterbi),
