@@ -1,5 +1,7 @@
 # Documentation
 
+📦 **Repository:** <https://github.com/sawers-rellan-labs/zealtiger>
+
 Step-by-step record of the pipeline, the decisions made, and the gotchas hit.
 Read in order; each file maps to one stage of the work.
 

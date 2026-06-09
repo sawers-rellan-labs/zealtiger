@@ -5,6 +5,8 @@ recurrent) with [`simcross`](https://github.com/kbroman/simcross), estimate the
 donor introgression-size distribution in Mb, and generate ground-truth datasets
 to **benchmark RTIGER** introgression/crossover detection (for the BZea project).
 
+📖 **Docs site & rendered notebook:** <https://sawers-rellan-labs.github.io/zealtiger/>
+
 ## Layout
 
 ```
