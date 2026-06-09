@@ -34,7 +34,10 @@ read_rtiger_segments <- function(x) {
             "^CompleteBlock-state-"), "\\.bed$")
     d <- readr::read_tsv(f, col_names = c("chr", "start0", "end", "score"),
                          show_col_types = FALSE, progress = FALSE)
-    tibble::tibble(name = nm, chr = d$chr, start_bp = d$start0 + 1L,
+    # normalize "chr1".."chr10" -> integer 1..10 to match the truth tables
+    tibble::tibble(name = nm,
+                   chr = as.integer(stringr::str_remove(d$chr, "(?i)^chr")),
+                   start_bp = d$start0 + 1L,
                    end_bp = d$end, state = unname(.score_map[d$score]))
   }) %>%
     purrr::list_rbind() %>%
@@ -49,10 +52,17 @@ read_rtiger_segments <- function(x) {
 #' @export
 segments_from_rtiger_object <- function(res) {
   samples <- names(res@Viterbi)
+  # RTIGER renames samples to "Sample_N" internally and keeps the original
+  # name in info$expDesign$OName; map back so names match the truth tables.
+  ed <- res@info$expDesign
+  name_map <- if (!is.null(ed) && all(c("name", "OName") %in% names(ed)))
+    stats::setNames(as.character(ed$OName), as.character(ed$name)) else NULL
   purrr::map(samples, function(s) {
+    out_name <- if (!is.null(name_map) && !is.na(name_map[s])) name_map[[s]] else s
     gr <- res@Viterbi[[s]]
     d <- tibble::tibble(
-      chr   = as.character(GenomicRanges::seqnames(gr)),
+      chr   = as.integer(stringr::str_remove(
+                as.character(GenomicRanges::seqnames(gr)), "(?i)^chr")),
       start = GenomicRanges::start(gr),
       end   = GenomicRanges::end(gr),
       state = unname(.vit_map[as.character(
@@ -65,7 +75,7 @@ segments_from_rtiger_object <- function(res) {
       dplyr::group_by(.data$chr, .data$run, .data$state) %>%
       dplyr::summarise(start_bp = min(.data$start), end_bp = max(.data$end),
                        .groups = "drop") %>%
-      dplyr::transmute(name = s, .data$chr, .data$start_bp, .data$end_bp,
+      dplyr::transmute(name = out_name, .data$chr, .data$start_bp, .data$end_bp,
                        .data$state)
   }) %>%
     purrr::list_rbind() %>%

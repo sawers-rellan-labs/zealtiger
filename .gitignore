@@ -18,3 +18,6 @@
 
 # macOS
 .DS_Store
+
+# stray copy of the logging-task doc (cp target); lives in the agent repo instead
+/agent
