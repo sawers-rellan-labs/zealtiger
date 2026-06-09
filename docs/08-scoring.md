@@ -29,6 +29,37 @@ mapping as in [07](07-rtiger-fitting.md).
 3. **Crossovers** (`score_cos`) — true vs called COs per line (bias, RMSE) and a
    `crossover_recovery.png` scatter.
 
+## Results — RTIGER on the SNP50K benchmark (r = 3)
+
+Best-rigidity fit (`r=3`, the empirical optimum from the sweep —
+[09](09-rigidity-selection.md)); 100 NILs at λ=0.43×, ~71% missing;
+`save.results=FALSE`, scored from the `.rds`.
+
+**Marker-level:** overall accuracy **0.999**, 0.36% uncovered.
+
+| state | recall | precision |
+|---|---|---|
+| 0 homozygous recurrent | 1.000 | 0.999 |
+| 1 heterozygous | 0.974 | 0.990 |
+| 2 homozygous donor | 0.998 | 0.997 |
+
+**Segment-level** (reciprocal overlap ≥ 0.5):
+
+| class | n_truth | precision | recall | F1 | FDR | boundary err |
+|---|---|---|---|---|---|---|
+| homozygous donor | 884 | 0.987 | 0.920 | **0.952** | 0.013 | ~85 kb |
+| donor present (het+homo) | 1400 | 0.981 | 0.869 | **0.921** | 0.019 | ~85 kb |
+| heterozygous | 516 | 0.962 | 0.775 | **0.858** | 0.039 | ~127 kb |
+
+**Crossovers:** true 21.8 vs called 19.4 per line (bias −2.4, RMSE 3.3).
+
+Takeaways: marker-level genotyping is near-perfect (**99.9%**); donor-segment
+**precision ≥0.98, FDR ≤2%** — almost no false introgressions; **recall ~0.87–0.92**,
+the missing ~8–13% being sub-Mb segments below the coverage floor
+([09](09-rigidity-selection.md)), not a tuning shortfall. Boundaries land within
+~2 marker spacings (~85 kb; ~127 kb for het). The full `r∈{2,3,5,10,20}` sweep
+that selects `r=3` is in [09](09-rigidity-selection.md).
+
 ## Self-test (validates the scorer with no Julia)
 
 `--demo` scores two synthetic call sets against truth:
