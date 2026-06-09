@@ -1,0 +1,373 @@
+---
+title: "BC2S3 NIL Introgression-Size Distribution"
+author: "Fausto Rodríguez-Zapata"
+date: "`r Sys.Date()`"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    df-print: paged
+execute:
+  warning: false
+  message: false
+params:
+  map_dir: "maizegdb_consensus_map"
+  n_nil: 1400
+  n_markers: 2500
+  m_interference: 10      # simcross default; positive interference
+  p_escape: 0
+  donor_allele: 2
+  seed: 20260609
+---
+
+## Setup
+
+**Purpose**: Load packages, source stage functions, fix the seed.
+
+**Approach**: Functions live in `R/01_compile_map.R` … `R/04_summarize.R`
+(see the spec). simcross 0.8 is already installed.
+
+**Expected outcome**: A clean session with all helpers in scope.
+
+```{r setup}
+library(tidyverse)
+library(simcross)
+library(furrr)
+library(patchwork)
+
+# Stage functions (defined per the specification)
+purrr::walk(fs::dir_ls("R", glob = "*.R"), source)
+
+set.seed(params$seed)
+plan(multisession)
+
+# Diagnostics
+cat("simcross:", as.character(packageVersion("simcross")),
+    "| seed:", params$seed,
+    "| target NILs:", params$n_nil, "\n")
+```
+
+---
+
+## Stage 1 — Compile the maize map (v5 NAM)
+
+### 1.1 Parse consensus files
+
+**Purpose**: Extract (locus, cM, chr, bp) anchors from all 10 chromosome
+files, using the B73 NAM v5 physical columns.
+
+**Approach**: `parse_consensus_v5()` matches v5 columns by squished name
+(robust to per-file column differences), drops rows lacking physical
+coordinates, and sets `bp` to the v5 gene-model midpoint.
+
+**Expected outcome**: One tidy tibble of raw anchors across chromosomes.
+
+```{r parse_map}
+map_files <- fs::dir_ls(params$map_dir, glob = "*chr*.txt")
+
+anchors_raw <- map_files %>%
+  purrr::map(parse_consensus_v5) %>%
+  purrr::list_rbind() %>%
+  dplyr::arrange(chr, bp)
+
+# Diagnostics
+cat("Files parsed:", length(map_files),
+    "| raw anchors:", nrow(anchors_raw),
+    "| chrs:", paste(sort(unique(anchors_raw$chr)), collapse = ","), "\n")
+```
+
+### 1.2 Enforce a monotone Marey map
+
+**Purpose**: Remove map inversions (mismapped / paralogous loci) so cM is
+non-decreasing along the physical axis within each chromosome.
+
+**Approach**: `enforce_monotone()` sorts by bp and applies a running-max
+filter on cM. Track how many anchors are dropped per chromosome — large
+losses flag consensus-vs-v5 disagreement (often pericentromeric).
+
+**Expected outcome**: A monotone anchor set + a per-chr drop report.
+
+```{r monotone_map}
+anchors_clean <- enforce_monotone(anchors_raw)
+
+drop_report <- anchors_raw %>%
+  dplyr::count(chr, name = "raw") %>%
+  dplyr::left_join(dplyr::count(anchors_clean, chr, name = "kept"),
+                   by = "chr") %>%
+  dplyr::mutate(dropped = raw - kept,
+                pct_dropped = round(100 * dropped / raw, 1))
+
+saveRDS(anchors_clean, "output/maize_map_v5_clean.rds")
+
+# Diagnostics
+cat("Clean anchors:", nrow(anchors_clean),
+    "| total dropped:", sum(drop_report$dropped), "\n")
+drop_report
+```
+
+### 1.3 Thin to the marker grid + per-chr cM lengths
+
+**Purpose**: Build the ~`r params$n_markers`-marker grid and the vector of
+per-chromosome cM lengths that `sim_from_pedigree` needs as `L`.
+
+**Approach**: Allocate the marker quota per chromosome in proportion to cM
+span; select markers as evenly spaced in cM as possible. `L` = max cM per
+chromosome from the clean map.
+
+**Expected outcome**: `marker_grid` (for cM↔Mb + optional `convert2geno`)
+and `chr_cm_lengths` (the simulation input).
+
+```{r thin_grid}
+# TODO: implement thin_markers(anchors_clean, n_target = params$n_markers)
+#   - per-chr quota proportional to cM span
+#   - even-in-cM selection; keep all if quota exceeds available
+marker_grid <- thin_markers(anchors_clean, n_target = params$n_markers)
+
+chr_cm_lengths <- anchors_clean %>%
+  dplyr::group_by(chr) %>%
+  dplyr::summarise(L = max(cm), .groups = "drop") %>%
+  dplyr::arrange(chr)
+
+saveRDS(marker_grid, "output/maize_map_v5_grid2500.rds")
+
+# Diagnostics
+cat("Markers retained:", nrow(marker_grid),
+    "| total map length (cM):", round(sum(chr_cm_lengths$L), 1), "\n")
+chr_cm_lengths
+```
+
+### 1.4 Marey QC plot
+
+**Purpose**: Visual gate before simulating — confirm the cleaned map is
+monotone and sensibly shaped per chromosome.
+
+**Approach**: cM-vs-Mb scatter, clean anchors overlaid, faceted by chr.
+
+**Expected outcome**: `output/marey_maps.pdf`. **Inspect before Stage 2.**
+
+```{r marey_plot}
+marey <- anchors_clean %>%
+  ggplot(aes(bp / 1e6, cm)) +
+  geom_point(size = 0.4, alpha = 0.5) +
+  facet_wrap(~ chr, scales = "free") +
+  labs(x = "Physical position (Mb, v5)", y = "Genetic position (cM)") +
+  theme_bw()
+
+ggsave("output/marey_maps.pdf", marey, width = 11, height = 8)
+marey
+```
+
+---
+
+## Stage 2 — Pedigree + simulation (no selection)
+
+### 2.1 Build and validate the pedigree
+
+**Purpose**: Define the BC2S3 NIL pedigree (final NIL = id 8).
+
+**Approach**: `bc2s3_pedigree()`; validate with `check_pedigree()`.
+
+**Expected outcome**: `TRUE` from the check.
+
+```{r pedigree}
+ped <- bc2s3_pedigree()
+stopifnot(check_pedigree(ped))
+
+# Diagnostics
+cat("Pedigree rows:", nrow(ped),
+    "| founders:", sum(ped$mom == 0 & ped$dad == 0), "\n")
+ped
+```
+
+### 2.2 Pilot run (n = 20) — fail fast
+
+**Purpose**: Confirm allele labeling + donor fraction before scaling.
+
+**Approach**: Simulate 20 NILs, extract donor segments, check mean donor
+fraction against the analytical BC2S3 expectation **0.125**.
+
+**Expected outcome**: Mean donor fraction ≈ 0.125 (within MC error).
+
+```{r pilot}
+# TODO: simulate_nil(ped, chr_cm_lengths, m, p, donor_allele) returns one
+#   NIL's donor segments (cM, unioned across mat/pat per chr) as a tibble.
+pilot <- furrr::future_map(
+  seq_len(20),
+  ~ simulate_nil(ped, chr_cm_lengths,
+                 m = params$m_interference, p = params$p_escape,
+                 donor_allele = params$donor_allele),
+  .options = furrr_options(seed = TRUE)
+)
+
+# donor fraction = donor cM / total map cM, averaged over lines
+pilot_frac <- purrr::map_dbl(
+  pilot, ~ sum(.x$end_cm - .x$start_cm)) / sum(chr_cm_lengths$L)
+
+# Diagnostics
+cat("Pilot mean donor fraction:", round(mean(pilot_frac), 4),
+    "| expected: 0.1250\n")
+stopifnot(abs(mean(pilot_frac) - 0.125) < 0.03)
+```
+
+### 2.3 Full simulation (n = `r params$n_nil`)
+
+**Purpose**: Generate the full NIL set and collect donor segments in cM.
+
+**Approach**: Parallel replicate simulation; tag each line with `nil_id`.
+
+**Expected outcome**: `segments_cm` — one row per donor segment (cM).
+
+```{r simulate_full}
+segments_cm <- furrr::future_map(
+  seq_len(params$n_nil),
+  ~ simulate_nil(ped, chr_cm_lengths,
+                 m = params$m_interference, p = params$p_escape,
+                 donor_allele = params$donor_allele) %>%
+      dplyr::mutate(nil_id = .x),
+  .options = furrr_options(seed = TRUE)
+) %>%
+  purrr::list_rbind()
+
+# Diagnostics
+cat("NILs simulated:", dplyr::n_distinct(segments_cm$nil_id),
+    "| total donor segments:", nrow(segments_cm), "\n")
+```
+
+---
+
+## Stage 3 — Convert segments cM → Mb
+
+**Purpose**: Map donor cM intervals to physical Mb per chromosome.
+
+**Approach**: Build a monotone `cM → bp` interpolator per chr from the full
+clean anchors (`make_cm_to_bp()`), apply to each segment's endpoints.
+
+**Expected outcome**: `segments_mb` with `start_bp`, `end_bp`, `mb`.
+
+```{r segments_to_mb}
+cm_to_bp <- anchors_clean %>%
+  split(.$chr) %>%
+  purrr::map(make_cm_to_bp)
+
+segments_mb <- segments_cm %>%
+  dplyr::mutate(
+    start_bp = purrr::map2_dbl(chr, start_cm, ~ cm_to_bp[[as.character(.x)]](.y)),
+    end_bp   = purrr::map2_dbl(chr, end_cm,   ~ cm_to_bp[[as.character(.x)]](.y)),
+    mb       = (end_bp - start_bp) / 1e6
+  )
+
+# sanity: no segment longer than its chromosome
+# TODO: assert mb <= chr physical length (from anchors_clean max bp)
+
+saveRDS(segments_mb, "output/nil_segments.rds")
+readr::write_csv(segments_mb, "output/nil_segments.csv")
+
+# Diagnostics
+cat("Segments converted:", nrow(segments_mb),
+    "| median segment (Mb):", round(median(segments_mb$mb), 2),
+    "| max (Mb):", round(max(segments_mb$mb), 2), "\n")
+```
+
+---
+
+## Stage 4 — Distribution + summaries
+
+### 4.1 Per-NIL summary
+
+**Purpose**: Collapse to one row per line.
+
+**Approach**: Total donor Mb, segment count per NIL.
+
+**Expected outcome**: `nil_summary` + saved table.
+
+```{r nil_summary}
+nil_summary <- segments_mb %>%
+  dplyr::group_by(nil_id) %>%
+  dplyr::summarise(
+    n_segments = dplyr::n(),
+    total_mb   = sum(mb),
+    .groups = "drop"
+  )
+
+saveRDS(nil_summary, "output/nil_summary.rds")
+readr::write_csv(nil_summary, "output/nil_summary.csv")
+
+# Diagnostics
+cat("Mean total donor Mb/line:", round(mean(nil_summary$total_mb), 1),
+    "| mean segments/line:", round(mean(nil_summary$n_segments), 2), "\n")
+```
+
+### 4.2 Distribution figures
+
+**Purpose**: Show the introgression-size distribution.
+
+**Approach**: (a) total donor Mb per line, (b) per-segment Mb, (c) ECDF of
+segment Mb with median + 90th percentile annotated.
+
+**Expected outcome**: Panels saved to `output/figures/`.
+
+```{r distribution_plots}
+fs::dir_create("output/figures")
+
+p_total <- ggplot(nil_summary, aes(total_mb)) +
+  geom_histogram(bins = 40) +
+  labs(x = "Total donor genome per NIL (Mb)", y = "NILs") +
+  theme_bw()
+
+p_seg <- ggplot(segments_mb, aes(mb)) +
+  geom_histogram(bins = 50) +
+  labs(x = "Donor segment size (Mb)", y = "Segments") +
+  theme_bw()
+
+q90 <- quantile(segments_mb$mb, 0.9)
+p_ecdf <- ggplot(segments_mb, aes(mb)) +
+  stat_ecdf() +
+  geom_vline(xintercept = median(segments_mb$mb), linetype = 2) +
+  geom_vline(xintercept = q90, linetype = 3) +
+  labs(x = "Donor segment size (Mb)", y = "ECDF") +
+  theme_bw()
+
+dist_panel <- p_total / p_seg / p_ecdf
+ggsave("output/figures/introgression_size.pdf", dist_panel,
+       width = 7, height = 10)
+ggsave("output/figures/introgression_size.png", dist_panel,
+       width = 7, height = 10, dpi = 150)
+dist_panel
+```
+
+### 4.3 Run metadata
+
+**Purpose**: Record parameters for reproducibility.
+
+**Approach**: Write params + versions to JSON.
+
+**Expected outcome**: `output/run_metadata.json`.
+
+```{r metadata}
+jsonlite::write_json(
+  list(
+    seed          = params$seed,
+    n_nil         = params$n_nil,
+    n_markers     = nrow(marker_grid),
+    m_interference = params$m_interference,
+    p_escape      = params$p_escape,
+    total_cM      = sum(chr_cm_lengths$L),
+    simcross      = as.character(packageVersion("simcross")),
+    date          = as.character(Sys.time())
+  ),
+  "output/run_metadata.json", pretty = TRUE, auto_unbox = TRUE
+)
+```
+
+---
+
+## Open implementation TODOs (for the CC session)
+
+- `thin_markers()` — Stage 1.3.
+- `simulate_nil()` — wraps `sim_from_pedigree(ped, L = chr_cm_lengths$L, m, p)`,
+  pulls individual 8, runs `donor_segments_cm()` per chr, **unions mat/pat
+  donor intervals** per chr, returns a (chr, start_cm, end_cm) tibble.
+- Chromosome-length assertion in Stage 3.
+- *Suggested, not required:* `report_map_qc()` and an `m = 0` interference
+  sensitivity pass.

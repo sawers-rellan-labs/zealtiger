@@ -1,0 +1,143 @@
+#!/usr/bin/env Rscript
+# Generate an RTIGER benchmark dataset from simulated BC2S3 NILs.
+#
+# Emits, under results/rtiger_benchmark/:
+#   counts/<name>.tsv     one RTIGER allele-count file per simulated NIL
+#   expDesign.csv         files + name table for RTIGER(expDesign = ...)
+#   seqlengths.csv        named chromosome lengths (bp) for RTIGER seqlengths
+#   truth_segments.csv    ground-truth dosage segments (for precision/recall)
+#   truth_markers.rds     per-marker true dosage (for marker-level scoring)
+#   sample_stats.csv      per-sample lambda, realized coverage/missingness, COs
+#   params.json           run parameters
+#
+# Usage:
+#   Rscript make_rtiger_benchmark.R [n_lines]   # default 100
+#
+# Requires results/maize_map_v5_clean.rds (run run_all.R Stage 1 first).
+
+suppressMessages({
+  library(tidyverse)
+  library(simcross)
+})
+purrr::walk(fs::dir_ls("R", glob = "*.R"), source)
+
+args <- commandArgs(trailingOnly = TRUE)
+params <- list(
+  n_lines      = if (length(args) >= 1) as.integer(args[1]) else 100L,
+  n_markers    = 50000L,
+  lambda_mean  = 0.43,    # SNP50K mean coverage
+  lambda_shape = 2.5,     # Gamma shape for per-sample lambda (Inf = constant)
+  lambda_min   = 0.15,    # floor: drop pathological ultra-low-coverage tail
+                          # (real SNP50K samples bottom out ~0.26; these would
+                          #  be excluded from genotyping anyway)
+  pi_floor     = 0.161,   # exp-floor structural missingness (SNP50K fit)
+  k_decay      = 1.042,   # exp-floor coverage decay (SNP50K fit)
+  error        = 0.005,   # per-base sequencing error
+  m            = 10, p = 0,
+  donor_allele = 2L,
+  seed         = 20260609L
+)
+set.seed(params$seed)
+
+stopifnot(fs::file_exists("results/maize_map_v5_clean.rds"))
+anchors_clean <- readRDS("results/maize_map_v5_clean.rds")
+chr_cm_lengths <- anchors_clean %>%
+  dplyr::group_by(chr) %>%
+  dplyr::summarise(L = max(cm), .groups = "drop") %>%
+  dplyr::arrange(chr)
+
+out_dir   <- "results/rtiger_benchmark"
+count_dir <- file.path(out_dir, "counts")
+fs::dir_create(count_dir)
+
+markers <- build_marker_grid(anchors_clean, params$n_markers, chr_prefix = "chr")
+seqlengths <- markers %>%
+  dplyr::group_by(chr_label) %>%
+  dplyr::summarise(len = max(bp) + 1L, .groups = "drop")
+
+# per-sample mean coverage: Gamma(mean = lambda_mean) unless shape is Inf
+draw_lambda <- function(n) {
+  if (!is.finite(params$lambda_shape)) return(rep(params$lambda_mean, n))
+  stats::rgamma(n, shape = params$lambda_shape,
+                rate = params$lambda_shape / params$lambda_mean)
+}
+lambdas <- draw_lambda(params$n_lines)
+lambdas <- lambdas * (params$lambda_mean / mean(lambdas))  # pin mean to target
+lambdas <- pmax(lambdas, params$lambda_min)                # realistic coverage floor
+
+ped <- bc2s3_pedigree()
+stopifnot(check_pedigree(ped, ignore_sex = TRUE))
+
+names_vec  <- sprintf("sim_%04d", seq_len(params$n_lines))
+truth_seg  <- vector("list", params$n_lines)
+truth_mark <- vector("list", params$n_lines)
+stats_list <- vector("list", params$n_lines)
+
+for (i in seq_len(params$n_lines)) {
+  dosage <- simulate_sample_dosage(ped, chr_cm_lengths, markers,
+                                   m = params$m, p = params$p,
+                                   donor_allele = params$donor_allele)
+  cts <- draw_allele_counts(dosage, lambdas[i], params$pi_floor,
+                            params$k_decay, params$error)
+  depth <- cts$ref + cts$alt
+  path  <- file.path(count_dir, paste0(names_vec[i], ".tsv"))
+  write_rtiger_sample(markers, cts$ref, cts$alt, path)
+
+  seg <- truth_segments_from_dosage(markers, dosage)
+  truth_seg[[i]]  <- dplyr::mutate(seg, name = names_vec[i], .before = 1)
+  truth_mark[[i]] <- tibble::tibble(name = names_vec[i], chr = markers$chr,
+                                    bp = markers$bp, dosage = dosage)
+  # detectable COs at this marker resolution = dosage-state transitions
+  n_co <- markers %>% dplyr::mutate(state = dosage) %>%
+    dplyr::group_by(chr) %>%
+    dplyr::summarise(co = sum(diff(state) != 0), .groups = "drop") %>%
+    dplyr::summarise(n = sum(co)) %>% dplyr::pull(n)
+  stats_list[[i]] <- tibble::tibble(
+    name = names_vec[i], lambda = lambdas[i],
+    mean_depth = mean(depth), missing_obs = mean(depth == 0),
+    n_co_detectable = n_co,
+    donor_markers = sum(dosage > 0), donor_frac = mean(dosage) / 2
+  )
+}
+
+# ---- write design + truth + metadata --------------------------------------
+expDesign <- data.frame(
+  files = fs::path_abs(file.path(count_dir, paste0(names_vec, ".tsv"))),
+  name  = names_vec
+)
+readr::write_csv(expDesign, file.path(out_dir, "expDesign.csv"))
+readr::write_csv(seqlengths, file.path(out_dir, "seqlengths.csv"))
+
+truth_segments <- purrr::list_rbind(truth_seg)
+readr::write_csv(truth_segments, file.path(out_dir, "truth_segments.csv"))
+saveRDS(purrr::list_rbind(truth_mark), file.path(out_dir, "truth_markers.rds"))
+
+sample_stats <- purrr::list_rbind(stats_list)
+readr::write_csv(sample_stats, file.path(out_dir, "sample_stats.csv"))
+
+jsonlite::write_json(
+  c(params, list(
+    seqnames = seqlengths$chr_label,
+    realized_mean_coverage   = mean(sample_stats$mean_depth),
+    realized_mean_missingness = mean(sample_stats$missing_obs),
+    mean_co_detectable        = mean(sample_stats$n_co_detectable),
+    simcross = as.character(packageVersion("simcross")),
+    date = as.character(Sys.time())
+  )),
+  file.path(out_dir, "params.json"), pretty = TRUE, auto_unbox = TRUE
+)
+
+cat("\n================ RTIGER BENCHMARK DATASET ================\n")
+cat(sprintf("Lines: %d | markers/line: %d | files in %s\n",
+            params$n_lines, nrow(markers), count_dir))
+cat(sprintf("Target SNP50K:   lambda %.2f, missingness %.3f\n",
+            params$lambda_mean, params$pi_floor +
+              (1 - params$pi_floor) * exp(-params$k_decay * params$lambda_mean)))
+cat(sprintf("Realized:        mean coverage %.3f, mean missingness %.3f\n",
+            mean(sample_stats$mean_depth), mean(sample_stats$missing_obs)))
+cat(sprintf("Mean detectable COs/line (at 50K res): %.1f | mean donor frac: %.4f\n",
+            mean(sample_stats$n_co_detectable), mean(sample_stats$donor_frac)))
+cat(sprintf("Truth: %d segments across %d lines\n",
+            nrow(truth_segments), params$n_lines))
+cat("\nWrote expDesign.csv, seqlengths.csv, truth_segments.csv,",
+    "truth_markers.rds, sample_stats.csv, params.json\n")

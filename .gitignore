@@ -1,0 +1,20 @@
+# Untracked input data and generated results (per project convention)
+/data/
+/results/
+
+# Rendered notebook (regenerate from nil_introgression.qmd)
+/nil_introgression.html
+/nil_introgression_files/
+/nil_introgression.knit.md
+
+# R session state
+.RData
+.Rhistory
+.Rproj.user/
+*.Rproj
+
+# Claude Code local state
+/.claude/
+
+# macOS
+.DS_Store
