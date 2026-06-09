@@ -17,6 +17,7 @@ Read in order; each file maps to one stage of the work.
 | [08-scoring.md](08-scoring.md) | Score RTIGER calls vs ground truth |
 | [09-rigidity-selection.md](09-rigidity-selection.md) | Choosing the rigidity parameter from first principles |
 | [10-rtiger-fitting-performance.md](10-rtiger-fitting-performance.md) | Why fitting is slow (quadratic in rigidity), autotune cost, scaling |
+| [11-benchmarking-other-tools.md](11-benchmarking-other-tools.md) | Benchmark *your own* ancestry caller: scoring schema + input-adapter gotchas |
 
 ## Pipeline at a glance
 
