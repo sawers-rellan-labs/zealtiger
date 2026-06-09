@@ -339,7 +339,20 @@ p_ecdf <- ggplot(segments_mb, aes(mb)) +
        caption = "dashed = median, dotted = 90th percentile") +
   theme_bw()
 
-dist_panel <- p_total / p_seg / p_ecdf
+# minor x-axis ticks (ggplot2 >= 3.5): 10 Mb on the segment panels, 50 Mb on the
+# total-genome panel (~900 Mb). The tick-length theme() is returned alongside the
+# scale so it is applied AFTER theme_bw() (which otherwise resets tick lengths).
+minor_ticks <- function(width)
+  list(
+    scale_x_continuous(minor_breaks = scales::breaks_width(width),
+                       guide = guide_axis(minor.ticks = TRUE)),
+    theme(axis.ticks.length.x       = unit(6, "pt"),
+          axis.minor.ticks.length.x = unit(3.5, "pt"))
+  )
+
+dist_panel <- (p_total + minor_ticks(50)) /
+              (p_seg   + minor_ticks(10)) /
+              (p_ecdf  + minor_ticks(10))
 ggsave("results/figures/introgression_size.pdf", dist_panel,
        width = 7, height = 10)
 ggsave("results/figures/introgression_size.png", dist_panel,
