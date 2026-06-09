@@ -57,10 +57,12 @@ cat("simcross:", as.character(packageVersion("simcross")),
 
 ### Input data — MaizeGDB consensus map
 
-The Stage-1 input was obtained **once** by running `download_consensus_map.sh`
-from the project root (`bash download_consensus_map.sh`), which fetches the ten
-MaizeGDB consensus genetic-map files (map ids 1203637–1203646) into
-`data/maizegdb_consensus_map/consensus_chr01.txt … consensus_chr10.txt`.
+The Stage-1 input is the ten MaizeGDB consensus genetic-map files (map ids
+1203637–1203646) in `data/maizegdb_consensus_map/consensus_chr01.txt …
+consensus_chr10.txt`, fetched by `download_consensus_map.sh`. `data/` is
+git-ignored, so the chunk below **runs the download script automatically if the
+files are not already present** — making the notebook reproducible from a fresh
+clone.
 
 Each `consensus_chrNN.txt` is a tab-separated MaizeGDB *map_text* export: line 1
 is a free-text title (skipped), line 2 the header, then columns `Locus`,
@@ -68,8 +70,20 @@ is a free-text title (skipped), line 2 the header, then columns `Locus`,
 (`<assembly>_gene_model / _chr / _start / _end`). `parse_consensus_v5()` locates
 the **B73 NAM v5** block (`Zm-B73-REFERENCE-NAM-5.0_*`) *by name* — its column
 index differs between files — and keeps `Locus`, `Coordinate` (cM), and the v5
-`chr / start / end`. `data/` is git-ignored; regenerate it any time with
-`bash download_consensus_map.sh`.
+`chr / start / end`.
+
+```{r ensure_input_data}
+# data/ is git-ignored: fetch the consensus map if it isn't already there.
+chr_files <- fs::dir_ls(map_dir, glob = "*chr*.txt", fail = FALSE)
+if (length(chr_files) < 10) {
+  message("Consensus map missing in ", map_dir,
+          " - running download_consensus_map.sh ...")
+  stopifnot(system2("bash", "download_consensus_map.sh") == 0)
+  chr_files <- fs::dir_ls(map_dir, glob = "*chr*.txt")
+}
+stopifnot(length(chr_files) == 10)
+cat("Consensus-map files present:", length(chr_files), "in", map_dir, "\n")
+```
 
 ---
 
