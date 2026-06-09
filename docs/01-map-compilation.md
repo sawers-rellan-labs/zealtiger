@@ -1,5 +1,7 @@
 # Stage 1 — Compile the B73 NAM v5 genetic map
 
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
 **Code:** `R/01_compile_map.R`, driven by `run_all.R` (and `nil_introgression.qmd` §1).
 **Input:** `data/maizegdb_consensus_map/consensus_chr01.txt … chr10.txt`
 **Output:** `results/maize_map_v5_clean.rds`, `results/maize_map_v5_grid2500.rds`,

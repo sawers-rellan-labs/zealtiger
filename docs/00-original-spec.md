@@ -1,5 +1,7 @@
 # BC2S3 NIL Introgression-Size Simulation — Specification
 
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
 **Handover document for a Claude Code session.**
 **Author:** Fausto Rodríguez-Zapata
 **Confirmed environment:** R 4.5.2, macOS arm64, `simcross` 0.8 (CRAN binary),

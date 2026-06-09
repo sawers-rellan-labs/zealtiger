@@ -1,5 +1,7 @@
 # Stage 4 — Size distribution + interference sensitivity
 
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
 **Code:** `R/04_summarize.R`, driven by `run_all.R --sim`; also
 `nil_introgression.qmd` §4.
 **Output:** `results/nil_summary.*`, `results/figures/introgression_size.{png,pdf}`,

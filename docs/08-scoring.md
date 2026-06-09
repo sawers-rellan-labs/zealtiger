@@ -1,5 +1,7 @@
 # Scoring RTIGER calls against ground truth
 
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
 **Code:** `R/06_score_rtiger.R`, driven by `score_rtiger.R`.
 **Output:** `results/rtiger_benchmark/scoring/` — `marker_scores.csv`,
 `segment_scores.csv`, `crossover_scores.csv`, `crossover_recovery.png`.

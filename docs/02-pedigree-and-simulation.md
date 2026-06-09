@@ -1,5 +1,7 @@
 # Stage 2 — BC2S3 pedigree + simulation
 
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
 **Code:** `R/02_simulate.R`, driven by `run_all.R --sim`.
 **Output (via Stages 3–4):** `results/nil_segments.*`, `results/nil_summary.*`
 

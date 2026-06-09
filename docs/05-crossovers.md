@@ -1,5 +1,7 @@
 # Crossovers per genome (for RTIGER autotune)
 
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
 **Code:** `n_crossovers_hap` + `crossover_summary` in `R/02_simulate.R` /
 `R/04_summarize.R`, driven by `run_all.R --sim`.
 **Output:** `results/nil_crossovers.csv`, `results/crossovers_per_chr.csv`,

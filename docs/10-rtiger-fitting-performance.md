@@ -1,5 +1,7 @@
 # RTIGER fitting performance — why it's slow and how it scales
 
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
 Notes on the runtime/memory cost of `fit_rtiger.R`, why `autotune=TRUE` is much
 slower than a fixed rigidity, and what to expect at full (1,439-sample) scale.
 Companion to [07-rtiger-fitting.md](07-rtiger-fitting.md) (mechanics) and

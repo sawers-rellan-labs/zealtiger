@@ -1,5 +1,7 @@
 # Stage 3 — Convert donor segments cM → Mb
 
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
 **Code:** `R/03_segments_to_mb.R`, driven by `run_all.R --sim`.
 **Output:** `results/nil_segments.csv` / `.rds` (one row per donor segment with
 `start_cm, end_cm, start_bp, end_bp, mb`).

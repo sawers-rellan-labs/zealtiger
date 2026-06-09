@@ -1,5 +1,7 @@
 # RTIGER benchmark dataset (ground truth known)
 
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
 **Code:** `R/05_make_rtiger_input.R`, driven by `make_rtiger_benchmark.R`.
 **Output:** `results/rtiger_benchmark/` — `counts/sim_NNNN.tsv`, `expDesign.csv`,
 `seqlengths.csv`, `truth_segments.csv`, `truth_markers.rds`, `sample_stats.csv`,

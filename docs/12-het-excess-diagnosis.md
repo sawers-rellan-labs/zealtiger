@@ -1,5 +1,7 @@
 # Diagnosing a heterozygote excess in ancestry calls
 
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
 An ancestry caller run on the real **SNP50K** VCF returned BC2S3 genotype
 frequencies with **~3× more heterozygotes than expected**. This note works
 through what can and cannot cause that, because the answer is diagnostic: it

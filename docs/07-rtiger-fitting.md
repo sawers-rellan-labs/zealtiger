@@ -1,5 +1,7 @@
 # Fitting RTIGER on the benchmark
 
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
 **Code:** `fit_rtiger.R`.
 **Output:** `results/rtiger_benchmark/rtiger_out/` — per-sample
 `CompleteBlock-state-<name>.bed` (chr, start, end, `AA`/`AB`/`BB`), state/count

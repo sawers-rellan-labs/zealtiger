@@ -1,5 +1,7 @@
 # Benchmarking an ancestry / segmentation caller against the simulation
 
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
 This simulation produces **ground-truth introgression segments** for 100 (or
 1,400) BC2S3 NILs, so you can score *any* ancestry-calling / genotype-segmentation
 tool — not just RTIGER — against a known answer. This doc explains the common

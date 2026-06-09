@@ -1,5 +1,7 @@
 # Choosing the RTIGER rigidity parameter
 
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
 ## Units: rigidity is in *informative* markers
 
 RTIGER's `rigidity` (min markers per segment) counts **informative** markers
