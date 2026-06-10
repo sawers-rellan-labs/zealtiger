@@ -8,31 +8,36 @@ format:
     toc-depth: 3
     code-fold: show
     df-print: paged
-    embed-resources: true   # self-contained single file (publishable under docs/)
+    embed-resources: true
 execute:
   warning: false
   message: false
 params:
   mb_calls:   "data/molbreeding_45k/calls_common_schema.csv"
   skim_calls: "data/rtiger_50K/calls_common_schema.csv"
-  mb_counts:  "data/molbreeding_45k/counts"
   sample_map: "data/molbreeding_45k_sample_map.tsv"
+  mb_counts:  "data/molbreeding_45k/counts"
 ---
 
 **Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
 
-Cross-validation of ancestry source **#2 (SNP50K skim → RTIGER, ~0.4×)** against
-source **#5 (MolBreeding 45K SNP array, ~100% call)** for the 14 BZea NILs genotyped
-on both platforms. The array is the near-empirical reference; the skim is the
-low-coverage workhorse used genome-wide. Both call sets are RTIGER segments on
-**B73 NAM v5** in the common schema (`name, chr, start_bp, end_bp, state` with
-0 = homozygous recurrent / B73, 1 = het, 2 = homozygous donor / teosinte).
+Cross-validation of ancestry source #2 (SNP50K skim → RTIGER, ~0.4×) against source
+#5 (MolBreeding 45K SNP array, ~100% call) for the 14 BZea NILs genotyped on both
+platforms. The array is the higher-confidence empirical genotyping; the skim is the
+low-coverage workhorse used genome-wide. Both call sets are RTIGER segments on B73 NAM
+v5 in the common schema (`name, chr, start_bp, end_bp, state` with 0 = homozygous
+recurrent / B73, 1 = het, 2 = homozygous donor / teosinte).
+
+The consensus-map BC2S3 **simulation** (source #1) is shown only as a **null
+expectation** for introgression structure under the modeled recombination process
+(MaizeGDB consensus map, ~1,783 cM — inflated for a composite map; `m=10` interference;
+BC2S3 pedigree). It is **not ground truth** — deviations from it may reflect the model's
+biases as much as the data's.
 
 > Provenance of the inputs (run first): the MolBreeding panel is lifted v3→v4→v5
 > (`molbreeding_liftover.R`), encoded as 0/1/2 pseudo-counts (`molbreeding_to_rtiger.R`),
-> and fit at **rigidity r = 2** (selected by `make_45k_array_benchmark.R` +
-> `sweep_rigidity_45k.R`; the skim uses r = 3). The skim per-donor calls come from
-> `fit_rtiger_by_donor.R`.
+> and fit at rigidity r = 2 (`make_45k_array_benchmark.R` + `sweep_rigidity_45k.R`;
+> the skim uses r = 3). The skim per-donor calls come from `fit_rtiger_by_donor.R`.
 
 ## Setup
 
@@ -66,7 +71,7 @@ cat(sprintf("Samples on both platforms: %d | grid markers: %d\n",
 
 **Purpose**: Assign each source a 0/1/2 state at every grid marker, per sample.
 
-**Approach**: Build per-sample `GRanges` of segments; overlap the width-1 grid
+**Approach**: Build per-sample GRanges of segments; overlap the width-1 grid
 positions to pull the called state.
 
 ```{r state-grid}
@@ -87,48 +92,66 @@ paired <- paired %>%
             by = "name")
 ```
 
-## Per-sample concordance
+## Concordance vs skim missingness
 
-**Expected outcome**: High agreement, with the donor-rich samples lowest (most
-opportunity for the skim to under-call).
+**Purpose**: Test whether the skim's agreement with the array degrades as the skim's
+own missing-data rate rises — i.e. is the disagreement coverage-driven?
+
+**Approach**: Per-sample skim missingness = fraction of the SNP50K sites with no
+reads (`RefCount + AltCount == 0`), read from the skim input counts
+(`data/rtiger_50K/counts/<accession>/<sample>.tsv`). Plot against the per-sample
+array-vs-skim concordance.
 
 ```{r per-sample}
+skim_missing <- function(s) {
+  f <- Sys.glob(file.path("data/rtiger_50K/counts", "*", paste0(s, ".tsv")))
+  if (!length(f)) return(NA_real_)
+  d <- readr::read_tsv(f[1], col_names = c("chr","pos","rb","rc","ab","ac"),
+                       show_col_types = FALSE)
+  mean(d$rc + d$ac == 0)
+}
+
 per_sample <- paired %>%
   group_by(name, accession) %>%
-  summarise(n = n(), concordance = mean(array == skim), .groups = "drop") %>%
-  arrange(concordance)
+  summarise(n = n(), concordance = mean(array == skim),
+            array_dosage = mean(array) / 2, .groups = "drop") %>%
+  mutate(skim_missing = map_dbl(name, skim_missing)) %>%
+  arrange(desc(skim_missing))
 per_sample
+```
 
-ggplot(per_sample, aes(reorder(name, concordance), concordance, fill = accession)) +
-  geom_col() +
-  geom_hline(yintercept = mean(per_sample$concordance), linetype = 2, colour = "grey40") +
-  coord_flip(ylim = c(0.6, 1)) +
-  labs(x = NULL, y = "marker concordance (array vs skim)",
-       title = sprintf("Per-sample concordance (mean %.3f)", mean(per_sample$concordance))) +
+```{r conc-vs-missing}
+r_cm <- cor(per_sample$skim_missing, per_sample$concordance)
+ggplot(per_sample, aes(skim_missing, concordance)) +
+  geom_smooth(method = "lm", se = FALSE, colour = "grey75", linewidth = 0.5) +
+  geom_point(aes(colour = array_dosage), size = 3) +
+  geom_text(aes(label = name), size = 2.6, vjust = -0.9, check_overlap = TRUE) +
+  scale_x_continuous(labels = scales::percent) +
+  scale_colour_viridis_c(option = "magma", direction = -1, end = 0.9) +
+  labs(x = "skim missing-data rate (fraction of SNP50K sites uncovered)",
+       y = "marker concordance with 45K array",
+       colour = "donor\ndosage\n(array)",
+       title = sprintf("Concordance vs skim missingness (r = %+.2f)", r_cm),
+       subtitle = "Discordance tracks donor content, not missingness — the low-concordance sample is the most donor-rich") +
   theme_bw()
 ```
 
-## Confusion matrix — array (truth) vs skim
+## Confusion matrix — array (reference) vs skim
 
-**Approach**: Row-normalise so each row is the skim's recovery of an array state
-(recall). The diagonal is correct recovery; off-diagonal shows where the skim drifts.
+Rows = array state (reference, MolBreeding), columns = skim call; each cell is the marker count and
+the row percentage (the skim's recovery of that array state). The diagonal is
+correct recovery; off-diagonal shows where the skim drifts.
 
 ```{r confusion}
-cm <- table(array = factor(paired$array, 0:2), skim = factor(paired$skim, 0:2))
+cm      <- table(array = factor(paired$array, 0:2), skim = factor(paired$skim, 0:2))
 overall <- sum(diag(cm)) / sum(cm)
-cm_df <- as.data.frame(cm) %>%
-  group_by(array) %>% mutate(prop = Freq / sum(Freq)) %>% ungroup()
-
-lab <- c("0\nrecurrent", "1\nhet", "2\ndonor")
-ggplot(cm_df, aes(skim, array, fill = prop)) +
-  geom_tile() +
-  geom_text(aes(label = sprintf("%.2f\n(%d)", prop, Freq)), size = 3) +
-  scale_fill_viridis_c(option = "magma", direction = -1, limits = c(0, 1)) +
-  scale_x_discrete(labels = lab) + scale_y_discrete(labels = lab, limits = rev) +
-  labs(x = "skim (SNP50K, r=3)", y = "array (MolBreeding 45K, truth)",
-       fill = "row prop",
-       title = sprintf("Array → skim recovery (overall concordance %.3f)", overall)) +
-  theme_minimal()
+prop    <- sweep(cm, 1, rowSums(cm), "/")
+disp    <- matrix(sprintf("%d (%.1f%%)", cm, 100 * prop), nrow = 3,
+                  dimnames = list(`array \\ skim` = c("0 recurrent","1 het","2 donor"),
+                                  c("0 recurrent","1 het","2 donor")))
+knitr::kable(disp, align = "r",
+             caption = sprintf("Array (rows) vs skim (cols): count (row %%). Overall marker concordance %.3f.",
+                               overall))
 
 # donor-present recovery
 dp <- paired$array %in% c(1, 2)
@@ -136,6 +159,43 @@ cat(sprintf("Array donor-present markers: %d | skim also donor-present: %.1f%%\n
             sum(dp), 100 * mean(paired$skim[dp] %in% c(1, 2))))
 cat(sprintf("Array homozygous-donor markers: %d | skim also hom-donor: %.1f%%\n",
             sum(paired$array == 2), 100 * mean(paired$skim[paired$array == 2] == 2)))
+```
+
+## Donor-call composition — het vs homozygous donor
+
+**Purpose**: With the dominant homozygous-recurrent (B73) background removed, zoom in
+on the donor calls and compare their composition between platforms.
+
+**Approach**: For each sample × platform, stack het and homozygous-donor as their
+percentage of the (shared, covered) markers — so the bar height is the true donor
+fraction of the genome (a few % up to ~16%), with the dominant homozygous-recurrent
+background simply not drawn. Array next to skim, per sample (ordered by array donor
+dosage). The skim's shorter, teal-shifted bars show donor under-calling and the
+homozygous-donor → het demotion.
+
+```{r donor-composition}
+denom <- paired %>% count(name, name = "tot")     # shared markers covered on both platforms
+comp <- bind_rows(
+  paired %>% transmute(name, platform = "array (45K)", state = array),
+  paired %>% transmute(name, platform = "skim (50K)",  state = skim)
+) %>%
+  filter(state %in% c(1, 2)) %>%
+  count(name, platform, state) %>%
+  left_join(denom, by = "name") %>%
+  mutate(pct = n / tot, state = factor(state, c(1, 2), c("het", "homozygous donor")))
+
+lev <- per_sample %>% arrange(array_dosage) %>% pull(name)
+comp$name <- factor(comp$name, levels = lev)
+
+ggplot(comp, aes(y = name, x = pct, fill = state)) +
+  geom_col(position = "stack") +
+  facet_wrap(~ platform) +
+  scale_fill_manual(values = c("het" = "forestgreen", "homozygous donor" = "purple4")) +
+  scale_x_continuous(labels = scales::percent) +
+  labs(x = "% of genome called donor (het + homozygous donor)", y = NULL, fill = NULL,
+       title = "Donor calls as % of genome (recurrent B73 not drawn)",
+       subtitle = "Stacked het + homozygous donor; array (reference) vs skim, per sample") +
+  theme_bw()
 ```
 
 ## Donor dosage — array vs skim
@@ -170,18 +230,83 @@ ggplot(dose, aes(array, skim, colour = kind)) +
   theme_bw()
 ```
 
+## Introgression-size distribution
+
+**Purpose**: Compare the sizes of called donor introgressions between the array and
+the skim — does the low-coverage skim fragment introgressions into smaller pieces?
+
+**Approach**: An introgression = a maximal run of consecutive donor-present segments
+(state 1 or 2) per chromosome; its size is the span end−start. Sizes pooled across the
+14 shared NILs, array (forestgreen) vs skim (purple4).
+
+```{r intro-sizes}
+intro_sizes <- function(df, plat) {
+  df %>%
+    filter(name %in% samples) %>%
+    arrange(name, chr, start_bp) %>%
+    group_by(name, chr) %>%
+    mutate(donor = state > 0, run = cumsum(c(TRUE, diff(donor) != 0))) %>%
+    filter(donor) %>%
+    group_by(name, chr, run) %>%
+    summarise(size_mb = (max(end_bp) - min(start_bp)) / 1e6, .groups = "drop") %>%
+    mutate(platform = plat)
+}
+sizes <- bind_rows(intro_sizes(mb, "array (45K)"),
+                   intro_sizes(skim, "skim (50K)"))
+
+# consensus-map BC2S3 simulation (null expectation), from the 45K-array benchmark mosaic
+sim_seg <- readr::read_csv("results/rtiger_45k_benchmark/truth_segments.csv",
+                             show_col_types = FALSE)
+sim_sizes <- sim_seg %>%
+  arrange(name, chr, start_bp) %>%
+  group_by(name, chr) %>%
+  mutate(donor = state > 0, run = cumsum(c(TRUE, diff(donor) != 0))) %>%
+  filter(donor) %>%
+  group_by(name, chr, run) %>%
+  summarise(size_mb = (max(end_bp) - min(start_bp)) / 1e6, .groups = "drop")
+
+bind_rows(sizes, mutate(sim_sizes, platform = "simulation (null)")) %>%
+  group_by(platform) %>%
+  summarise(n_introgressions = n(), median_mb = round(median(size_mb), 2),
+            mean_mb = round(mean(size_mb), 2), .groups = "drop")
+```
+
+```{r intro-sizes-plot}
+ggplot(sizes, aes(size_mb)) +
+  geom_histogram(aes(y = after_stat(density), fill = platform),
+                 position = "identity", alpha = 0.5, bins = 40) +
+  geom_freqpoly(data = sim_sizes, aes(y = after_stat(density)),
+                bins = 40, colour = "grey20", linewidth = 0.8) +
+  scale_fill_manual(values = c("array (45K)" = "forestgreen", "skim (50K)" = "purple4")) +
+  scale_x_log10() +
+  labs(x = "introgression size (Mb, log scale)", y = "density", fill = NULL,
+       title = "Introgression-size distribution: array vs skim",
+       subtitle = "grey line = consensus-map simulation (null expectation)") +
+  theme_bw()
+```
+
 ## Findings
 
-- **Mean marker concordance ≈ 0.91** across the 14 shared NILs; the lowest sample
-  is the most donor-rich (most to miss).
+- Mean marker concordance ≈ 0.91 across the 14 shared NILs.
+- **Discordance is driven by donor content, not skim missingness.** Concordance vs
+  skim missing-rate is weakly positive (r ≈ +0.3) — more dropout does not mean worse
+  agreement, because the surviving markers are mostly recurrent background that both
+  platforms call. The lowest-concordance sample is the most donor-rich, not the most
+  missing: the skim errs specifically where there is donor signal.
 - **Recurrent background is recovered near-perfectly** (~96% of array-recurrent
-  markers), so the skim is reliable for the B73 genome and for *detecting* donor
+  markers), so the skim is reliable for the B73 genome and for detecting donor
   presence (~71% of donor-present markers recovered).
-- **The skim under-calls donor dosage**, and **homozygous donor is the weak spot**
+- **The skim under-calls donor dosage**, and homozygous donor is the weak spot
   (~17% recovered as BB; most demoted to het or recurrent) — at ~0.4× a
   homozygous-donor site rarely shows enough ALT reads to read as BB. This is the
   coverage-limited behaviour anticipated in `docs/12-het-excess-diagnosis.md`, here
   quantified against an empirical reference.
-- The B73-bulk checks sit at ≈ 0 dosage on both platforms (polarity / negative
-  control confirmed).
+- **Relative to the consensus-map simulation (null expectation, grey).** At r=2 the
+  array shows many small segments and the skim few large ones; both are compared to
+  the simulation only as a null baseline, not ground truth. Segment granularity is
+  strongly rigidity-dependent (see the separate rigidity analysis): at a matched ~2 Mb
+  resolution the array resolves ~13 donor blocks/sample and the skim ~6, vs the
+  simulation's ~10 — so the empirical platforms bracket the null rather than "err" against it.
+- The B73-bulk checks sit at ≈ 0 dosage on both platforms (polarity / negative control
+  confirmed).
 ```
