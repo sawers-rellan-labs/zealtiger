@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Fausto Rodríguez-Zapata">
-<meta name="dcterms.date" content="2026-06-09">
+<meta name="dcterms.date" content="2026-06-11">
 
 <title>MolBreeding 45K array vs SNP50K skim — ancestry-call concordance</title>
 <style>
@@ -3512,7 +3512,7 @@ window.onload = function() {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">June 9, 2026</p>
+      <p class="date">June 11, 2026</p>
     </div>
   </div>
   
@@ -3529,7 +3529,7 @@ window.onload = function() {
 <p><strong>Two filters applied from the start:</strong> (1) <strong>line QC</strong> — drop the 6 lab-flagged <code>Crappy</code> samples (≈18% genome-wide het, implausible for BC2S3 → contamination); keep the 8 <code>Good</code> teosinte NILs; (2) <strong>SNP filter</strong> — keep only array markers overlapping the <strong>wideseq teosinte-vs-B73 panel</strong> (9,178 of 21,223 lifted v5 markers, donor- informative).</p>
 <p><strong>Rigidity chosen objectively by RTIGER autotune</strong> (initial r₀=50) — the <em>same</em> method for both platforms, to avoid ad-hoc per-platform choices. Autotune selects <strong>r = 8 for both</strong>. Calls are RTIGER segments on B73 NAM v5 (<code>name, chr, start_bp, end_bp, state</code>; 0 = recurrent/B73, 1 = het, 2 = homozygous donor).</p>
 <blockquote class="blockquote">
-<p>The consensus-map BC2S3 <strong>simulation</strong> (source #1) is a <strong>null expectation</strong> under the modeled recombination process (MaizeGDB consensus map ~1,783 cM — inflated for a composite map; <code>m=10</code> interference; BC2S3 pedigree), <strong>not ground truth</strong>.</p>
+<p>The consensus-map BC2S3 <strong>simulation</strong> (source #1) is a <strong>null expectation</strong> under the modeled recombination process (the MaizeGDB consensus map, ~1,783 cM total; <code>m=10</code> interference; BC2S3 pedigree), <strong>not ground truth</strong>.</p>
 </blockquote>
 <section id="setup" class="level2">
 <h2 class="anchored" data-anchor-id="setup">Setup</h2>
@@ -3787,7 +3787,7 @@ window.onload = function() {
 <li><strong>Pipeline, filtered from the start:</strong> 8 Good NILs × 9,178 wideseq-informative array markers, both platforms painted with RTIGER <strong>autotune (r₀=50 → r=8)</strong> — one objective rigidity method for both, no ad-hoc per-platform tuning.</li>
 <li><strong>Marker-level concordance is high</strong>, with the skim recovering recurrent background near-perfectly but under-calling donor (especially homozygous donor) — coverage- limited behaviour (<code>docs/12</code>), quantified against the array.</li>
 <li><strong>The two empirical platforms bracket the simulation null on CO count</strong> (array &gt; sim &gt; skim): the array resolves the most recombination, the low-coverage skim the least (it merges/misses introgressions at r=8), the consensus-map null in between. They do <strong>not</strong> converge on a single segment size under consistent autotuning.</li>
-<li><strong>The simulation is a null, not truth</strong> — its inflated consensus map (~1,783 cM) makes its own block/CO counts uncertain, so divergence from it is an observation, not an error. “Resolution” = the ~1.9 Mb detection limit at r=8, distinct from the (larger) median segment size, which is a result. ```</li>
+<li><strong>The simulation is a null, not truth</strong> — it runs on the MaizeGDB consensus map (~1,783 cM), a generic composite map rather than one specific to this cross, so its own block/CO counts are a modeled expectation and divergence from it is an observation, not an error. “Resolution” = the ~1.9 Mb detection limit at r=8, distinct from the (larger) median segment size, which is a result. ```</li>
 </ul>
 </section>
 

@@ -39,8 +39,8 @@ both**. Calls are RTIGER segments on B73 NAM v5 (`name, chr, start_bp, end_bp, s
 0 = recurrent/B73, 1 = het, 2 = homozygous donor).
 
 > The consensus-map BC2S3 **simulation** (source #1) is a **null expectation** under
-> the modeled recombination process (MaizeGDB consensus map ~1,783 cM — inflated for a
-> composite map; `m=10` interference; BC2S3 pedigree), **not ground truth**.
+> the modeled recombination process (the MaizeGDB consensus map, ~1,783 cM total;
+> `m=10` interference; BC2S3 pedigree), **not ground truth**.
 
 ## Setup
 
@@ -208,8 +208,9 @@ ggplot(comp, aes(y = name, x = pct, fill = state)) +
   > skim): the array resolves the most recombination, the low-coverage skim the least
   (it merges/misses introgressions at r=8), the consensus-map null in between. They do
   **not** converge on a single segment size under consistent autotuning.
-- **The simulation is a null, not truth** — its inflated consensus map (~1,783 cM)
-  makes its own block/CO counts uncertain, so divergence from it is an observation, not
-  an error. "Resolution" = the ~1.9 Mb detection limit at r=8, distinct from the
+- **The simulation is a null, not truth** — it runs on the MaizeGDB consensus map
+  (~1,783 cM), a generic composite map rather than one specific to this cross, so its
+  own block/CO counts are a modeled expectation and divergence from it is an
+  observation, not an error. "Resolution" = the ~1.9 Mb detection limit at r=8, distinct from the
   (larger) median segment size, which is a result.
 ```
