@@ -538,39 +538,107 @@ ancestry/segment calling at the real **SNP50K** regime (λ ≈ 0.43×, ~71% miss
 **Approach**: `make_rtiger_benchmark.R` writes 100 NILs as RTIGER allele-count
 files with known truth; `fit_rtiger.R` fits RTIGER (Julia backend, fork
 `faustovrz/RTIGER@optimize-julia-core`) at a fixed rigidity; `score_rtiger.R`
-scores the calls against truth. A rigidity sweep selects the optimum **r = 3**
-(see `docs/06`–`docs/11`). The tables below are that r = 3 fit; reproduce with
-`Rscript fit_rtiger.R 0 3 0` then
-`Rscript score_rtiger.R --rtiger results/rtiger_benchmark/rtiger_out_r3/rtiger_result.rds`.
+scores the calls against truth. We report **two rigidities** so the choice is not
+ad hoc:
 
-**Expected outcome**: precision/recall by genotype class at the optimal rigidity.
+- **r = 3** — the *minimum-CO-bias* point of the rigidity sweep (`docs/09`): of all
+  rigidities tested it recovers the most crossovers. Reproduce with
+  `Rscript fit_rtiger.R 0 3 0 4` then
+  `Rscript score_rtiger.R --rtiger results/rtiger_benchmark/rtiger_out_r3/rtiger_result.rds`.
+- **r = 8** — chosen *objectively* by RTIGER's autotune (`optimize_R`, initial
+  r₀ = 50, minimizing the expected number of erroneous segments). This is the **same
+  value both empirical platforms** — MolBreeding 45K array and SNP50K skim —
+  autotune to (`array_vs_skim.qmd`), so the simulation, the array, and the skim all
+  agree on r = 8. Reproduce with `Rscript agent/autotune_rtiger_benchmark.R 0 50 "" 4`
+  (writes `rtiger_out_auto/`, records the pick in `autotune_selected.txt`).
 
-```{r rtiger_benchmark, echo=FALSE}
-# Headline r = 3 results on the 100-NIL SNP50K benchmark (save.results = FALSE).
-# Static (no Julia/RTIGER needed to render); see docs/08 and results/rtiger_benchmark/scoring/.
-marker <- tibble::tribble(
-  ~state,                   ~recall, ~precision,
-  "0 homozygous recurrent",   1.000,     0.999,
-  "1 heterozygous",           0.974,     0.990,
-  "2 homozygous donor",       0.998,     0.997
+The trailing `4` is the Julia EM thread count: `threads = 4` cuts benchmark walltime
+**~35%** on this machine versus single-threaded; fits are deterministic in the thread
+count, so the tables below are identical regardless.
+
+How r = 8 is obtained — the objective autotune call itself (kept `eval=FALSE`
+because it needs Julia + the RTIGER fork, like the rest of this section; the tables
+above are its scored outputs). The full script is `agent/autotune_rtiger_benchmark.R`:
+
+```{r autotune_rigidity, eval=FALSE}
+library(RTIGER); library(readr)
+setupJulia(JULIA_HOME = Sys.getenv("JULIA_HOME")); sourceJulia()
+
+ed   <- read_csv("results/rtiger_benchmark/expDesign.csv",  show_col_types = FALSE)
+sl   <- read_csv("results/rtiger_benchmark/seqlengths.csv", show_col_types = FALSE)
+seqv <- setNames(sl$len, sl$chr_label)
+
+# autotune=TRUE: fit once at the initial r0, run optimize_R (minimize the expected
+# number of erroneous segments over a log-spaced rigidity grid), then refit at the
+# winner. BOTH EM fits honour `threads`; optimize_R itself is analytic (single-thread).
+# average_coverage and crossovers_per_megabase are left NULL so they are derived from
+# the data — the same objective basis used on the real platforms (no truth peeking).
+fit <- RTIGER(
+  expDesign    = ed,
+  outputdir    = "results/rtiger_benchmark/rtiger_out_auto",
+  seqlengths   = seqv,
+  rigidity     = 50L,        # initial r0
+  autotune     = TRUE,
+  max_rigidity = 2L^9L,
+  save.results = FALSE,
+  threads      = 4L,
+  verbose      = TRUE
 )
-segment <- tibble::tribble(
-  ~class,                   ~n_truth, ~precision, ~recall,   ~F1,  ~FDR, ~boundary_kb,
-  "homozygous donor",            884,      0.987,   0.920, 0.952, 0.013,          85,
-  "heterozygous",                516,      0.962,   0.775, 0.858, 0.039,         127,
-  "TOTAL (donor present)",      1400,      0.981,   0.869, 0.921, 0.019,          85
-)
-knitr::kable(marker,
-  caption = "Marker-level (RTIGER, r = 3): overall accuracy 0.999, 0.36% uncovered.")
-knitr::kable(segment,
-  caption = paste("Segment-level, reciprocal overlap >= 0.5.",
-                  "Crossovers: 19.4 called vs 21.8 true (bias -2.4)."))
+fit@params$rigidity   # -> 8  (autotuned rigidity; ~36 s / 100 NILs single-threaded)
 ```
 
-**Takeaways**: marker-level genotyping is near-perfect (**99.9%**); donor-segment
-**precision ≥ 0.98 (FDR ≤ 2%)** — almost no false introgressions; **recall
-~0.87–0.92**, the missing ~8–13% being sub-Mb segments below the SNP50K detection
-floor (`docs/09`), not a tuning shortfall. Boundaries land within ~2 marker
-spacings (~85 kb; ~127 kb for het). RTIGER ran on the **fast path**
-(`save.results = FALSE`, ~30 s / 100 samples) and was scored from the saved
-object.
+**Expected outcome**: precision/recall by genotype class at both rigidities — the
+hand-tuned minimum-bias r = 3 and the objective autotune r = 8.
+
+```{r rtiger_benchmark, echo=FALSE}
+# Headline results on the 100-NIL SNP50K benchmark (save.results = FALSE), scored
+# against the simulated ground truth. Static (no Julia/RTIGER needed to render);
+# r=3   -> results/rtiger_benchmark/scoring/        (min-CO-bias point of the sweep)
+# r=8   -> results/rtiger_benchmark/scoring_auto_r8/ (objective autotune; matches both platforms)
+marker <- tibble::tribble(
+  ~r, ~state,                   ~recall, ~precision,
+  3L, "0 homozygous recurrent",   1.000,     0.999,
+  3L, "1 heterozygous",           0.974,     0.990,
+  3L, "2 homozygous donor",       0.998,     0.997,
+  8L, "0 homozygous recurrent",   1.000,     0.999,
+  8L, "1 heterozygous",           0.974,     0.983,
+  8L, "2 homozygous donor",       0.996,     0.997
+)
+segment <- tibble::tribble(
+  ~r, ~class,                   ~n_truth, ~precision, ~recall,   ~F1,  ~FDR, ~boundary_kb,
+  3L, "homozygous donor",            884,      0.987,   0.920, 0.952, 0.013,          85,
+  3L, "heterozygous",                516,      0.962,   0.775, 0.858, 0.039,         127,
+  3L, "TOTAL (donor present)",      1400,      0.981,   0.869, 0.921, 0.019,          85,
+  8L, "homozygous donor",            884,      0.999,   0.887, 0.939, 0.001,          85,
+  8L, "heterozygous",                516,      0.895,   0.773, 0.830, 0.105,         127,
+  8L, "TOTAL (donor present)",      1400,      0.980,   0.861, 0.917, 0.020,          85
+)
+crossovers <- tibble::tribble(
+  ~r, ~called, ~true, ~co_bias,
+  3L,    19.4,  21.8,    -2.44,
+  8L,    19.1,  21.8,    -2.71
+)
+knitr::kable(marker,
+  caption = "Marker-level per-state recall/precision. Overall accuracy 0.999, ~0.36% uncovered at both r.")
+knitr::kable(segment,
+  caption = "Segment-level, reciprocal overlap >= 0.5, by rigidity.")
+knitr::kable(crossovers,
+  caption = paste("Crossovers per genome vs ground truth (true = 21.8).",
+                  "r = 3 is the minimum-bias rigidity; the ~-2.4 floor is structural."))
+```
+
+**Takeaways**: marker-level genotyping is near-perfect (**99.9%**) at both
+rigidities; donor-segment **precision ≥ 0.98 (FDR ≤ 2%)** — almost no false
+introgressions; **recall ~0.86–0.92**, the missing ~8–14% being sub-Mb segments
+below the SNP50K detection floor (`docs/09`), not a tuning shortfall. Boundaries
+land within ~2 marker spacings (~85 kb; ~127 kb for het).
+
+The two rigidities trade off as expected. **r = 3 minimizes crossover bias**
+(−2.4 vs −2.7) and gives the best heterozygous-segment precision (0.96 vs 0.90),
+so it recovers the most recombination — but no rigidity reaches zero bias, because
+the ~2.4-CO deficit is the structural sub-Mb floor at λ≈0.43×, not a tuning choice.
+**r = 8 is the objective autotune pick** and agrees with both empirical platforms,
+trading a slightly higher CO under-count for marginally cleaner homozygous-donor
+calls (precision 0.999, FDR 0.1%). RTIGER ran on the **fast path**
+(`save.results = FALSE`, ~30 s / 100 samples single-threaded, ~20 s at
+`threads = 4`) and was scored from the saved object.

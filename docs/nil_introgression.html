@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Fausto Rodríguez-Zapata">
-<meta name="dcterms.date" content="2026-06-09">
+<meta name="dcterms.date" content="2026-06-11">
 
 <title>BC2S3 NIL Introgression-Size Distribution</title>
 <style>
@@ -3531,7 +3531,7 @@ window.onload = function() {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">June 9, 2026</p>
+      <p class="date">June 11, 2026</p>
     </div>
   </div>
   
@@ -4140,14 +4140,50 @@ Per-chromosome conservative CO/Mb vector (max over samples):</code></pre>
 <section id="benchmarking-rtiger" class="level2">
 <h2 class="anchored" data-anchor-id="benchmarking-rtiger">Benchmarking RTIGER</h2>
 <p><strong>Purpose</strong>: use the simulated NILs as ground truth to benchmark RTIGER’s ancestry/segment calling at the real <strong>SNP50K</strong> regime (λ ≈ 0.43×, ~71% missing).</p>
-<p><strong>Approach</strong>: <code>make_rtiger_benchmark.R</code> writes 100 NILs as RTIGER allele-count files with known truth; <code>fit_rtiger.R</code> fits RTIGER (Julia backend, fork <code>faustovrz/RTIGER@optimize-julia-core</code>) at a fixed rigidity; <code>score_rtiger.R</code> scores the calls against truth. A rigidity sweep selects the optimum <strong>r = 3</strong> (see <code>docs/06</code>–<code>docs/11</code>). The tables below are that r = 3 fit; reproduce with <code>Rscript fit_rtiger.R 0 3 0</code> then <code>Rscript score_rtiger.R --rtiger results/rtiger_benchmark/rtiger_out_r3/rtiger_result.rds</code>.</p>
-<p><strong>Expected outcome</strong>: precision/recall by genotype class at the optimal rigidity.</p>
+<p><strong>Approach</strong>: <code>make_rtiger_benchmark.R</code> writes 100 NILs as RTIGER allele-count files with known truth; <code>fit_rtiger.R</code> fits RTIGER (Julia backend, fork <code>faustovrz/RTIGER@optimize-julia-core</code>) at a fixed rigidity; <code>score_rtiger.R</code> scores the calls against truth. We report <strong>two rigidities</strong> so the choice is not ad hoc:</p>
+<ul>
+<li><strong>r = 3</strong> — the <em>minimum-CO-bias</em> point of the rigidity sweep (<code>docs/09</code>): of all rigidities tested it recovers the most crossovers. Reproduce with <code>Rscript fit_rtiger.R 0 3 0 4</code> then <code>Rscript score_rtiger.R --rtiger results/rtiger_benchmark/rtiger_out_r3/rtiger_result.rds</code>.</li>
+<li><strong>r = 8</strong> — chosen <em>objectively</em> by RTIGER’s autotune (<code>optimize_R</code>, initial r₀ = 50, minimizing the expected number of erroneous segments). This is the <strong>same value both empirical platforms</strong> — MolBreeding 45K array and SNP50K skim — autotune to (<code>array_vs_skim.qmd</code>), so the simulation, the array, and the skim all agree on r = 8. Reproduce with <code>Rscript agent/autotune_rtiger_benchmark.R 0 50 &quot;&quot; 4</code> (writes <code>rtiger_out_auto/</code>, records the pick in <code>autotune_selected.txt</code>).</li>
+</ul>
+<p>The trailing <code>4</code> is the Julia EM thread count: <code>threads = 4</code> cuts benchmark walltime <strong>~35%</strong> on this machine versus single-threaded; fits are deterministic in the thread count, so the tables below are identical regardless.</p>
+<p>How r = 8 is obtained — the objective autotune call itself (kept <code>eval=FALSE</code> because it needs Julia + the RTIGER fork, like the rest of this section; the tables above are its scored outputs). The full script is <code>agent/autotune_rtiger_benchmark.R</code>:</p>
+<div class="cell">
+<details open class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb43"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb43-1"><a href="#cb43-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(RTIGER); <span class="fu">library</span>(readr)</span>
+<span id="cb43-2"><a href="#cb43-2" aria-hidden="true" tabindex="-1"></a><span class="fu">setupJulia</span>(<span class="at">JULIA_HOME =</span> <span class="fu">Sys.getenv</span>(<span class="st">&quot;JULIA_HOME&quot;</span>)); <span class="fu">sourceJulia</span>()</span>
+<span id="cb43-3"><a href="#cb43-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-4"><a href="#cb43-4" aria-hidden="true" tabindex="-1"></a>ed   <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">&quot;results/rtiger_benchmark/expDesign.csv&quot;</span>,  <span class="at">show_col_types =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb43-5"><a href="#cb43-5" aria-hidden="true" tabindex="-1"></a>sl   <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="st">&quot;results/rtiger_benchmark/seqlengths.csv&quot;</span>, <span class="at">show_col_types =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb43-6"><a href="#cb43-6" aria-hidden="true" tabindex="-1"></a>seqv <span class="ot">&lt;-</span> <span class="fu">setNames</span>(sl<span class="sc">$</span>len, sl<span class="sc">$</span>chr_label)</span>
+<span id="cb43-7"><a href="#cb43-7" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb43-8"><a href="#cb43-8" aria-hidden="true" tabindex="-1"></a><span class="co"># autotune=TRUE: fit once at the initial r0, run optimize_R (minimize the expected</span></span>
+<span id="cb43-9"><a href="#cb43-9" aria-hidden="true" tabindex="-1"></a><span class="co"># number of erroneous segments over a log-spaced rigidity grid), then refit at the</span></span>
+<span id="cb43-10"><a href="#cb43-10" aria-hidden="true" tabindex="-1"></a><span class="co"># winner. BOTH EM fits honour `threads`; optimize_R itself is analytic (single-thread).</span></span>
+<span id="cb43-11"><a href="#cb43-11" aria-hidden="true" tabindex="-1"></a><span class="co"># average_coverage and crossovers_per_megabase are left NULL so they are derived from</span></span>
+<span id="cb43-12"><a href="#cb43-12" aria-hidden="true" tabindex="-1"></a><span class="co"># the data — the same objective basis used on the real platforms (no truth peeking).</span></span>
+<span id="cb43-13"><a href="#cb43-13" aria-hidden="true" tabindex="-1"></a>fit <span class="ot">&lt;-</span> <span class="fu">RTIGER</span>(</span>
+<span id="cb43-14"><a href="#cb43-14" aria-hidden="true" tabindex="-1"></a>  <span class="at">expDesign    =</span> ed,</span>
+<span id="cb43-15"><a href="#cb43-15" aria-hidden="true" tabindex="-1"></a>  <span class="at">outputdir    =</span> <span class="st">&quot;results/rtiger_benchmark/rtiger_out_auto&quot;</span>,</span>
+<span id="cb43-16"><a href="#cb43-16" aria-hidden="true" tabindex="-1"></a>  <span class="at">seqlengths   =</span> seqv,</span>
+<span id="cb43-17"><a href="#cb43-17" aria-hidden="true" tabindex="-1"></a>  <span class="at">rigidity     =</span> <span class="dv">50</span>L,        <span class="co"># initial r0</span></span>
+<span id="cb43-18"><a href="#cb43-18" aria-hidden="true" tabindex="-1"></a>  <span class="at">autotune     =</span> <span class="cn">TRUE</span>,</span>
+<span id="cb43-19"><a href="#cb43-19" aria-hidden="true" tabindex="-1"></a>  <span class="at">max_rigidity =</span> <span class="dv">2</span>L<span class="sc">^</span><span class="dv">9</span>L,</span>
+<span id="cb43-20"><a href="#cb43-20" aria-hidden="true" tabindex="-1"></a>  <span class="at">save.results =</span> <span class="cn">FALSE</span>,</span>
+<span id="cb43-21"><a href="#cb43-21" aria-hidden="true" tabindex="-1"></a>  <span class="at">threads      =</span> <span class="dv">4</span>L,</span>
+<span id="cb43-22"><a href="#cb43-22" aria-hidden="true" tabindex="-1"></a>  <span class="at">verbose      =</span> <span class="cn">TRUE</span></span>
+<span id="cb43-23"><a href="#cb43-23" aria-hidden="true" tabindex="-1"></a>)</span>
+<span id="cb43-24"><a href="#cb43-24" aria-hidden="true" tabindex="-1"></a>fit<span class="sc">@</span>params<span class="sc">$</span>rigidity   <span class="co"># -&gt; 8  (autotuned rigidity; ~36 s / 100 NILs single-threaded)</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+<p><strong>Expected outcome</strong>: precision/recall by genotype class at both rigidities — the hand-tuned minimum-bias r = 3 and the objective autotune r = 8.</p>
 <div class="cell">
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
-<caption>Marker-level (RTIGER, r = 3): overall accuracy 0.999, 0.36% uncovered.</caption>
+<caption>Marker-level per-state recall/precision. Overall accuracy 0.999, ~0.36% uncovered at both r.</caption>
 <thead>
 <tr class="header">
+<th style="text-align: right;">r</th>
 <th style="text-align: left;">state</th>
 <th style="text-align: right;">recall</th>
 <th style="text-align: right;">precision</th>
@@ -4155,18 +4191,39 @@ Per-chromosome conservative CO/Mb vector (max over samples):</code></pre>
 </thead>
 <tbody>
 <tr class="odd">
+<td style="text-align: right;">3</td>
 <td style="text-align: left;">0 homozygous recurrent</td>
 <td style="text-align: right;">1.000</td>
 <td style="text-align: right;">0.999</td>
 </tr>
 <tr class="even">
+<td style="text-align: right;">3</td>
 <td style="text-align: left;">1 heterozygous</td>
 <td style="text-align: right;">0.974</td>
 <td style="text-align: right;">0.990</td>
 </tr>
 <tr class="odd">
+<td style="text-align: right;">3</td>
 <td style="text-align: left;">2 homozygous donor</td>
 <td style="text-align: right;">0.998</td>
+<td style="text-align: right;">0.997</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">8</td>
+<td style="text-align: left;">0 homozygous recurrent</td>
+<td style="text-align: right;">1.000</td>
+<td style="text-align: right;">0.999</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">8</td>
+<td style="text-align: left;">1 heterozygous</td>
+<td style="text-align: right;">0.974</td>
+<td style="text-align: right;">0.983</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">8</td>
+<td style="text-align: left;">2 homozygous donor</td>
+<td style="text-align: right;">0.996</td>
 <td style="text-align: right;">0.997</td>
 </tr>
 </tbody>
@@ -4174,11 +4231,12 @@ Per-chromosome conservative CO/Mb vector (max over samples):</code></pre>
 </div>
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
-<caption>Segment-level, reciprocal overlap &gt;= 0.5. Crossovers: 19.4 called vs 21.8 true (bias -2.4).</caption>
+<caption>Segment-level, reciprocal overlap &gt;= 0.5, by rigidity.</caption>
 <colgroup>
-<col style="width: 30%">
-<col style="width: 11%">
-<col style="width: 14%">
+<col style="width: 4%">
+<col style="width: 29%">
+<col style="width: 10%">
+<col style="width: 13%">
 <col style="width: 9%">
 <col style="width: 8%">
 <col style="width: 8%">
@@ -4186,6 +4244,7 @@ Per-chromosome conservative CO/Mb vector (max over samples):</code></pre>
 </colgroup>
 <thead>
 <tr class="header">
+<th style="text-align: right;">r</th>
 <th style="text-align: left;">class</th>
 <th style="text-align: right;">n_truth</th>
 <th style="text-align: right;">precision</th>
@@ -4197,6 +4256,7 @@ Per-chromosome conservative CO/Mb vector (max over samples):</code></pre>
 </thead>
 <tbody>
 <tr class="odd">
+<td style="text-align: right;">3</td>
 <td style="text-align: left;">homozygous donor</td>
 <td style="text-align: right;">884</td>
 <td style="text-align: right;">0.987</td>
@@ -4206,6 +4266,7 @@ Per-chromosome conservative CO/Mb vector (max over samples):</code></pre>
 <td style="text-align: right;">85</td>
 </tr>
 <tr class="even">
+<td style="text-align: right;">3</td>
 <td style="text-align: left;">heterozygous</td>
 <td style="text-align: right;">516</td>
 <td style="text-align: right;">0.962</td>
@@ -4215,6 +4276,7 @@ Per-chromosome conservative CO/Mb vector (max over samples):</code></pre>
 <td style="text-align: right;">127</td>
 </tr>
 <tr class="odd">
+<td style="text-align: right;">3</td>
 <td style="text-align: left;">TOTAL (donor present)</td>
 <td style="text-align: right;">1400</td>
 <td style="text-align: right;">0.981</td>
@@ -4223,11 +4285,69 @@ Per-chromosome conservative CO/Mb vector (max over samples):</code></pre>
 <td style="text-align: right;">0.019</td>
 <td style="text-align: right;">85</td>
 </tr>
+<tr class="even">
+<td style="text-align: right;">8</td>
+<td style="text-align: left;">homozygous donor</td>
+<td style="text-align: right;">884</td>
+<td style="text-align: right;">0.999</td>
+<td style="text-align: right;">0.887</td>
+<td style="text-align: right;">0.939</td>
+<td style="text-align: right;">0.001</td>
+<td style="text-align: right;">85</td>
+</tr>
+<tr class="odd">
+<td style="text-align: right;">8</td>
+<td style="text-align: left;">heterozygous</td>
+<td style="text-align: right;">516</td>
+<td style="text-align: right;">0.895</td>
+<td style="text-align: right;">0.773</td>
+<td style="text-align: right;">0.830</td>
+<td style="text-align: right;">0.105</td>
+<td style="text-align: right;">127</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">8</td>
+<td style="text-align: left;">TOTAL (donor present)</td>
+<td style="text-align: right;">1400</td>
+<td style="text-align: right;">0.980</td>
+<td style="text-align: right;">0.861</td>
+<td style="text-align: right;">0.917</td>
+<td style="text-align: right;">0.020</td>
+<td style="text-align: right;">85</td>
+</tr>
+</tbody>
+</table>
+</div>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>Crossovers per genome vs ground truth (true = 21.8). r = 3 is the minimum-bias rigidity; the ~-2.4 floor is structural.</caption>
+<thead>
+<tr class="header">
+<th style="text-align: right;">r</th>
+<th style="text-align: right;">called</th>
+<th style="text-align: right;">true</th>
+<th style="text-align: right;">co_bias</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">19.4</td>
+<td style="text-align: right;">21.8</td>
+<td style="text-align: right;">-2.44</td>
+</tr>
+<tr class="even">
+<td style="text-align: right;">8</td>
+<td style="text-align: right;">19.1</td>
+<td style="text-align: right;">21.8</td>
+<td style="text-align: right;">-2.71</td>
+</tr>
 </tbody>
 </table>
 </div>
 </div>
-<p><strong>Takeaways</strong>: marker-level genotyping is near-perfect (<strong>99.9%</strong>); donor-segment <strong>precision ≥ 0.98 (FDR ≤ 2%)</strong> — almost no false introgressions; <strong>recall ~0.87–0.92</strong>, the missing ~8–13% being sub-Mb segments below the SNP50K detection floor (<code>docs/09</code>), not a tuning shortfall. Boundaries land within ~2 marker spacings (~85 kb; ~127 kb for het). RTIGER ran on the <strong>fast path</strong> (<code>save.results = FALSE</code>, ~30 s / 100 samples) and was scored from the saved object.</p>
+<p><strong>Takeaways</strong>: marker-level genotyping is near-perfect (<strong>99.9%</strong>) at both rigidities; donor-segment <strong>precision ≥ 0.98 (FDR ≤ 2%)</strong> — almost no false introgressions; <strong>recall ~0.86–0.92</strong>, the missing ~8–14% being sub-Mb segments below the SNP50K detection floor (<code>docs/09</code>), not a tuning shortfall. Boundaries land within ~2 marker spacings (~85 kb; ~127 kb for het).</p>
+<p>The two rigidities trade off as expected. <strong>r = 3 minimizes crossover bias</strong> (−2.4 vs −2.7) and gives the best heterozygous-segment precision (0.96 vs 0.90), so it recovers the most recombination — but no rigidity reaches zero bias, because the ~2.4-CO deficit is the structural sub-Mb floor at λ≈0.43×, not a tuning choice. <strong>r = 8 is the objective autotune pick</strong> and agrees with both empirical platforms, trading a slightly higher CO under-count for marginally cleaner homozygous-donor calls (precision 0.999, FDR 0.1%). RTIGER ran on the <strong>fast path</strong> (<code>save.results = FALSE</code>, ~30 s / 100 samples single-threaded, ~20 s at <code>threads = 4</code>) and was scored from the saved object.</p>
 </section>
 
 </main>
