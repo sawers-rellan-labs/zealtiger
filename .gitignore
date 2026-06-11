@@ -21,3 +21,6 @@
 
 # agent/ — internal working area (handoff prompts, roadmaps); not published
 /agent
+
+/.quarto/
+**/*.quarto_ipynb
