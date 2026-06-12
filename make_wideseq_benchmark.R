@@ -47,14 +47,16 @@ args <- commandArgs(trailingOnly = TRUE)
 params <- list(
   n_lines        = if (length(args) >= 1) as.integer(args[1]) else 100L,
   sites_per_mb   = if (length(args) >= 2) as.numeric(args[2]) else 12948,
-  lambda_mean    = if (length(args) >= 3) as.numeric(args[3]) else 0.59,
+  lambda_mean    = if (length(args) >= 3) as.numeric(args[3]) else 0.590,
   points_per_bin = if (length(args) >= 4) as.integer(args[4]) else 40L,
   bin_size       = 1e6,
   # WIDESEQ exp-floor missing-data model (NOT SNP50K): missing(l)=pi+(1-pi)e^{-k l}
   pi_floor       = 0.346,
   k_decay        = 1.256,
-  lambda_shape   = 2.5,     # Gamma shape for per-sample lambda (Inf = constant)
-  lambda_min     = 0.20,
+  # Per-sample lambda ~ NORMAL, fit to 1434 BZea wideseq samples (agent/fit_wideseq_lambda.R):
+  # mean 0.590, sd 0.226 (CV 0.38, skew 0.34) -- Normal beats Gamma/lognormal by AIC.
+  lambda_sd      = 0.226,
+  lambda_min     = 0.05,    # positivity floor (real population has a small near-0 failed-lib tail)
   error          = 0.005,
   m              = 10, p = 0,
   donor_allele   = 2L,
@@ -83,13 +85,13 @@ fs::dir_create(bin_dir)
 cat(sprintf("wideseq benchmark: %d lines, ~%.0f Mb, sites/Mb=%.0f, lambda=%.2f, truth subgrid=%d/Mb\n",
             params$n_lines, genome_mb, params$sites_per_mb, params$lambda_mean, params$points_per_bin))
 
+# per-sample coverage ~ Normal(mean, sd) fit to the BZea wideseq population, floored
+# at lambda_min for positivity (sd=0 -> constant lambda).
 draw_lambda <- function(n) {
-  if (!is.finite(params$lambda_shape)) return(rep(params$lambda_mean, n))
-  stats::rgamma(n, shape = params$lambda_shape, rate = params$lambda_shape / params$lambda_mean)
+  if (params$lambda_sd <= 0) return(rep(params$lambda_mean, n))
+  pmax(stats::rnorm(n, params$lambda_mean, params$lambda_sd), params$lambda_min)
 }
 lambdas <- draw_lambda(params$n_lines)
-lambdas <- lambdas * (params$lambda_mean / mean(lambdas))
-lambdas <- pmax(lambdas, params$lambda_min)
 
 ped <- bc2s3_pedigree()
 stopifnot(check_pedigree(ped, ignore_sex = TRUE))
