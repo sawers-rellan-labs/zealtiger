@@ -24,18 +24,21 @@ sourceJulia()
 # scorer reads segments straight from it, so benchmark runs need save_results=0.
 # threads: RTIGER's Julia core parallelizes per-sample EM; threads=4 cuts walltime
 # ~35% on this 100-NIL benchmark. Results are deterministic in the thread count.
+# args: [n_samples] [rigidity] [save_results] [threads] [benchdir]
+#   benchdir holds expDesign.csv + seqlengths.csv; fit written to benchdir/rtiger_out_r<r>.
 args <- commandArgs(trailingOnly = TRUE)
 n <- if (length(args) >= 1) as.integer(args[1]) else 0L
 r <- if (length(args) >= 2) as.integer(args[2]) else 3L
 save_it <- if (length(args) >= 3) as.logical(as.integer(args[3])) else FALSE
 threads <- if (length(args) >= 4) as.integer(args[4]) else 1L
+benchdir <- if (length(args) >= 5) args[5] else "results/rtiger_benchmark"
 
-ed <- read_csv("results/rtiger_benchmark/expDesign.csv", show_col_types = FALSE)
+ed <- read_csv(file.path(benchdir, "expDesign.csv"), show_col_types = FALSE)
 if (n > 0L) ed <- ed[seq_len(n), ]
-sl <- read_csv("results/rtiger_benchmark/seqlengths.csv", show_col_types = FALSE)
+sl <- read_csv(file.path(benchdir, "seqlengths.csv"), show_col_types = FALSE)
 seqv <- setNames(sl$len, sl$chr_label)
 
-outdir <- sprintf("results/rtiger_benchmark/rtiger_out_r%d", r)
+outdir <- file.path(benchdir, sprintf("rtiger_out_r%d", r))
 if (n > 0L) outdir <- paste0(outdir, "_n", n)
 dir.create(outdir, recursive = TRUE, showWarnings = FALSE)
 
