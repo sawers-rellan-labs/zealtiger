@@ -1,0 +1,144 @@
+# The ergodicity assumption in the wideseq coverage model
+
+**Scope.** This note documents and defends an assumption used by the wideseq
+benchmark generator (`make_wideseq_benchmark.R`): that the **per-sample** coverage
+distribution can stand in for the **per-site** coverage distribution when simulating
+the ~27.6M teosinte-vs-B73 wideseq sites. The motivation is practical — per-site
+statistics over ~1,400 samples × ~27.6M sites is an unwieldy (sample × site) tensor,
+whereas per-sample and per-bin summaries are tractable. The point of this note is to
+state what is actually assumed, assess where it holds and where it does not, and lay
+out how to defend it (and partly replace it with measurement) for reviewers.
+
+## 1. What is actually being assumed
+
+The slogan "per-sample coverage ≈ per-site coverage" is, taken literally, false and
+should not be defended as written. The defensible claim is narrower and has two parts.
+
+1. **Within-sample exchangeability of sites within a bin.** Every wideseq site in a
+   sample is modeled as accumulating reads at a common per-sample rate `λ_s`, with the
+   only site-level variation being Poisson read sampling plus a structural
+   "always-missing" floor `π`. There is no systematic per-site coverage structure
+   (GC, mappability, local copy number) beyond that floor.
+
+2. **Transfer of the between-sample law to the within-sample / per-bin scale.** The
+   missingness curve and the coverage distribution are estimated *across samples*, then
+   applied *across bins within a sample*: a low-coverage bin is assumed to behave like a
+   low-coverage sample.
+
+Named precisely, the ergodic claim is: *the distribution of coverage across sites
+within one genome equals the distribution of coverage across samples at one site.* That
+is a testable statement, not a hand-wave.
+
+### What the generator does
+- Per-sample mean coverage is drawn `λ_s ~ Normal(0.590, 0.226)`, floored for
+  positivity. (Fit to 1,434 BZea wideseq samples; Normal beats Gamma and lognormal by
+  AIC −192 vs +205 vs +1091; CV 0.38, skew 0.34.)
+- Missingness uses the wideseq exp-floor model
+  `missing(λ) = π + (1−π)·e^(−kλ)` with `π = 0.346`, `k = 1.256` (mean missingness
+  ≈ 0.67), fit across samples (`missing_data.Rmd`).
+- Each 1 Mb bin then draws, **analytically and without materializing individual
+  variants**: `VARIANT_COUNT ~ Poisson(sites_per_mb)`, `INFORMATIVE_VARIANT_COUNT ~
+  Binomial(VARIANT_COUNT, present_prob)`, `DEPTH_SUM = IVC + Poisson(IVC·(λ/present−1))`,
+  `ALT_COUNT ~ Binomial(DEPTH_SUM, p_eff)`.
+
+So `λ_s` and the population (π, k) are the only coverage inputs; every bin in a sample
+shares them. That sharing is the ergodicity assumption in operational form.
+
+## 2. Assessment: where it is safe, where it bites
+
+### Safe — and this is the load-bearing argument
+The caller never sees a site. It consumes the **per-bin `ALT_FREQ`**, an aggregate over
+~3,000–4,000 informative sites (real per-bin means: `DEPTH_SUM` ≈ 7,600 reads,
+`INFORMATIVE_VARIANT_COUNT` ≈ 4,300, ≈ 1.8 reads per covered site — shallow coverage,
+many sites). By the central limit theorem the bin statistic is governed by the **mean**
+per-site rate (≈ `λ_s`) and the **effective site count**, not by the shape of the
+per-site coverage distribution:
+
+```
+Var(ALT_FREQ) ≈ p(1 − p) / DEPTH_SUM
+```
+
+Consequently the per-site coverage decomposition is a nuisance the caller cannot
+distinguish and does not need: matching the per-bin `DEPTH_SUM` and informative-site
+count is sufficient to match calling behavior. The assumption is strongest exactly where
+it is used — at the bin aggregation scale.
+
+### Where it can genuinely bite
+None of these is the per-sample-mean substitution itself; they are the real targets a
+careful reviewer will probe.
+
+- **Spatial coverage structure (the principal risk).** If low-coverage / low-mappability
+  sites cluster — maize pericentromeres, repeats — then bins are *not* exchangeable:
+  heterochromatic bins carry systematically fewer informative sites and lower depth than
+  a flat `sites_per_mb` + constant `π` implies. This understates bin-to-bin variance and
+  over-covers the hardest regions.
+- **Reference-mapping bias against donor alleles.** Teosinte (ALT) reads map worse to the
+  B73 reference, so donor sites can be under-covered and under-called — a
+  coverage × genotype interaction that a genotype-independent `λ_s` ignores. This is the
+  same effect that makes the 0.4× skim under-call donor, and it is what a reviewer focused
+  on *introgression* calling will attack first.
+- **Between → within transfer of (π, k).** The parameters are fit from *between-sample*
+  variation but applied *across bins within* a sample. This is valid only if the
+  missingness mechanism is the same at both scales.
+
+## 3. How to defend it — the cheap data is the key
+
+The same scale that makes the per-site tensor unwieldy (1,400 × 27.6M) is why it is not
+needed: the **per-bin file** (`all_samples_bin_genotypes.tsv`, ~3M rows) is exactly the
+granularity at which the assumption can be *tested* rather than asserted. In rough order
+of impact:
+
+1. **Reframe the claim as bin-level sufficiency, not coverage equivalence.** State that
+   the inferential unit is the 1 Mb bin; the caller is a function of `ALT_FREQ` and the
+   informative-site count; per-site coverage enters only through those bin aggregates;
+   therefore matching the per-bin `DEPTH_SUM` / `INFORMATIVE_VARIANT_COUNT` distributions
+   is sufficient. This preempts the "per-site ≠ per-sample" objection at the root.
+
+2. **Run the direct ergodicity test (cheap, decisive).** From the per-bin file, fit
+   `missing ~ π + (1−π)e^(−kλ)` *within samples across bins* and overlay it on the
+   *between-sample* (π, k). If the within-sample bin-level curve coincides with the
+   between-sample curve, the ergodic transfer is empirically validated — one figure
+   answers the objection.
+
+3. **Validate the aggregate, not the atoms.** Overlay the *simulated* per-bin `DEPTH_SUM`
+   and `ALT_FREQ` distributions on the *real* per-bin distributions. Coincidence justifies
+   the collapse at the scale that matters, irrespective of per-site detail.
+
+4. **Where it is cheap, replace the assumption with measurement.** Instead of flat
+   `sites_per_mb` + constant `π`, feed the **real per-bin marginal profile** (mean
+   informative-site count and present-fraction per genomic bin, averaged over samples —
+   directly computable from the per-bin file) into the generator. This neutralizes the
+   spatial-structure risk and leaves ergodicity responsible only for *sub-bin* site
+   behavior, which the CLT already protects. The weakest assumption becomes an empirical
+   input.
+
+5. **Pre-empt with a sensitivity analysis.** Simulate per-site rate heterogeneity (e.g.
+   site rates ~ Gamma with the same per-sample mean) and show the bin-level `ALT_FREQ`
+   distribution and the caller's accuracy are invariant. "We injected per-site coverage
+   dispersion and bin-level inference did not move" is a refutation, not a promise.
+
+## 4. Limitations to state honestly
+
+- **Spatial coverage structure** (heterochromatin / repeats) — mitigated by move 4 (real
+  per-bin profile); otherwise a flat per-Mb density understates bin-to-bin variance.
+- **Reference bias on donor alleles** — a separate coverage × genotype term, checkable by
+  asking whether `ALT_FREQ` reaches ~1.0 in known homozygous-donor regions of
+  high-confidence samples; if it falls short, add an ALT-specific coverage/error term.
+
+## 5. Bottom line
+
+The assumption is defensible, provided the *narrow* version is defended: **bin-level
+sufficiency with within-bin site exchangeability, protected by the CLT at ~10³–10⁴ sites
+per bin** — not the literal "per-sample equals per-site coverage." The per-bin file lets
+three of the objections become validation figures and one become a direct empirical
+input, so ergodicity can be presented as *tested, and partly replaced by measurement*,
+rather than assumed. The single highest-value check is move 2: the within-sample vs
+between-sample missingness-curve overlay.
+
+## References / artifacts
+- Generator: `make_wideseq_benchmark.R` (per-bin analytic draw; `λ ~ Normal`).
+- Coverage / missingness model: BzeaSeq `docs/missing_data.Rmd`
+  (`λ = DEPTH_SUM/VARIANT_COUNT`; exp-floor fit), wideseq row λ=0.59, π=0.346, k=1.256.
+- Per-sample λ fit: Normal(0.590, 0.226), n=1,434 (`agent/fit_wideseq_lambda.R`).
+- Per-bin data for validation: `…/BZea/bzeaseq/ancestry/all_samples_bin_genotypes.tsv`.
+- Caller scored against this benchmark: `score_wideseq.R` (3-state `Kgmm_HMM`).
