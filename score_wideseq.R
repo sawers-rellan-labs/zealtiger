@@ -40,6 +40,14 @@ viterbi3 <- function(obs_idx, start, trans, emiss) {
   path
 }
 
+# Evaluate expr while swallowing both stdout and stderr chatter (e.g. REBMIX banners).
+quiet <- function(expr) {
+  val <- NULL
+  utils::capture.output(type = "message",
+    utils::capture.output(val <- expr))
+  val
+}
+
 args     <- commandArgs(trailingOnly = TRUE)
 bins_dir <- if ("--bins" %in% args) args[which(args == "--bins") + 1] else
             "results/wideseq_benchmark/bins"
@@ -74,12 +82,12 @@ relabel_clusters <- function(clusters, alt_freq) {
 gmm_clusters <- function(x, K = 3) {
   if (length(unique(round(x, 4))) < K) return(as.integer(factor(rank(x, ties.method = "min"))))
   if (has_rebmix) {
-    cl <- tryCatch({
+    cl <- tryCatch(quiet({          # REBMIX/RCLRMIX print version banners; swallow them
       est <- rebmix::REBMIX(Dataset = list(data.frame(Value = x)),
                             Preprocessing = "histogram", cmin = K, cmax = K,
                             Criterion = "BIC", pdf = "normal")
       as.integer(rebmix::RCLRMIX(x = est)@Zp)
-    }, error = function(e) NULL)
+    }), error = function(e) NULL)
     if (!is.null(cl) && length(unique(cl)) >= 2) return(cl)
   }
   stats::kmeans(x, centers = min(K, length(unique(x))))$cluster   # fallback
