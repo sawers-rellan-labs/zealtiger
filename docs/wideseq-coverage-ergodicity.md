@@ -9,6 +9,18 @@ whereas per-sample and per-bin summaries are tractable. The point of this note i
 state what is actually assumed, assess where it holds and where it does not, and lay
 out how to defend it (and partly replace it with measurement) for reviewers.
 
+**Framing — ergodic inspiration, scale-invariance claim.** The *inspiration* is ergodic:
+the two axes here — the ensemble of **samples** and the sequence of **positions** (1 Mb
+bins) **along the chromosomes** — play the roles of ensemble and "time," and ergodicity's
+promise is that averaging *along one genome* equals averaging *across the ensemble*. That
+symmetry is what motivates re-using a per-sample coverage law at the per-bin scale. But
+the genomic axis is **non-stationary** (pericentromeres/repeats are systematically low),
+so the process is not ergodic in the textbook sense. The rigorous, testable claim we
+actually rely on is therefore narrower: that the missingness law **`missing(λ)` is
+scale-invariant** — the same function whether λ varies because you picked a low-depth
+*sample* or a low-mappability *region* — i.e. **λ is a near-sufficient statistic for
+missingness**. Ergodicity is the analogy; scale-invariance of `missing(λ)` is the claim.
+
 ## 1. What is actually being assumed
 
 The slogan "per-sample coverage ≈ per-site coverage" is, taken literally, false and
@@ -25,9 +37,10 @@ should not be defended as written. The defensible claim is narrower and has two 
    applied *across bins within a sample*: a low-coverage bin is assumed to behave like a
    low-coverage sample.
 
-Named precisely, the ergodic claim is: *the distribution of coverage across sites
-within one genome equals the distribution of coverage across samples at one site.* That
-is a testable statement, not a hand-wave.
+Named precisely, this is **scale-invariance of the missingness law**: `missing(λ)`
+estimated *across samples* is the same function as `missing(λ)` *across bins within a
+genome* (equivalently, λ is a near-sufficient statistic for missingness at both scales).
+That is the testable core the ergodic symmetry points to — and section 4 tests it.
 
 ### What the generator does
 - Per-sample mean coverage is drawn `λ_s ~ Normal(0.590, 0.226)`, floored for
@@ -42,7 +55,8 @@ is a testable statement, not a hand-wave.
   `ALT_COUNT ~ Binomial(DEPTH_SUM, p_eff)`.
 
 So `λ_s` and the population (π, k) are the only coverage inputs; every bin in a sample
-shares them. That sharing is the ergodicity assumption in operational form.
+shares them. That sharing is the scale-invariance assumption — the ergodic symmetry —
+in operational form.
 
 ## 2. Assessment: where it is safe, where it bites
 
