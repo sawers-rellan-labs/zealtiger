@@ -68,7 +68,10 @@ cat(sprintf("Per-taxon RTIGER: %d taxa, rigidity=%d, threads=%d, save.results=%s
             nrow(sizes), r, threads, save_it))
 cat(sprintf("Largest group: %s (n=%d) — the memory/runtime stress fit.\n", sizes$taxon[1], sizes$n[1]))
 
-summary_rows <- vector("list", nrow(sizes))
+# Merge each taxon's row into run_summary.csv, REPLACING only its own prior row and
+# keeping rows for taxa not in this invocation. This makes per-taxon runs (taxon arg)
+# accumulate into one summary over ALL taxa instead of clobbering it down to the last run.
+summary_path <- file.path(fits_dir, "run_summary.csv")
 for (i in seq_len(nrow(sizes))) {
   tx <- sizes$taxon[i]; n <- sizes$n[i]
   ed <- ed_all |> filter(taxon == tx) |> select(files, name) |> as.data.frame()
@@ -86,7 +89,11 @@ for (i in seq_len(nrow(sizes))) {
     saveRDS(res, file.path(outdir, "rtiger_result.rds"))
     cat(sprintf("    done in %.1fs (%d samples)\n", secs, length(res@Viterbi)))
   } else cat(sprintf("    FAILED in %.1fs: %s\n", secs, status))
-  summary_rows[[i]] <- data.frame(taxon = tx, n = n, seconds = round(secs, 1), status = status)
-  write_csv(bind_rows(summary_rows[seq_len(i)]), file.path(fits_dir, "run_summary.csv"))
+  this_row <- data.frame(taxon = tx, n = n, seconds = round(secs, 1), status = status)
+  prior    <- if (file.exists(summary_path))
+                read_csv(summary_path, show_col_types = FALSE, col_types = NULL) else this_row[0, ]
+  merged   <- bind_rows(prior[!prior$taxon %in% tx, , drop = FALSE], this_row)
+  merged   <- merged[order(-merged$n), ]
+  write_csv(merged, summary_path)
 }
 cat(sprintf("\nALL DONE. %d taxa; summary -> %s\n", nrow(sizes), file.path(fits_dir, "run_summary.csv")))

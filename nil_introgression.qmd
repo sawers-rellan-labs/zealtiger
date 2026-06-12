@@ -336,14 +336,20 @@ segment Mb with median + 90th percentile annotated.
 **Expected outcome**: Panels saved to `results/figures/`.
 
 ```{r distribution_plots}
+med_total <- median(nil_summary$total_mb)
 p_total <- ggplot(nil_summary, aes(total_mb)) +
   geom_histogram(bins = 40, fill = "steelblue") +
-  labs(x = "Total donor genome per NIL (Mb)", y = "NILs") +
+  geom_vline(xintercept = med_total, linetype = 2) +
+  labs(x = "Total donor genome per NIL (Mb)", y = "NILs",
+       caption = sprintf("dashed = median (%.1f Mb)", med_total)) +
   theme_bw()
 
+med_seg <- median(segments_mb$mb)
 p_seg <- ggplot(segments_mb, aes(mb)) +
   geom_histogram(bins = 50, fill = "darkorange") +
-  labs(x = "Donor segment size (Mb)", y = "Segments") +
+  geom_vline(xintercept = med_seg, linetype = 2) +
+  labs(x = "Donor segment size (Mb)", y = "Segments",
+       caption = sprintf("dashed = median (%.1f Mb)", med_seg)) +
   theme_bw()
 
 q90 <- quantile(segments_mb$mb, 0.9)
@@ -642,3 +648,48 @@ trading a slightly higher CO under-count for marginally cleaner homozygous-donor
 calls (precision 0.999, FDR 0.1%). RTIGER ran on the **fast path**
 (`save.results = FALSE`, ~30 s / 100 samples single-threaded, ~20 s at
 `threads = 4`) and was scored from the saved object.
+
+## Production fit — real SNP50K population (per taxon)
+
+The benchmark above is **100 *simulated* NILs** with known truth — it validates the
+caller, it is *not* the population call set. The production fit (**Source 2**) runs the
+same r = 8 RTIGER on the **real SNP50K skim**, grouped **by teosinte taxon** rather than
+jointly: samples within a taxon share divergence from B73, so pooling the HMM emission
+parameters is valid and gains power, while the largest group (Zx, 575) stays well under a
+single ~1,400-sample joint EM (`fit_rtiger_by_taxa.R`; calls in
+`data/rtiger_50K/calls_taxa_r8.csv`). After coverage QC (drop libraries with any
+chromosome under 2·r covered markers) the fit covers **1,391 samples across five taxa**:
+
+```{r rtiger_production_taxa, echo=FALSE}
+# Per-taxon production fit on the real SNP50K skim, r = 8, save.results = FALSE,
+# JULIA_NUM_THREADS = 4. Wall times from data/rtiger_50K/fits_taxa/run_summary.csv
+# (regenerated 2026-06-12; the merge in fit_rtiger_by_taxa.R now accumulates all taxa
+# instead of overwriting the file down to the last per-taxon invocation). Static tribble
+# so this renders without the git-ignored data mount, matching the benchmark tables above.
+# species per taxon code: donor_id prefix -> founder_group -> species, from
+# /Volumes/rsstu/.../BZea/bzeaseq/sample_metatada.csv (Zx = mexicana races
+# Chalco/Durango/Mesa Central/Nobogame; Zv = Balsas parviglumis; Zd/Zl/Zh as below).
+prod <- tibble::tribble(
+  ~taxon, ~species,                            ~n, ~seconds, ~status,
+  "Zx",   "Zea mays ssp. mexicana",           575,   105.7,   "ok",
+  "Zv",   "Zea mays ssp. parviglumis",        382,    68.6,   "ok",
+  "Zd",   "Zea diploperennis",                253,    38.7,   "ok",
+  "Zl",   "Zea luxurians",                    120,    25.7,   "ok",
+  "Zh",   "Zea mays ssp. huehuetenangensis",   61,     8.7,   "ok"
+)
+prod <- dplyr::bind_rows(
+  prod,
+  tibble::tibble(taxon = "TOTAL", species = "—", n = sum(prod$n),
+                 seconds = round(sum(prod$seconds), 1), status = "—"))
+knitr::kable(prod,
+  caption = paste("RTIGER production fit on the real SNP50K population, r = 8, per teosinte",
+                  "taxon. Species from donor_id prefix -> founder_group in sample_metatada.csv.",
+                  "Wall seconds single-machine, threads = 4. 1,391 samples total."))
+```
+
+**Takeaways**: the whole population fits in **~4 min wall** on one machine, no HPC —
+flat-RSS scaling (≈1.2 GB + 3.2 MB/sample → ~5.6 GB at full joint size; §profiling).
+Per-taxon mean donor dosage is **0.081**, consistent with the BC2S3 expectation
+(≈0.125 before selection/drift) and the simulation truth. These calls are Source 2 of
+the five-source cross-validation; the common-schema export lives in
+`data/rtiger_50K/calls_common_schema.csv`.
