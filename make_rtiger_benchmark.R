@@ -22,21 +22,26 @@ suppressMessages({
 purrr::walk(fs::dir_ls("R", glob = "*.R"), source)
 
 args <- commandArgs(trailingOnly = TRUE)
+# Coverage/grid defaults model the SNP50K skim; override via env vars to benchmark
+# other regimes (e.g. seqcapture capped to ~20x: LAMBDA_MEAN=20 PI_FLOOR=0.002
+# OUT_DIR=results/rtiger_benchmark_20x). pi_floor is the structural missingness
+# (SNP50K ~0.16; GBTS seqcapture ~0.002 — near-complete).
+env_num <- function(k, d) { v <- Sys.getenv(k); if (nzchar(v)) as.numeric(v) else d }
+env_chr <- function(k, d) { v <- Sys.getenv(k); if (nzchar(v)) v else d }
 params <- list(
   n_lines      = if (length(args) >= 1) as.integer(args[1]) else 100L,
-  n_markers    = 50000L,
-  lambda_mean  = 0.43,    # SNP50K mean coverage
-  lambda_shape = 2.5,     # Gamma shape for per-sample lambda (Inf = constant)
-  lambda_min   = 0.15,    # floor: drop pathological ultra-low-coverage tail
-                          # (real SNP50K samples bottom out ~0.26; these would
-                          #  be excluded from genotyping anyway)
-  pi_floor     = 0.161,   # exp-floor structural missingness (SNP50K fit)
-  k_decay      = 1.042,   # exp-floor coverage decay (SNP50K fit)
-  error        = 0.005,   # per-base sequencing error
+  n_markers    = as.integer(env_num("N_MARKERS", 50000)),
+  lambda_mean  = env_num("LAMBDA_MEAN", 0.43),    # mean coverage
+  lambda_shape = env_num("LAMBDA_SHAPE", 2.5),    # Gamma shape (Inf = constant)
+  lambda_min   = env_num("LAMBDA_MIN", 0.15),     # low-coverage floor
+  pi_floor     = env_num("PI_FLOOR", 0.161),      # exp-floor structural missingness
+  k_decay      = env_num("K_DECAY", 1.042),       # exp-floor coverage decay
+  error        = env_num("ERROR", 0.005),         # per-base sequencing error
   m            = 10, p = 0,
   donor_allele = 2L,
-  seed         = 20260609L
+  seed         = as.integer(env_num("SEED", 20260609))
 )
+out_dir   <- env_chr("OUT_DIR", "results/rtiger_benchmark")
 set.seed(params$seed)
 
 stopifnot(fs::file_exists("results/maize_map_v5_clean.rds"))
@@ -46,7 +51,6 @@ chr_cm_lengths <- anchors_clean %>%
   dplyr::summarise(L = max(cm), .groups = "drop") %>%
   dplyr::arrange(chr)
 
-out_dir   <- "results/rtiger_benchmark"
 count_dir <- file.path(out_dir, "counts")
 fs::dir_create(count_dir)
 

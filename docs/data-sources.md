@@ -43,6 +43,7 @@ abbreviate this as `…/rrellan/`). Others are in Google Drive or local `~/ref`.
 |---|---|
 | **Hazel** (NC State HPC, LSF); conda env `/share/maize/frodrig4/conda/env/rnagt` | cluster for rnagt (Source 4) |
 | rpubs.com/faustovrz/1306822 ("BZea WideSeq") | rendered wideseq method |
+| rpubs.com/faustovrz/1337797 | rendered ancestry analysis; consumes the **GATK table** (GATK `CollectAllelicCounts` tidy/long readcounts: `SAMPLE CONTIG POSITION REF_NUCLEOTIDE ALT_NUCLEOTIDE REF_COUNT ALT_COUNT TOTAL_COUNT`) as input |
 | GitHub `sawers-rellan-labs/BzeaSeq` `docs/getting_teosinte_variants_from_Schnable2023.md` | teosinte-variant site filtering |
 | bioRxiv 2026.02.20.707111v1 | wideseq-style method paper |
 

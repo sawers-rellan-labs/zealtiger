@@ -552,10 +552,10 @@ ad hoc:
   `Rscript fit_rtiger.R 0 3 0 4` then
   `Rscript score_rtiger.R --rtiger results/rtiger_benchmark/rtiger_out_r3/rtiger_result.rds`.
 - **r = 8** — chosen *objectively* by RTIGER's autotune (`optimize_R`, initial
-  r₀ = 50, minimizing the expected number of erroneous segments). This is the **same
-  value both empirical platforms** — MolBreeding 45K array and SNP50K skim —
-  autotune to (`array_vs_skim.qmd`), so the simulation, the array, and the skim all
-  agree on r = 8. Reproduce with `Rscript agent/autotune_rtiger_benchmark.R 0 50 "" 4`
+  r₀ = 50, minimizing the expected number of erroneous segments) on the SNP50K skim,
+  and applied consistently to the MolBreeding GBTS calls so all sources share one
+  rigidity (`molbreeding_vs_skim.qmd`). Reproduce with
+  `Rscript agent/autotune_rtiger_benchmark.R 0 50 "" 4`
   (writes `rtiger_out_auto/`, records the pick in `autotune_selected.txt`).
 
 The trailing `4` is the Julia EM thread count: `threads = 4` cuts benchmark walltime

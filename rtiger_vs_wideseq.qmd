@@ -95,7 +95,7 @@ knitr::kable(crossovers, caption = paste(
 
 ```{r intro-sizes, echo=FALSE, fig.width=8, fig.height=5}
 library(dplyr); library(ggplot2)
-blocks <- readr::read_csv("docs/rtiger_vs_wideseq_blocks.csv", show_col_types = FALSE)
+blocks <- readr::read_csv("results/joint_benchmark/rtiger_vs_wideseq_blocks.csv", show_col_types = FALSE)
 
 summ <- blocks %>% group_by(src) %>%
   summarise(blocks_per_sample = round(n() / dplyr::n_distinct(name), 1),

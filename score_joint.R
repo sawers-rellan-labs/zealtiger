@@ -7,7 +7,7 @@
 #
 # Usage: Rscript score_joint.R     (needs results/joint_benchmark/rtiger/rtiger_out_r8 fitted)
 # Writes results/joint_benchmark/scoring/{marker,segment,crossover}_scores.csv and the
-# introgression-size table docs/rtiger_vs_wideseq_blocks.csv (for the comparison notebook).
+# introgression-size table results/joint_benchmark/rtiger_vs_wideseq_blocks.csv (for the notebook).
 
 suppressMessages({library(tidyverse); library(data.table)})
 purrr::walk(fs::dir_ls("R", glob = "*.R"), source)
@@ -69,7 +69,7 @@ blocks <- bind_rows(
   donor_blocks(truth_seg) |> mutate(src = "simulation (truth)"),
   donor_blocks(rtg_seg)   |> mutate(src = "RTIGER (r=8)"),
   donor_blocks(ws_seg)    |> mutate(src = "wideseq (Kgmm_HMM)"))
-write_csv(blocks, "docs/rtiger_vs_wideseq_blocks.csv")
+write_csv(blocks, file.path(root, "rtiger_vs_wideseq_blocks.csv"))
 
 cat("================ MARKER-LEVEL (vs canonical fine truth) ================\n")
 print(as.data.frame(marker), digits = 3)
@@ -84,4 +84,4 @@ blocks |> group_by(src) |>
             pct_under_1Mb = round(100 * mean(size_mb < 1), 1),
             donor_Mb_per_sample = round(sum(size_mb) / n_distinct(name), 0), .groups = "drop") |>
   as.data.frame() |> print(row.names = FALSE)
-cat("\nWrote scoring CSVs + docs/rtiger_vs_wideseq_blocks.csv\n")
+cat("\nWrote scoring CSVs + results/joint_benchmark/rtiger_vs_wideseq_blocks.csv\n")

@@ -11,10 +11,11 @@ size-distribution figures → interference comparison → crossovers) plus the
 RTIGER r=3 benchmark results. Regenerate with
 `quarto render nil_introgression.qmd` (the source `.qmd` is at the repo root).
 
-**Rendered notebook:** [`array_vs_skim.html`](array_vs_skim.html) — concordance of
-the MolBreeding 45K array (source #5) vs the SNP50K skim RTIGER calls (source #2)
-for the 14 NILs on both platforms (confusion matrix, per-sample concordance, donor
-dosage). Regenerate with `quarto render array_vs_skim.qmd`.
+**Rendered notebook:** [`molbreeding_vs_skim.html`](molbreeding_vs_skim.html) — concordance
+of the MolBreeding GBTS calls (source #5, **real ~110× allele counts**) vs the SNP50K skim
+RTIGER calls (source #2) for the NILs on both platforms (donor dosage + B73-bulk control,
+confusion matrix, segment scale, introgression-size distribution, donor composition).
+Regenerate with `quarto render molbreeding_vs_skim.qmd`.
 
 | Doc | Step |
 |---|---|

@@ -1,0 +1,219 @@
+---
+title: "MolBreeding GBTS (real counts) vs SNP50K skim — ancestry-call concordance"
+author: "Fausto Rodríguez-Zapata"
+date: "`r Sys.Date()`"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    df-print: paged
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+params:
+  mb_calls:   "data/molbreeding_gbts/SNP_wsfilt/calls_common_schema.csv"  # GBTS real counts, wideseq-filtered, r=8, all 16
+  mb_full:    "data/molbreeding_gbts/SNP/calls_common_schema.csv"         # GBTS real counts, all 20,347 v5 SNPs, r=8
+  skim_calls: "data/rtiger_50K/calls_taxa_r8.csv"                         # skim, per-taxon r=8
+  sample_map: "data/molbreeding_45k_sample_map.tsv"
+  mb_counts:  "data/molbreeding_gbts/SNP_wsfilt/counts"                   # filtered marker grid (RTIGER 6-col)
+  sim_seg:    "results/rtiger_45k_benchmark/truth_segments.csv"           # consensus-map simulation (NULL)
+  seqlengths: "data/rtiger_50K/seqlengths.csv"
+---
+
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
+Cross-validation of ancestry source **#2 (SNP50K skim, ~0.4×)** against source **#5
+(MolBreeding GBTS)** for the BZea NILs genotyped on both platforms.
+
+**This is the real-count pipeline.** MolBreeding source #5 is **GBTS target-capture
+sequencing** (~110× depth, ~0.2% missing), *not* a hybridization array — so it is fed to
+RTIGER as **real allele counts** (`REF_COUNT`/`ALT_COUNT` from the GATK table), exactly
+like the skim, rather than the 0/1/2 pseudo-counts of the earlier array-style attempt.
+
+**Two design choices:**
+
+1. **No line-QC filter.** The array-era "Crappy"/`Good` split was driven by array
+   het-rate; with real ~110× counts every sample is clean (missing ~0.2%), so **all 16
+   samples are kept** — 14 teosinte NILs + 2 B73-bulk checks. The checks are a built-in
+   control (they should read ≈ pure recurrent).
+2. **SNP filter (`wsfilt`).** Keep only markers overlapping the **wideseq
+   teosinte-vs-B73 panel** (9,157 of the 20,347 lifted v5 SNPs are donor-informative,
+   with consistent REF=B73 / ALT=teosinte polarity across sources). The full 20,347-SNP
+   fit is shown alongside for reference.
+
+**Rigidity r = 8 for both platforms** — matched to the skim's per-taxon r=8 (Source 2),
+so the comparison uses one consistent rigidity rather than ad-hoc per-platform tuning.
+Calls are RTIGER segments on B73 NAM v5 (`name, chr, start_bp, end_bp, state`;
+0 = recurrent/B73, 1 = het, 2 = homozygous donor).
+
+> The consensus-map BC2S3 **simulation** (source #1) is a **null expectation** under the
+> modeled recombination process (MaizeGDB consensus map, ~1,783 cM; `m=10` interference;
+> BC2S3 pedigree), **not ground truth**.
+
+## Setup
+
+```{r setup}
+library(tidyverse); library(GenomicRanges); library(S4Vectors)
+source("R/06_score_rtiger.R")
+
+mb      <- read_csv(params$mb_calls,   show_col_types = FALSE)   # GBTS wsfilt, r=8
+mb_full <- read_csv(params$mb_full,    show_col_types = FALSE)   # GBTS full,  r=8
+skim    <- read_csv(params$skim_calls, show_col_types = FALSE)   # skim, per-taxon r=8
+smap    <- read_tsv(params$sample_map, show_col_types = FALSE)
+sl      <- read_csv(params$seqlengths, show_col_types = FALSE)
+sim_seg <- read_csv(params$sim_seg,    show_col_types = FALSE)
+
+# common wideseq marker grid, from the filtered RTIGER count files
+cf <- read_tsv(list.files(params$mb_counts, full.names = TRUE)[1],
+               col_names = c("chr_label","bp","rb","rc","ab","ac"), show_col_types = FALSE)
+grid    <- tibble(chr = as.integer(sub("chr","",cf$chr_label)), bp = cf$bp)
+spacing <- sum(sl$len) / nrow(grid)
+
+# samples present on both platforms (the 2 B73 checks have no skim NIL match)
+samples <- intersect(unique(mb$name), unique(skim$name))
+cat(sprintf("MolBreeding GBTS samples: %d (all kept, no QC) | shared with skim: %d\n",
+            n_distinct(mb$name), length(samples)))
+cat(sprintf("wideseq markers: %d (~%.0f kb spacing; r=8 detection limit ≈ %.1f Mb)\n",
+            nrow(grid), spacing/1e3, 8*spacing/1e6))
+
+donor_blocks <- function(seg) seg %>% arrange(name, chr, start_bp) %>% group_by(name, chr) %>%
+  mutate(run = cumsum(c(TRUE, diff(state > 0) != 0)), donor = state > 0) %>% filter(donor) %>%
+  group_by(name, chr, run) %>% summarise(size_mb = (max(end_bp)-min(start_bp))/1e6, .groups = "drop")
+co_count <- function(seg) seg %>% arrange(name, chr, start_bp) %>% group_by(name, chr) %>%
+  summarise(tr = sum(abs(diff(as.integer(state > 0)))), .groups = "drop") %>%
+  group_by(name) %>% summarise(COs = sum(tr), .groups = "drop")
+state_at <- function(df, s) {
+  d <- df[df$name == s, ]
+  d$state[findOverlaps(GRanges(grid$chr, IRanges(grid$bp, width = 1)),
+                       GRanges(d$chr, IRanges(d$start_bp, d$end_bp)), select = "first")]
+}
+```
+
+## Donor dosage & the B73-bulk control
+
+Per-sample donor dosage (bp-weighted `state/2`). BC2S3 expectation ≈ 0.125; a flipped
+REF/ALT polarity would read ≈ 0.875. The two B73-bulk checks (`PN4_SID326`, `PN6_SID576`)
+should read ≈ 0 — a built-in validity test that needs no external truth.
+
+```{r dosage}
+dosage <- function(seg) seg %>% mutate(len = end_bp - start_bp + 1) %>%
+  group_by(name) %>% summarise(dosage = sum(len * state/2) / sum(len), .groups = "drop")
+checks <- c("PN4_SID326", "PN6_SID576")
+dose <- dosage(mb) %>% dplyr::rename(gbts_wsfilt = dosage) %>%
+  left_join(dosage(mb_full) %>% dplyr::rename(gbts_full = dosage), by = "name") %>%
+  left_join(dosage(skim)    %>% dplyr::rename(skim = dosage),       by = "name") %>%
+  mutate(is_B73_check = name %in% checks) %>% arrange(gbts_full)
+dose
+cat(sprintf("mean donor dosage — GBTS full %.3f | GBTS wsfilt %.3f | skim (shared) %.3f\n",
+            mean(dose$gbts_full), mean(dose$gbts_wsfilt),
+            mean(dose$skim[!is.na(dose$skim)])))
+cat(sprintf("B73-bulk checks dosage (GBTS full): %s — expect ≈ 0\n",
+            paste(sprintf("%s=%.3f", checks,
+                          dose$gbts_full[match(checks, dose$name)]), collapse = ", ")))
+```
+
+## State on the common grid
+
+```{r state-grid}
+paired <- map_dfr(samples, function(s) {
+  a <- state_at(mb, s); k <- state_at(skim, s); ok <- !is.na(a) & !is.na(k)
+  tibble(name = s, gbts = a[ok], skim = k[ok])
+})
+```
+
+## Confusion matrix — GBTS vs skim
+
+Rows = GBTS state (wideseq-filtered, r=8), cols = skim (per-taxon r=8); cell = count (row %).
+
+```{r confusion}
+cm <- table(gbts = factor(paired$gbts, 0:2), skim = factor(paired$skim, 0:2))
+overall <- sum(diag(cm)) / sum(cm)
+prop <- sweep(cm, 1, rowSums(cm), "/")
+disp <- matrix(sprintf("%d (%.1f%%)", cm, 100*prop), nrow = 3,
+               dimnames = list(`gbts \\ skim` = c("0 recurrent","1 het","2 donor"),
+                               c("0 recurrent","1 het","2 donor")))
+knitr::kable(disp, align = "r",
+             caption = sprintf("GBTS (rows) vs skim (cols): count (row %%). Overall concordance %.3f.", overall))
+dp <- paired$gbts %in% c(1, 2)
+cat(sprintf("GBTS donor-present markers: %d | skim also donor-present: %.1f%%\n",
+            sum(dp), 100*mean(paired$skim[dp] %in% c(1,2))))
+cat(sprintf("GBTS homozygous-donor markers: %d | skim also hom-donor: %.1f%%\n",
+            sum(paired$gbts == 2), 100*mean(paired$skim[paired$gbts == 2] == 2)))
+```
+
+## Segment scale & crossover count — GBTS vs skim vs null
+
+```{r seg-scale}
+metrics <- function(seg, lab, nsamp) {
+  allseg <- (seg$end_bp - seg$start_bp + 1)/1e6
+  db <- donor_blocks(seg)
+  tibble(source = lab,
+         donor_blocks_per_sample = round(nrow(db)/nsamp, 1),
+         median_all_seg_Mb = round(median(allseg), 1),
+         median_donor_block_Mb = round(median(db$size_mb), 2),
+         median_COs = median(co_count(seg)$COs))
+}
+mb_s   <- mb   %>% filter(name %in% samples)
+skim_s <- skim %>% filter(name %in% samples)
+bind_rows(
+  metrics(mb_s,    "GBTS wsfilt (r=8)", length(samples)),
+  metrics(mb_full %>% filter(name %in% samples), "GBTS full (r=8)", length(samples)),
+  metrics(skim_s,  "skim (r=8)",        length(samples)),
+  metrics(sim_seg, "simulation (null)", n_distinct(sim_seg$name))
+)
+```
+
+## Introgression-size distribution
+
+```{r intro-sizes}
+gbts_b <- donor_blocks(mb_s)   %>% mutate(src = "GBTS wsfilt (r=8)")
+skim_b <- donor_blocks(skim_s) %>% mutate(src = "skim (r=8)")
+sim_b  <- donor_blocks(sim_seg)
+ggplot(bind_rows(gbts_b, skim_b), aes(x = size_mb, fill = src)) +
+  geom_histogram(aes(y = after_stat(density)), position = "identity", alpha = 0.5, bins = 30) +
+  geom_freqpoly(data = sim_b, aes(x = size_mb, y = after_stat(density)),
+                bins = 30, colour = "grey20", linewidth = 0.9, inherit.aes = FALSE) +
+  scale_fill_manual(values = c("GBTS wsfilt (r=8)" = "forestgreen", "skim (r=8)" = "purple4")) +
+  scale_x_log10() +
+  labs(x = "introgression size (Mb, log scale)", y = "density", fill = NULL,
+       title = "Introgression-size distribution (all 16 NILs, 2-state, r=8)",
+       subtitle = "grey line = consensus-map simulation (null expectation)") + theme_bw()
+```
+
+## Donor-call composition — het vs homozygous donor
+
+```{r donor-composition}
+comp <- bind_rows(
+  paired %>% transmute(name, platform = "GBTS wsfilt (r=8)", state = gbts),
+  paired %>% transmute(name, platform = "skim (r=8)",        state = skim)) %>%
+  filter(state %in% c(1, 2)) %>% count(name, platform, state) %>%
+  left_join(count(paired, name, name = "tot"), by = "name") %>%
+  mutate(pct = n/tot, state = factor(state, c(1,2), c("het","homozygous donor")))
+ord <- paired %>% group_by(name) %>% summarise(d = mean(gbts)/2) %>% arrange(d) %>% pull(name)
+comp$name <- factor(comp$name, levels = ord)
+ggplot(comp, aes(y = name, x = pct, fill = state)) +
+  geom_col(position = "stack") + facet_wrap(~ platform) +
+  scale_fill_manual(values = c("het" = "forestgreen", "homozygous donor" = "purple4")) +
+  scale_x_continuous(labels = scales::percent) +
+  labs(x = "% of genome called donor", y = NULL, fill = NULL,
+       title = "Donor calls as % of genome (recurrent not drawn)") + theme_bw()
+```
+
+## Findings
+
+- **Real-count pipeline.** Source #5 is GBTS sequencing (~110×), so RTIGER runs on real
+  `REF_COUNT`/`ALT_COUNT` like the skim — not the array-style 0/1/2 pseudo-counts. All 16
+  samples pass with no QC filter; the data is uniformly high-quality (missing ~0.2%).
+- **Polarity & controls check out.** Per-sample donor dosage is low (BC2S3-like, far from
+  the ~0.875 of a flipped polarity), and the two B73-bulk checks read ≈ 0 donor — a
+  built-in validity test passed without external truth.
+- **Cross-source concordance with the skim is high** at marker level; per-sample dosage
+  tracks the skim in rank on the shared NILs, with GBTS reading somewhat more donor
+  (especially het) than the coverage-limited skim — the expected direction (the ~110×
+  GBTS resolves heterozygosity the ~0.4× skim misses).
+- **The simulation is a null, not truth** — consensus-map (~1,783 cM) modeled expectation;
+  divergence from it is an observation, not an error. "Resolution" = the detection limit
+  ≈ r × marker spacing at r=8, distinct from the (larger) median segment size, a result.
+```

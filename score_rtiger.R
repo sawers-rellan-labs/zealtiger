@@ -15,8 +15,12 @@ purrr::walk(fs::dir_ls("R", glob = "*.R"), source)
 
 args      <- commandArgs(trailingOnly = TRUE)
 demo      <- "--demo" %in% args
-rtiger_in <- if ("--rtiger" %in% args) args[which(args == "--rtiger") + 1] else NULL
-truth_dir <- "results/rtiger_benchmark"
+argval <- function(flag, default) {     # value after flag, bounds- and flag-checked
+  i <- which(args == flag)
+  if (length(i) && i[1] < length(args) && !startsWith(args[i[1] + 1], "-")) args[i[1] + 1] else default
+}
+rtiger_in <- argval("--rtiger", NULL)
+truth_dir <- argval("--truth", "results/rtiger_benchmark")
 out_dir   <- file.path(truth_dir, "scoring")
 fs::dir_create(out_dir)
 
