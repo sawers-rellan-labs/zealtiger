@@ -1,0 +1,142 @@
+---
+title: "RTIGER vs wideseq — ancestry-calling performance on simulated BC2S3 NILs"
+author: "Fausto Rodríguez-Zapata"
+date: "`r Sys.Date()`"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    df-print: paged
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+---
+
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
+## Scope
+
+Head-to-head benchmark of the two ancestry callers against the **same simulated
+ground truth**, each in its native platform/regime (shared `simcross` BC2S3 mosaics,
+seed `20260609`, n = 100):
+
+- **RTIGER** (`faustovrz/RTIGER` fork), objective autotune **r = 8**, on the **SNP50K
+  skim** (λ ≈ 0.43×, ~50K markers), scored per marker.
+- **wideseq** (method B; BzeaSeq `call_ancestry.Rmd`), the recommended **`Kgmm_HMM`**
+  3-state caller, on the **teosinte panel** (~27.6M sites, ~12,950/Mb, λ ≈ 0.59× →
+  1 Mb bins), scored per bin.
+
+Both are scored against their own truth at native resolution
+(`make_rtiger_benchmark.R` + `make_wideseq_benchmark.R` → `score_rtiger.R` /
+`score_wideseq.R`). Because the underlying recombination mosaics are identical, the
+comparison is fair on truth; differences reflect platform + resolution + method
+together — the realistic operational comparison (the two are inherently
+different-resolution callers, so there is no single shared input).
+
+> **State coding** (both): 0 = homozygous recurrent (B73), 1 = het, 2 = homozygous
+> donor (teosinte). An *introgression* = a maximal donor-present run (state ≥ 1).
+
+## Genotyping accuracy
+
+```{r perf-tables, echo=FALSE}
+# Static: scored on the n=100 benchmark (RTIGER autotune r=8; wideseq Kgmm_HMM).
+# Reproduce: Rscript score_rtiger.R --rtiger results/rtiger_benchmark/rtiger_out_auto/rtiger_result.rds
+#            Rscript score_wideseq.R   (results/{rtiger,wideseq}_benchmark/scoring/)
+marker <- tibble::tribble(
+  ~state,            ~RTIGER_recall, ~RTIGER_prec, ~wideseq_recall, ~wideseq_prec,
+  "0 recurrent",            1.000,        0.999,         0.998,         0.996,
+  "1 het",                  0.974,        0.983,         0.971,         0.939,
+  "2 donor",                0.996,        0.997,         0.963,         0.995
+)
+segment <- tibble::tribble(
+  ~class,              ~RTIGER_P, ~RTIGER_R, ~RTIGER_F1, ~wideseq_P, ~wideseq_R, ~wideseq_F1,
+  "homozygous donor",      0.999,     0.887,      0.939,      0.997,      0.792,      0.882,
+  "heterozygous",          0.895,     0.773,      0.830,      0.958,      0.724,      0.825,
+  "donor present",         0.980,     0.861,      0.917,      0.989,      0.772,      0.867
+)
+crossovers <- tibble::tribble(
+  ~method,               ~called, ~true, ~co_bias,
+  "RTIGER (r=8)",           19.1,  21.8,    -2.71,
+  "wideseq (Kgmm_HMM)",     15.4,  19.9,    -4.48
+)
+knitr::kable(marker, caption = paste(
+  "Marker/bin-level recall & precision.",
+  "Overall accuracy: RTIGER 0.9986 (0.35% uncovered), wideseq 0.9937 (0% uncovered)."))
+knitr::kable(segment, caption = paste(
+  "Segment-level (reciprocal overlap >= 0.5). Boundary error (donor-present):",
+  "RTIGER ~85 kb; wideseq 0 kb is a 1 Mb-grid artifact (true floor +/-1 Mb)."))
+knitr::kable(crossovers, caption = paste(
+  "Crossovers per genome vs each method's OWN truth (RTIGER truth has more",
+  "detectable COs at 50K-marker resolution) -> compare bias, not absolute counts."))
+```
+
+**Takeaways.** Both genotype near-perfectly at the marker/bin level (≥ 99%). The
+split is in resolution vs cleanliness:
+
+- **RTIGER recovers more and finer** — higher segment recall everywhere
+  (donor-present F1 0.917 vs 0.867) and a smaller crossover deficit (−2.7 vs −4.5),
+  because at marker resolution it detects sub-Mb introgressions that wideseq's 1 Mb
+  binning merges or misses. Boundaries land within ~85 kb (≈2 marker spacings).
+- **wideseq is cleaner / more precise** — higher donor-present precision (0.989 vs
+  0.980) and markedly higher het precision (0.958 vs 0.895): the dense per-bin
+  aggregation gives confident, low-false-positive calls, but it cannot localize below
+  ~1 Mb (the "0 kb" boundary error is a scoring artifact of calls and truth sharing
+  bin edges).
+
+## Introgression-size distribution
+
+```{r intro-sizes, echo=FALSE, fig.width=8, fig.height=5}
+library(dplyr); library(ggplot2)
+blocks <- readr::read_csv("docs/rtiger_vs_wideseq_blocks.csv", show_col_types = FALSE)
+
+summ <- blocks %>% group_by(src) %>%
+  summarise(blocks_per_sample = round(n() / dplyr::n_distinct(name), 1),
+            median_Mb = round(median(size_mb), 1),
+            mean_Mb   = round(mean(size_mb), 1),
+            `p10_Mb`  = round(quantile(size_mb, .10), 1),
+            `p90_Mb`  = round(quantile(size_mb, .90), 1),
+            `pct_under_1Mb` = round(100 * mean(size_mb < 1), 1),
+            donor_Mb_per_sample = round(sum(size_mb) / dplyr::n_distinct(name), 0),
+            .groups = "drop")
+knitr::kable(summ, caption = "Introgression-size summary (donor-present blocks, n=100).")
+
+tb <- filter(blocks, src == "simulation (truth)")
+mp <- filter(blocks, src != "simulation (truth)")
+ggplot(mp, aes(x = size_mb, fill = src)) +
+  geom_histogram(aes(y = after_stat(density)), position = "identity",
+                 alpha = 0.5, bins = 30) +
+  geom_freqpoly(data = tb, aes(x = size_mb, y = after_stat(density)),
+                bins = 30, colour = "grey20", linewidth = 0.9, inherit.aes = FALSE) +
+  scale_fill_manual(values = c("RTIGER (r=8)" = "forestgreen",
+                               "wideseq (Kgmm_HMM)" = "purple4")) +
+  scale_x_log10() +
+  labs(x = "introgression size (Mb, log scale)", y = "density", fill = NULL,
+       title = "Introgression-size distribution: RTIGER vs wideseq",
+       subtitle = "grey line = simulation truth; shared BC2S3 mosaics (n=100)") +
+  theme_bw()
+```
+
+**Takeaways.**
+
+- **Both preserve total donor burden** (~290 Mb/sample vs truth 294) — the genome-wide
+  donor fraction is right either way.
+- **RTIGER reproduces the truth distribution**, including the small-block tail: nearly
+  the right block count (9.8 vs 10.6/sample), matching median (12.5 vs 11.2 Mb), and it
+  resolves down to ~1 Mb. The green histogram sits on the truth line.
+- **wideseq is shifted to larger blocks**: fewer blocks (8.0/sample), inflated median
+  (17 vs 11 Mb), and **0% below 1 Mb by construction** — the 1 Mb floor erases sub-Mb
+  introgressions and merges adjacent ones, repackaging the same donor content into
+  fewer, larger blocks.
+
+## Conclusion
+
+The two callers are **complementary**. For the project's **introgression-size
+distribution** deliverable, **RTIGER is the faithful instrument** — its size
+distribution matches ground truth including the fine (<5 Mb) tail. **wideseq** nails
+per-bin genotype and total donor fraction with very clean (high-precision) calls, but
+its size distribution is biased toward larger blocks and is blind below ~1 Mb; treat it
+as a coarse view (lower bound on block count, upper bound on block size). Use RTIGER
+where fine-scale recombination/size matters; use wideseq for clean high-confidence broad
+ancestry on the dense teosinte panel.
