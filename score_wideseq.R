@@ -159,6 +159,7 @@ called_seg <- called_bins %>% arrange(name, chr, BIN_POS) %>%
   summarise(start_bp = (min(BIN_POS) - 1L) * BIN, end_bp = max(BIN_POS) * BIN,
             state = first(state), .groups = "drop") %>%
   select(name, chr, start_bp, end_bp, state)
+readr::write_csv(called_seg, file.path(out_dir, "called_segments.csv"))  # for size-dist comparison
 
 # ---- score (same R/06 functions as score_rtiger.R) -------------------------
 mk <- assign_called_state(called_seg, truth_markers)
