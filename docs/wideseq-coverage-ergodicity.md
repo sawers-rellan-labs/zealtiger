@@ -117,23 +117,58 @@ of impact:
    distribution and the caller's accuracy are invariant. "We injected per-site coverage
    dispersion and bin-level inference did not move" is a refutation, not a promise.
 
-## 4. Limitations to state honestly
+## 4. Validation result (move 2, run on the real data)
 
-- **Spatial coverage structure** (heterochromatin / repeats) — mitigated by move 4 (real
-  per-bin profile); otherwise a flat per-Mb density understates bin-to-bin variance.
+We ran move 2 on the **real** per-bin file (`all_samples_bin_genotypes.tsv`,
+1,434 samples, 3.06M bins; `agent/ergodicity_check.R` /
+`agent/ergodicity_real_vs_sim.R`): fit `missing = π + (1−π)e^(−kλ)` *within genomes
+across bins* and *between genomes across samples*, and compare. As a control we ran the
+identical fit on the **simulation**.
+
+| dataset | scale | n | π | k |
+|---|---|---|---|---|
+| **real** | within-genome (per 1 Mb bin) | 3,057,288 | 0.313 | 1.176 |
+| **real** | between-genome (per sample) | 1,434 | 0.346 | 1.256 |
+| simulation | within-genome (bin) | 212,900 | 0.346 | 1.255 |
+| simulation | between-genome (sample) | 100 | 0.346 | 1.256 |
+
+![Within- vs between-genome missingness, real vs simulation](figures/ergodicity_real_vs_sim.png)
+
+**Read this carefully — the test is only meaningful on real data.** The simulation is
+**ergodic by construction**: `make_*_benchmark.R` draws every bin from one per-sample λ
+and a flat per-bin `present_prob`, so its within- and between-genome curves are
+identical to 3 decimals (Δπ ≈ 0, Δk ≈ 0.001) and recover the input (π=0.346, k=1.256)
+exactly. That is the *control*, not the validation — a coincidence on simulated data
+would prove nothing.
+
+The **real data is what validates the assumption**: its within- and between-genome
+curves nearly coincide too (Δπ = 0.033, Δk = 0.080), separating only slightly in the
+high-λ tail (> 1×). So the missingness↔coverage law measured across samples does hold
+across bins within a genome — the per-sample coverage model transfers to the per-bin
+scale. The small residual (the real data being *slightly* less ergodic than the perfect
+simulation: bin floor 0.313 vs sample 0.346) is exactly the genuine per-bin spatial
+structure flagged below — now quantified and shown to be small.
+
+## 5. Limitations to state honestly
+
+- **Spatial coverage structure** (heterochromatin / repeats) — the source of the small
+  real-data ergodicity residual above (Δπ ≈ 0.03); mitigated by move 4 (real per-bin
+  profile); otherwise a flat per-Mb density understates bin-to-bin variance.
 - **Reference bias on donor alleles** — a separate coverage × genotype term, checkable by
   asking whether `ALT_FREQ` reaches ~1.0 in known homozygous-donor regions of
   high-confidence samples; if it falls short, add an ALT-specific coverage/error term.
 
-## 5. Bottom line
+## 6. Bottom line
 
 The assumption is defensible, provided the *narrow* version is defended: **bin-level
 sufficiency with within-bin site exchangeability, protected by the CLT at ~10³–10⁴ sites
 per bin** — not the literal "per-sample equals per-site coverage." The per-bin file lets
 three of the objections become validation figures and one become a direct empirical
 input, so ergodicity can be presented as *tested, and partly replaced by measurement*,
-rather than assumed. The single highest-value check is move 2: the within-sample vs
-between-sample missingness-curve overlay.
+rather than assumed. The highest-value check — move 2, the within- vs between-genome
+missingness-curve overlay — **has now been run on the real data and confirms the
+transfer** (Δπ = 0.03, Δk = 0.08; section 4), with the simulation control showing the
+expected Δ ≈ 0.
 
 ## References / artifacts
 - Generator: `make_wideseq_benchmark.R` (per-bin analytic draw; `λ ~ Normal`).
