@@ -41,10 +41,11 @@ viterbi3 <- function(obs_idx, start, trans, emiss) {
 }
 
 # Evaluate expr while swallowing both stdout and stderr chatter (e.g. REBMIX banners).
+# Outer capture = stdout (also swallows the inner call's visible return); inner = stderr.
 quiet <- function(expr) {
   val <- NULL
-  utils::capture.output(type = "message",
-    utils::capture.output(val <- expr))
+  utils::capture.output(
+    utils::capture.output(val <- expr, type = "message"))
   val
 }
 
