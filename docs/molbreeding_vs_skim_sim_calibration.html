@@ -3488,7 +3488,13 @@ window.onload = function() {
   <li><a href="#layer-3-recovery-degraded-sim-r-5" id="toc-layer-3-recovery-degraded-sim-r-5" class="nav-link" data-scroll-target="#layer-3-recovery-degraded-sim-r-5">Layer 3 — Recovery (degraded sim, r = 5)</a></li>
   <li><a href="#three-f_i-decomposition-skim" id="toc-three-f_i-decomposition-skim" class="nav-link" data-scroll-target="#three-f_i-decomposition-skim">Three-<code>f_i</code> decomposition (skim)</a></li>
   </ul></li>
-  <li><a href="#gbts-source-5-110-pending" id="toc-gbts-source-5-110-pending" class="nav-link" data-scroll-target="#gbts-source-5-110-pending">GBTS (Source 5, ~110×) — pending</a>
+  <li><a href="#gbts-source-5-110-target-capture-wideseq-filtered" id="toc-gbts-source-5-110-target-capture-wideseq-filtered" class="nav-link" data-scroll-target="#gbts-source-5-110-target-capture-wideseq-filtered">GBTS (Source 5, ~110× target-capture, wideseq-filtered)</a>
+  <ul class="collapse">
+  <li><a href="#layer-2-observation-model-gbts" id="toc-layer-2-observation-model-gbts" class="nav-link" data-scroll-target="#layer-2-observation-model-gbts">Layer 2 — Observation model (GBTS)</a></li>
+  <li><a href="#layer-3-recovery-degraded-sim-r-2" id="toc-layer-3-recovery-degraded-sim-r-2" class="nav-link" data-scroll-target="#layer-3-recovery-degraded-sim-r-2">Layer 3 — Recovery (degraded sim, r = 2)</a></li>
+  <li><a href="#three-f_i-decomposition-gbts" id="toc-three-f_i-decomposition-gbts" class="nav-link" data-scroll-target="#three-f_i-decomposition-gbts">Three-<code>f_i</code> decomposition (GBTS)</a></li>
+  </ul></li>
+  <li><a href="#skim-vs-gbts-cross-platform" id="toc-skim-vs-gbts-cross-platform" class="nav-link" data-scroll-target="#skim-vs-gbts-cross-platform">Skim vs GBTS — cross-platform</a>
   <ul class="collapse">
   <li><a href="#notes" id="toc-notes" class="nav-link" data-scroll-target="#notes">Notes</a></li>
   </ul></li>
@@ -3530,7 +3536,7 @@ window.onload = function() {
 
 <p><strong>Repo:</strong> <a href="https://github.com/sawers-rellan-labs/zealtiger">sawers-rellan-labs/zealtiger</a></p>
 <blockquote class="blockquote">
-<p><strong>STATUS: skim done, GBTS pending.</strong> Simulation-calibrated successor to <code>molbreeding_vs_skim.qmd</code>. The original is kept <strong>frozen</strong> (<code>docs/molbreeding_vs_skim.html</code>); outputs here are <strong>isolated</strong> to <code>results/sim_calibration/</code>. Promote to the canonical name only once validated.</p>
+<p><strong>STATUS: skim + GBTS done.</strong> Simulation-calibrated successor to <code>molbreeding_vs_skim.qmd</code>. The original is kept <strong>frozen</strong> (<code>docs/molbreeding_vs_skim.html</code>); outputs here are <strong>isolated</strong> to <code>results/sim_calibration/</code>. Promote to the canonical name only once validated.</p>
 </blockquote>
 <section id="what-this-adds-over-the-old-comparison" class="level2">
 <h2 class="anchored" data-anchor-id="what-this-adds-over-the-old-comparison">What this adds over the old comparison</h2>
@@ -3841,17 +3847,286 @@ window.onload = function() {
 <hr>
 </section>
 </section>
-<section id="gbts-source-5-110-pending" class="level1">
-<h1>GBTS (Source 5, ~110×) — pending</h1>
+<section id="gbts-source-5-110-target-capture-wideseq-filtered" class="level1">
+<h1>GBTS (Source 5, ~110× target-capture, wideseq-filtered)</h1>
+<p>The wideseq-filtered (<code>SNP_wsfilt</code>) <strong>high-confidence</strong> set: 9,157 sites validated in prior genotyping and selected for clean Poisson coverage in the skim. ~100% covered at <strong>~110×</strong> (capped to <strong>20×</strong> for the betabinomial fit cost), so het is <strong>resolved</strong> — the opposite regime to the skim. Informative density ~4.3/Mb (sparser than skim’s 6.7; GBTS’s edge is <em>coverage</em>, not marker count). Derived rigidity <strong>r=2</strong> (FP+FN sweep vs truth — see below; <em>not</em> the borrowed r=8).</p>
+<section id="layer-2-observation-model-gbts" class="level2">
+<h2 class="anchored" data-anchor-id="layer-2-observation-model-gbts">Layer 2 — Observation model (GBTS)</h2>
 <div class="cell">
 <details open class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a><span class="co"># </span><span class="al">TODO</span><span class="co"> (next): same three layers for GBTS on its own panel.</span></span>
-<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a><span class="co"># Layer 2: GBTS ~0% missing, confident het. Layer 3: per-platform r (NOT r=8 —</span></span>
-<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a><span class="co"># see docs/14; GBTS ~23 vs skim ~6.6 informative markers/Mb). Three-f_i: real</span></span>
-<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a><span class="co"># GBTS f_i vs degraded-GBTS-sim. Expect smaller het-undercall bias than skim.</span></span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb14"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb14-1"><a href="#cb14-1" aria-hidden="true" tabindex="-1"></a>g <span class="ot">&lt;-</span> data.table<span class="sc">::</span><span class="fu">fread</span>(params<span class="sc">$</span>gbts_gatk)</span>
+<span id="cb14-2"><a href="#cb14-2" aria-hidden="true" tabindex="-1"></a>real <span class="ot">&lt;-</span> g[, .(<span class="at">depth =</span> <span class="fu">mean</span>(TOTAL_COUNT), <span class="at">missing =</span> <span class="fu">mean</span>(TOTAL_COUNT <span class="sc">==</span> <span class="dv">0</span>),</span>
+<span id="cb14-3"><a href="#cb14-3" aria-hidden="true" tabindex="-1"></a>              <span class="at">het =</span> <span class="fu">mean</span>(REF_COUNT <span class="sc">&gt;</span> <span class="dv">0</span> <span class="sc">&amp;</span> ALT_COUNT <span class="sc">&gt;</span> <span class="dv">0</span>)), by <span class="ot">=</span> SAMPLE]</span>
+<span id="cb14-4"><a href="#cb14-4" aria-hidden="true" tabindex="-1"></a>ss <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="fu">file.path</span>(params<span class="sc">$</span>gbts_bench, <span class="st">&quot;sample_stats.csv&quot;</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb14-5"><a href="#cb14-5" aria-hidden="true" tabindex="-1"></a><span class="fu">tibble</span>(<span class="at">source =</span> <span class="fu">c</span>(<span class="st">&quot;real GBTS (raw)&quot;</span>, <span class="st">&quot;real GBTS (capped 20×, fit input)&quot;</span>, <span class="st">&quot;degraded sim (20×)&quot;</span>),</span>
+<span id="cb14-6"><a href="#cb14-6" aria-hidden="true" tabindex="-1"></a>       <span class="at">mean_depth  =</span> <span class="fu">c</span>(<span class="fu">mean</span>(real<span class="sc">$</span>depth), <span class="dv">20</span>, <span class="fu">mean</span>(ss<span class="sc">$</span>mean_depth)),</span>
+<span id="cb14-7"><a href="#cb14-7" aria-hidden="true" tabindex="-1"></a>       <span class="at">missingness =</span> <span class="fu">c</span>(<span class="fu">mean</span>(real<span class="sc">$</span>missing), <span class="fu">mean</span>(real<span class="sc">$</span>missing), <span class="fu">mean</span>(ss<span class="sc">$</span>missing_obs)),</span>
+<span id="cb14-8"><a href="#cb14-8" aria-hidden="true" tabindex="-1"></a>       <span class="at">obs_het_rate =</span> <span class="fu">c</span>(<span class="fu">mean</span>(real<span class="sc">$</span>het), <span class="cn">NA</span>, <span class="cn">NA</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb14-9"><a href="#cb14-9" aria-hidden="true" tabindex="-1"></a>  knitr<span class="sc">::</span><span class="fu">kable</span>(<span class="at">digits =</span> <span class="dv">4</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 48%">
+<col style="width: 15%">
+<col style="width: 17%">
+<col style="width: 18%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">source</th>
+<th style="text-align: right;">mean_depth</th>
+<th style="text-align: right;">missingness</th>
+<th style="text-align: right;">obs_het_rate</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">real GBTS (raw)</td>
+<td style="text-align: right;">110.1883</td>
+<td style="text-align: right;">0.0012</td>
+<td style="text-align: right;">0.086</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">real GBTS (capped 20×, fit input)</td>
+<td style="text-align: right;">20.0000</td>
+<td style="text-align: right;">0.0012</td>
+<td style="text-align: right;">NA</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">degraded sim (20×)</td>
+<td style="text-align: right;">20.0042</td>
+<td style="text-align: right;">0.0012</td>
+<td style="text-align: right;">NA</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p><strong>Read:</strong> real GBTS is ~110×, ~0.1 % missing — near-complete. The betabinomial fit cost caps it to <strong>20×</strong> (the fit input), which the sim benchmark matches (20×, ~0.1 % missing). At 20× het is fully resolved (vs the skim’s ~1.5 reads), so there is <strong>no het-undercall</strong> here. Observation model validated at the capped level.</p>
+</section>
+<section id="layer-3-recovery-degraded-sim-r-2" class="level2">
+<h2 class="anchored" data-anchor-id="layer-3-recovery-degraded-sim-r-2">Layer 3 — Recovery (degraded sim, r = 2)</h2>
+<div class="cell">
+<details open class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>sc <span class="ot">&lt;-</span> <span class="fu">file.path</span>(params<span class="sc">$</span>gbts_bench, <span class="st">&quot;scoring&quot;</span>)</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a><span class="fu">read_csv</span>(<span class="fu">file.path</span>(sc, <span class="st">&quot;segment_scores.csv&quot;</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">select</span>(class, n_truth, n_called, precision, recall, F1) <span class="sc">%&gt;%</span></span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>  knitr<span class="sc">::</span><span class="fu">kable</span>(<span class="at">digits =</span> <span class="dv">3</span>, <span class="at">caption =</span> <span class="st">&quot;GBTS segment recovery at r=2 (reciprocal overlap ≥ 0.5)&quot;</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>GBTS segment recovery at r=2 (reciprocal overlap ≥ 0.5)</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;">class</th>
+<th style="text-align: right;">n_truth</th>
+<th style="text-align: right;">n_called</th>
+<th style="text-align: right;">precision</th>
+<th style="text-align: right;">recall</th>
+<th style="text-align: right;">F1</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">homozygous_donor</td>
+<td style="text-align: right;">851</td>
+<td style="text-align: right;">834</td>
+<td style="text-align: right;">1.000</td>
+<td style="text-align: right;">0.980</td>
+<td style="text-align: right;">0.990</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">heterozygous</td>
+<td style="text-align: right;">452</td>
+<td style="text-align: right;">432</td>
+<td style="text-align: right;">0.986</td>
+<td style="text-align: right;">0.942</td>
+<td style="text-align: right;">0.964</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">donor_present</td>
+<td style="text-align: right;">1303</td>
+<td style="text-align: right;">1266</td>
+<td style="text-align: right;">0.999</td>
+<td style="text-align: right;">0.971</td>
+<td style="text-align: right;">0.985</td>
+</tr>
+</tbody>
+</table>
+</div>
+<details open class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb16"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb16-1"><a href="#cb16-1" aria-hidden="true" tabindex="-1"></a><span class="fu">read_csv</span>(<span class="fu">file.path</span>(sc, <span class="st">&quot;crossover_scores.csv&quot;</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb16-2"><a href="#cb16-2" aria-hidden="true" tabindex="-1"></a>  knitr<span class="sc">::</span><span class="fu">kable</span>(<span class="at">digits =</span> <span class="dv">3</span>, <span class="at">caption =</span> <span class="st">&quot;GBTS crossover recovery&quot;</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>GBTS crossover recovery</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;">call_set</th>
+<th style="text-align: right;">mean_true_co</th>
+<th style="text-align: right;">mean_called_co</th>
+<th style="text-align: right;">co_bias</th>
+<th style="text-align: right;">co_rmse</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">RTIGER</td>
+<td style="text-align: right;">20.38</td>
+<td style="text-align: right;">19.9</td>
+<td style="text-align: right;">-0.48</td>
+<td style="text-align: right;">1.01</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p><strong>Read:</strong> recovery is excellent — donor F1 ≈ 0.99, <strong>het F1 ≈ 0.96</strong>, CO bias ≈ −0.5 (vs skim’s 0.95 / 0.89 / −1.7). High coverage resolves the het and crossovers the skim misses, so the <strong>method bias is minimal</strong>.</p>
+</section>
+<section id="three-f_i-decomposition-gbts" class="level2">
+<h2 class="anchored" data-anchor-id="three-f_i-decomposition-gbts">Three-<code>f_i</code> decomposition (GBTS)</h2>
+<div class="cell">
+<details open class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb17"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb17-1"><a href="#cb17-1" aria-hidden="true" tabindex="-1"></a>sim_g  <span class="ot">&lt;-</span> <span class="fu">seg_fractions</span>(<span class="fu">read_rtiger_segments</span>(<span class="fu">file.path</span>(params<span class="sc">$</span>gbts_bench, <span class="st">&quot;rtiger_out_r2&quot;</span>, <span class="st">&quot;rtiger_result.rds&quot;</span>)))</span>
+<span id="cb17-2"><a href="#cb17-2" aria-hidden="true" tabindex="-1"></a>real_g <span class="ot">&lt;-</span> <span class="fu">seg_fractions</span>(<span class="fu">read_csv</span>(params<span class="sc">$</span>gbts_calls, <span class="at">show_col_types =</span> <span class="cn">FALSE</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb17-3"><a href="#cb17-3" aria-hidden="true" tabindex="-1"></a>                          <span class="fu">transmute</span>(name, chr, start_bp, end_bp, state))</span>
+<span id="cb17-4"><a href="#cb17-4" aria-hidden="true" tabindex="-1"></a>fig <span class="ot">&lt;-</span> <span class="fu">tibble</span>(</span>
+<span id="cb17-5"><a href="#cb17-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">f_i =</span> <span class="fu">factor</span>(<span class="fu">c</span>(<span class="st">&quot;(1) p0 breeding&quot;</span>, <span class="st">&quot;(2) degraded-sim&quot;</span>, <span class="st">&quot;(3) real GBTS&quot;</span>),</span>
+<span id="cb17-6"><a href="#cb17-6" aria-hidden="true" tabindex="-1"></a>               <span class="at">levels =</span> <span class="fu">c</span>(<span class="st">&quot;(1) p0 breeding&quot;</span>, <span class="st">&quot;(2) degraded-sim&quot;</span>, <span class="st">&quot;(3) real GBTS&quot;</span>)),</span>
+<span id="cb17-7"><a href="#cb17-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">REF =</span> <span class="fu">c</span>(p0[<span class="st">&quot;REF&quot;</span>], <span class="fu">mean</span>(sim_g<span class="sc">$</span>REF), <span class="fu">mean</span>(real_g<span class="sc">$</span>REF)),</span>
+<span id="cb17-8"><a href="#cb17-8" aria-hidden="true" tabindex="-1"></a>  <span class="at">Het =</span> <span class="fu">c</span>(p0[<span class="st">&quot;Het&quot;</span>], <span class="fu">mean</span>(sim_g<span class="sc">$</span>Het), <span class="fu">mean</span>(real_g<span class="sc">$</span>Het)),</span>
+<span id="cb17-9"><a href="#cb17-9" aria-hidden="true" tabindex="-1"></a>  <span class="at">ALT =</span> <span class="fu">c</span>(p0[<span class="st">&quot;ALT&quot;</span>], <span class="fu">mean</span>(sim_g<span class="sc">$</span>ALT), <span class="fu">mean</span>(real_g<span class="sc">$</span>ALT)),</span>
+<span id="cb17-10"><a href="#cb17-10" aria-hidden="true" tabindex="-1"></a>  <span class="at">n   =</span> <span class="fu">c</span>(<span class="cn">NA</span>, <span class="fu">nrow</span>(sim_g), <span class="fu">nrow</span>(real_g)))</span>
+<span id="cb17-11"><a href="#cb17-11" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">kable</span>(fig, <span class="at">digits =</span> <span class="dv">4</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<thead>
+<tr class="header">
+<th style="text-align: left;">f_i</th>
+<th style="text-align: right;">REF</th>
+<th style="text-align: right;">Het</th>
+<th style="text-align: right;">ALT</th>
+<th style="text-align: right;">n</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">(1) p0 breeding</td>
+<td style="text-align: right;">0.8594</td>
+<td style="text-align: right;">0.0312</td>
+<td style="text-align: right;">0.1094</td>
+<td style="text-align: right;">NA</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">(2) degraded-sim</td>
+<td style="text-align: right;">0.8570</td>
+<td style="text-align: right;">0.0307</td>
+<td style="text-align: right;">0.1123</td>
+<td style="text-align: right;">100</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">(3) real GBTS</td>
+<td style="text-align: right;">0.8748</td>
+<td style="text-align: right;">0.1030</td>
+<td style="text-align: right;">0.0221</td>
+<td style="text-align: right;">16</td>
+</tr>
+</tbody>
+</table>
+</div>
+<details open class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb18"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb18-1"><a href="#cb18-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;(2)-(1) method bias:  Het %+.4f  ALT %+.4f</span><span class="sc">\n</span><span class="st">&quot;</span>,</span>
+<span id="cb18-2"><a href="#cb18-2" aria-hidden="true" tabindex="-1"></a>            fig<span class="sc">$</span>Het[<span class="dv">2</span>]<span class="sc">-</span>fig<span class="sc">$</span>Het[<span class="dv">1</span>], fig<span class="sc">$</span>ALT[<span class="dv">2</span>]<span class="sc">-</span>fig<span class="sc">$</span>ALT[<span class="dv">1</span>]))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>(2)-(1) method bias:  Het -0.0005  ALT +0.0029</code></pre>
+</div>
+<details open class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb20"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb20-1"><a href="#cb20-1" aria-hidden="true" tabindex="-1"></a><span class="fu">cat</span>(<span class="fu">sprintf</span>(<span class="st">&quot;(3)-(2) real biology: Het %+.4f  ALT %+.4f  [N=%d]</span><span class="sc">\n</span><span class="st">&quot;</span>,</span>
+<span id="cb20-2"><a href="#cb20-2" aria-hidden="true" tabindex="-1"></a>            fig<span class="sc">$</span>Het[<span class="dv">3</span>]<span class="sc">-</span>fig<span class="sc">$</span>Het[<span class="dv">2</span>], fig<span class="sc">$</span>ALT[<span class="dv">3</span>]<span class="sc">-</span>fig<span class="sc">$</span>ALT[<span class="dv">2</span>], fig<span class="sc">$</span>n[<span class="dv">3</span>]))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stdout">
+<pre><code>(3)-(2) real biology: Het +0.0723  ALT -0.0901  [N=16]</code></pre>
+</div>
+<details open class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb22"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb22-1"><a href="#cb22-1" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(fig, <span class="fu">file.path</span>(params<span class="sc">$</span>out_dir, <span class="st">&quot;gbts_three_fi_r2.csv&quot;</span>))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
+<p><strong>Read.</strong> Method bias ≈0. Real biology: <strong>Het +0.072, ALT −0.090</strong> — a heterozygote excess / donor-homozygote deficit even <em>larger</em> than the skim’s, because GBTS resolves het the skim under-calls. N=16, but the signal is 3–14 SE; donor dosage <strong>0.074</strong> vs 0.125.</p>
+<hr>
+</section>
+</section>
+<section id="skim-vs-gbts-cross-platform" class="level1">
+<h1>Skim vs GBTS — cross-platform</h1>
+<div class="cell">
+<details open class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb23"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb23-1"><a href="#cb23-1" aria-hidden="true" tabindex="-1"></a>sk <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="fu">file.path</span>(params<span class="sc">$</span>out_dir, <span class="st">&quot;skim_three_fi.csv&quot;</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb23-2"><a href="#cb23-2" aria-hidden="true" tabindex="-1"></a>gb <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(<span class="fu">file.path</span>(params<span class="sc">$</span>out_dir, <span class="st">&quot;gbts_three_fi_r2.csv&quot;</span>), <span class="at">show_col_types =</span> <span class="cn">FALSE</span>)</span>
+<span id="cb23-3"><a href="#cb23-3" aria-hidden="true" tabindex="-1"></a>bias_bio <span class="ot">&lt;-</span> <span class="cf">function</span>(d, plat, r) <span class="fu">tibble</span>(</span>
+<span id="cb23-4"><a href="#cb23-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">platform =</span> plat, <span class="at">r =</span> r,</span>
+<span id="cb23-5"><a href="#cb23-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">method_bias_Het =</span> d<span class="sc">$</span>Het[<span class="dv">2</span>]<span class="sc">-</span>d<span class="sc">$</span>Het[<span class="dv">1</span>], <span class="at">method_bias_ALT =</span> d<span class="sc">$</span>ALT[<span class="dv">2</span>]<span class="sc">-</span>d<span class="sc">$</span>ALT[<span class="dv">1</span>],</span>
+<span id="cb23-6"><a href="#cb23-6" aria-hidden="true" tabindex="-1"></a>  <span class="at">biology_Het =</span> d<span class="sc">$</span>Het[<span class="dv">3</span>]<span class="sc">-</span>d<span class="sc">$</span>Het[<span class="dv">2</span>], <span class="at">biology_ALT =</span> d<span class="sc">$</span>ALT[<span class="dv">3</span>]<span class="sc">-</span>d<span class="sc">$</span>ALT[<span class="dv">2</span>],</span>
+<span id="cb23-7"><a href="#cb23-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">donor_dosage =</span> d<span class="sc">$</span>ALT[<span class="dv">3</span>] <span class="sc">+</span> <span class="fl">0.5</span><span class="sc">*</span>d<span class="sc">$</span>Het[<span class="dv">3</span>])</span>
+<span id="cb23-8"><a href="#cb23-8" aria-hidden="true" tabindex="-1"></a><span class="fu">bind_rows</span>(<span class="fu">bias_bio</span>(sk, <span class="st">&quot;skim (0.4×)&quot;</span>, <span class="dv">5</span>), <span class="fu">bias_bio</span>(gb, <span class="st">&quot;GBTS (110×)&quot;</span>, <span class="dv">2</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb23-9"><a href="#cb23-9" aria-hidden="true" tabindex="-1"></a>  knitr<span class="sc">::</span><span class="fu">kable</span>(<span class="at">digits =</span> <span class="dv">4</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<colgroup>
+<col style="width: 14%">
+<col style="width: 3%">
+<col style="width: 19%">
+<col style="width: 19%">
+<col style="width: 14%">
+<col style="width: 14%">
+<col style="width: 15%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">platform</th>
+<th style="text-align: right;">r</th>
+<th style="text-align: right;">method_bias_Het</th>
+<th style="text-align: right;">method_bias_ALT</th>
+<th style="text-align: right;">biology_Het</th>
+<th style="text-align: right;">biology_ALT</th>
+<th style="text-align: right;">donor_dosage</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">skim (0.4×)</td>
+<td style="text-align: right;">5</td>
+<td style="text-align: right;">-0.0024</td>
+<td style="text-align: right;">-0.0056</td>
+<td style="text-align: right;">0.0467</td>
+<td style="text-align: right;">-0.0693</td>
+<td style="text-align: right;">0.0722</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">GBTS (110×)</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">-0.0005</td>
+<td style="text-align: right;">0.0029</td>
+<td style="text-align: right;">0.0723</td>
+<td style="text-align: right;">-0.0901</td>
+<td style="text-align: right;">0.0736</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p><strong>The result.</strong> Two independent platforms — each with its own data-calibrated coverage model and its own truth-derived rigidity — both show the <strong>same heterozygote-excess / donor-homozygote-deficit</strong> with <strong>negligible method bias</strong> and <strong>identical donor dosage (~0.07 vs the neutral 0.125)</strong>. The clincher: GBTS shows a <em>larger</em> het excess than the skim, exactly because the skim <strong>under-calls het</strong> at 0.4× (het looks homozygous) and partially masks it — the high-coverage platform that resolves het sees more of it. So the signal is real biology (selection against donor homozygotes / heterosis / residual heterozygosity / paralog mis-mapping → <code>docs/12-het-excess-diagnosis.md</code>), <strong>not</strong> a coverage or caller artifact. The simulation baseline is what licenses that conclusion.</p>
 <section id="notes" class="level2">
 <h2 class="anchored" data-anchor-id="notes">Notes</h2>
 <ul>

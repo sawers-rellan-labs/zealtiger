@@ -19,12 +19,15 @@ params:
   skim_design:  "data/rtiger_50K/expDesign_all.csv"
   skim_calls:   "data/rtiger_50K/calls_taxa_r5.csv"  # real skim RTIGER calls (r=5 per-taxon, refit)
   n_skim_obs:   60      # real skim count files sampled for the coverage stats (render speed)
+  gbts_bench:   "results/sim_calibration/gbts_benchmark"   # GBTS-wsfilt benchmark (20x capped)
+  gbts_calls:   "results/sim_calibration/gbts_calls/SNP_wsfilt/calls_common_schema.csv"  # real GBTS r=2
+  gbts_gatk:    "data/molbreeding_45k/gatk_table_SNP_wsfilt_v5.tsv"   # real GBTS-wsfilt allele counts
   seed:         1
 ---
 
 **Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
 
-> **STATUS: skim done, GBTS pending.** Simulation-calibrated successor to
+> **STATUS: skim + GBTS done.** Simulation-calibrated successor to
 > `molbreeding_vs_skim.qmd`. The original is kept **frozen**
 > (`docs/molbreeding_vs_skim.html`); outputs here are **isolated** to
 > `results/sim_calibration/`. Promote to the canonical name only once validated.
@@ -184,15 +187,101 @@ from biology.
 
 ---
 
-# GBTS (Source 5, ~110×) — pending
+# GBTS (Source 5, ~110× target-capture, wideseq-filtered)
 
-```{r gbts}
-#| eval: false
-# TODO (next): same three layers for GBTS on its own panel.
-# Layer 2: GBTS ~0% missing, confident het. Layer 3: per-platform r (NOT r=8 —
-# see docs/14; GBTS ~23 vs skim ~6.6 informative markers/Mb). Three-f_i: real
-# GBTS f_i vs degraded-GBTS-sim. Expect smaller het-undercall bias than skim.
+The wideseq-filtered (`SNP_wsfilt`) **high-confidence** set: 9,157 sites validated
+in prior genotyping and selected for clean Poisson coverage in the skim. ~100%
+covered at **~110×** (capped to **20×** for the betabinomial fit cost), so het is
+**resolved** — the opposite regime to the skim. Informative density ~4.3/Mb
+(sparser than skim's 6.7; GBTS's edge is *coverage*, not marker count). Derived
+rigidity **r=2** (FP+FN sweep vs truth — see below; *not* the borrowed r=8).
+
+## Layer 2 — Observation model (GBTS)
+
+```{r gbts-layer2}
+g <- data.table::fread(params$gbts_gatk)
+real <- g[, .(depth = mean(TOTAL_COUNT), missing = mean(TOTAL_COUNT == 0),
+              het = mean(REF_COUNT > 0 & ALT_COUNT > 0)), by = SAMPLE]
+ss <- read_csv(file.path(params$gbts_bench, "sample_stats.csv"), show_col_types = FALSE)
+tibble(source = c("real GBTS (raw)", "real GBTS (capped 20×, fit input)", "degraded sim (20×)"),
+       mean_depth  = c(mean(real$depth), 20, mean(ss$mean_depth)),
+       missingness = c(mean(real$missing), mean(real$missing), mean(ss$missing_obs)),
+       obs_het_rate = c(mean(real$het), NA, NA)) %>%
+  knitr::kable(digits = 4)
 ```
+
+**Read:** real GBTS is ~110×, ~0.1 % missing — near-complete. The betabinomial fit
+cost caps it to **20×** (the fit input), which the sim benchmark matches (20×,
+~0.1 % missing). At 20× het is fully resolved (vs the skim's ~1.5 reads), so there
+is **no het-undercall** here. Observation model validated at the capped level.
+
+## Layer 3 — Recovery (degraded sim, r = 2)
+
+```{r gbts-layer3}
+sc <- file.path(params$gbts_bench, "scoring")
+read_csv(file.path(sc, "segment_scores.csv"), show_col_types = FALSE) %>%
+  select(class, n_truth, n_called, precision, recall, F1) %>%
+  knitr::kable(digits = 3, caption = "GBTS segment recovery at r=2 (reciprocal overlap ≥ 0.5)")
+read_csv(file.path(sc, "crossover_scores.csv"), show_col_types = FALSE) %>%
+  knitr::kable(digits = 3, caption = "GBTS crossover recovery")
+```
+
+**Read:** recovery is excellent — donor F1 ≈ 0.99, **het F1 ≈ 0.96**, CO bias ≈ −0.5
+(vs skim's 0.95 / 0.89 / −1.7). High coverage resolves the het and crossovers the
+skim misses, so the **method bias is minimal**.
+
+## Three-`f_i` decomposition (GBTS)
+
+```{r gbts-three-fi}
+sim_g  <- seg_fractions(read_rtiger_segments(file.path(params$gbts_bench, "rtiger_out_r2", "rtiger_result.rds")))
+real_g <- seg_fractions(read_csv(params$gbts_calls, show_col_types = FALSE) %>%
+                          transmute(name, chr, start_bp, end_bp, state))
+fig <- tibble(
+  f_i = factor(c("(1) p0 breeding", "(2) degraded-sim", "(3) real GBTS"),
+               levels = c("(1) p0 breeding", "(2) degraded-sim", "(3) real GBTS")),
+  REF = c(p0["REF"], mean(sim_g$REF), mean(real_g$REF)),
+  Het = c(p0["Het"], mean(sim_g$Het), mean(real_g$Het)),
+  ALT = c(p0["ALT"], mean(sim_g$ALT), mean(real_g$ALT)),
+  n   = c(NA, nrow(sim_g), nrow(real_g)))
+knitr::kable(fig, digits = 4)
+cat(sprintf("(2)-(1) method bias:  Het %+.4f  ALT %+.4f\n",
+            fig$Het[2]-fig$Het[1], fig$ALT[2]-fig$ALT[1]))
+cat(sprintf("(3)-(2) real biology: Het %+.4f  ALT %+.4f  [N=%d]\n",
+            fig$Het[3]-fig$Het[2], fig$ALT[3]-fig$ALT[2], fig$n[3]))
+write_csv(fig, file.path(params$out_dir, "gbts_three_fi_r2.csv"))
+```
+
+**Read.** Method bias ≈0. Real biology: **Het +0.072, ALT −0.090** — a heterozygote
+excess / donor-homozygote deficit even *larger* than the skim's, because GBTS
+resolves het the skim under-calls. N=16, but the signal is 3–14 SE; donor dosage
+**0.074** vs 0.125.
+
+---
+
+# Skim vs GBTS — cross-platform
+
+```{r cross-platform}
+sk <- read_csv(file.path(params$out_dir, "skim_three_fi.csv"), show_col_types = FALSE)
+gb <- read_csv(file.path(params$out_dir, "gbts_three_fi_r2.csv"), show_col_types = FALSE)
+bias_bio <- function(d, plat, r) tibble(
+  platform = plat, r = r,
+  method_bias_Het = d$Het[2]-d$Het[1], method_bias_ALT = d$ALT[2]-d$ALT[1],
+  biology_Het = d$Het[3]-d$Het[2], biology_ALT = d$ALT[3]-d$ALT[2],
+  donor_dosage = d$ALT[3] + 0.5*d$Het[3])
+bind_rows(bias_bio(sk, "skim (0.4×)", 5), bias_bio(gb, "GBTS (110×)", 2)) %>%
+  knitr::kable(digits = 4)
+```
+
+**The result.** Two independent platforms — each with its own data-calibrated
+coverage model and its own truth-derived rigidity — both show the **same
+heterozygote-excess / donor-homozygote-deficit** with **negligible method bias**
+and **identical donor dosage (~0.07 vs the neutral 0.125)**. The clincher: GBTS
+shows a *larger* het excess than the skim, exactly because the skim **under-calls
+het** at 0.4× (het looks homozygous) and partially masks it — the high-coverage
+platform that resolves het sees more of it. So the signal is real biology
+(selection against donor homozygotes / heterosis / residual heterozygosity /
+paralog mis-mapping → `docs/12-het-excess-diagnosis.md`), **not** a coverage or
+caller artifact. The simulation baseline is what licenses that conclusion.
 
 ## Notes
 

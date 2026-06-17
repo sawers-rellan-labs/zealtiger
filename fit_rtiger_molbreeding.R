@@ -82,7 +82,7 @@ seqv <- setNames(sl$len, sl$chr_label)
 fit_set <- function(setname) {
   cat(sprintf("\n=============== %s (rigidity=%d) ===============\n", setname, r))
   gt_path  <- sprintf("data/molbreeding_45k/gatk_table_%s_v5.tsv", setname)
-  out_root <- file.path("data/molbreeding_gbts", setname)
+  out_root <- file.path(getopt("--outdir", "data/molbreeding_gbts"), setname)
   cnt_dir  <- file.path(out_root, "counts"); fit_dir <- file.path(out_root, "fit")
   dir.create(cnt_dir, recursive = TRUE, showWarnings = FALSE)
   dir.create(fit_dir, recursive = TRUE, showWarnings = FALSE)
