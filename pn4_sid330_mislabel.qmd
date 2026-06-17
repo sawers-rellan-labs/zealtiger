@@ -1,0 +1,177 @@
+---
+title: "Sample-identity check — the GBTS PN4_SID330 mislabel"
+author: "Fausto Rodríguez-Zapata"
+date: "`r Sys.Date()`"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    df-print: paged
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+params:
+  mb_calls:   "results/sim_calibration/gbts_calls/SNP_wsfilt/calls_common_schema.csv"  # GBTS wsfilt, r=2
+  mb_counts:  "results/sim_calibration/gbts_calls/SNP_wsfilt/counts"                    # wsfilt marker grid (9,157)
+  skim_calls: "data/rtiger_50K/calls_taxa_r5.csv"                                       # all 1393 skim RTIGER r=5
+  query:      "PN4_SID330"
+  seed:       1
+---
+
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
+While painting GBTS vs skim ancestry calls for the 16 dual-platform NILs
+(`molbreeding_vs_skim_calibrated.qmd`), **`PN4_SID330`** was the one line whose two
+platforms disagreed wildly — not in amount but in *pattern*. This notebook tests
+whether the two `PN4_SID330` calls even come from the same DNA, and if not, finds
+the true identity by scanning **all 1393 skim samples**.
+
+**Result up front:** the GBTS sample labelled `PN4_SID330` is **PN4_SID322** — a
+label/well swap on the GBTS (MolBreeding) side. The skim `PN4_SID330` is a
+distinct, correctly-labelled individual.
+
+## Setup
+
+```{r setup}
+library(tidyverse); library(data.table); library(GenomicRanges)
+set.seed(params$seed)
+
+mb   <- read_csv(params$mb_calls,   show_col_types = FALSE)   # GBTS wsfilt, r=2 (16 samples)
+skim <- read_csv(params$skim_calls, show_col_types = FALSE)   # skim RTIGER r=5 (1393 samples)
+cf   <- read_tsv(list.files(params$mb_counts, full.names = TRUE)[1],
+                 col_names = c("chr_label","bp","rb","rc","ab","ac"), show_col_types = FALSE)
+grid <- tibble(chr = as.integer(sub("chr","",cf$chr_label)), bp = cf$bp) %>% mutate(gi = row_number())
+gg   <- GRanges(grid$chr, IRanges(grid$bp, width = 1))
+
+# state-on-grid (0/1/2) for one sample's segment table
+state_on_grid <- function(seg) {
+  h <- findOverlaps(gg, GRanges(seg$chr, IRanges(seg$start_bp, seg$end_bp)), select = "first")
+  seg$state[h]
+}
+# identity metrics: donor-present Jaccard (robust to skim het-undercall) + state concordance
+jac  <- function(a, b) { ok <- !is.na(a) & !is.na(b); a <- a[ok] > 0; b <- b[ok] > 0
+  if (sum(a | b) == 0) return(NA_real_); sum(a & b) / sum(a | b) }
+conc <- function(a, b) { ok <- !is.na(a) & !is.na(b); if (!any(ok)) return(NA_real_); mean(a[ok] == b[ok]) }
+
+cat(sprintf("query = GBTS-%s | skim panel = %d samples | grid = %d sites\n",
+            params$query, n_distinct(skim$name), nrow(grid)))
+```
+
+## Identity scan — GBTS-PN4_SID330 vs all 1393 skim samples
+
+The query is the GBTS `PN4_SID330` donor pattern; we score it against every skim
+sample's calls on the common grid. A correctly-labelled sample matches its own
+label best (donor Jaccard ≈ 0.65–0.98, as the other 13 dual-platform NILs do).
+
+```{r scan}
+q  <- state_on_grid(mb %>% filter(name == params$query))   # GBTS query
+qd <- q > 0
+
+# all skim samples on the grid in one pass (data.table foverlaps)
+sk  <- as.data.table(skim)[, .(name, chr = as.character(chr), start_bp, end_bp, state)]
+gdt <- as.data.table(grid)[, .(gi, chr = as.character(chr), start = bp, end = bp)]
+setkey(sk, chr, start_bp, end_bp)
+ov <- foverlaps(gdt, sk, by.x = c("chr","start","end"),
+                by.y = c("chr","start_bp","end_bp"), type = "within", nomatch = NULL)
+
+res <- ov[, {
+  v <- rep(NA_integer_, nrow(grid)); v[gi] <- state
+  .(donorJ = jac(q, v), concord = conc(q, v), skim_donor = mean(v > 0, na.rm = TRUE))
+}, by = name][order(-donorJ)]
+
+knitr::kable(head(res, 15), digits = 3,
+             caption = "Top 15 skim matches to GBTS-PN4_SID330 (by donor Jaccard)")
+
+own <- which(res$name == params$query)
+cat(sprintf("\nlabelled skim %s: rank %d / %d  donorJ = %.3f  concord = %.3f\n",
+            params$query, own, nrow(res), res$donorJ[own], res$concord[own]))
+```
+
+**Read:** a single decisive hit — **PN4_SID322** at donor Jaccard **0.84** /
+concordance **0.91** — far above the runner-up (~0.47) and the line's own label
+(**0.10, rank ~506/1393**). GBTS-`PN4_SID330` is the same DNA as skim-`PN4_SID322`.
+
+## Ruling out "they're just sibs"
+
+Both `PN4_SID322` and `PN4_SID330` are family **Zx.0030**, so the match could in
+principle be close relatives rather than identical DNA. The test: compare the two
+**skim** samples directly. If they were near-identical sibs, the match would be
+ambiguous; if they are distinct, GBTS-330 ≡ skim-322 can only be a swap.
+
+```{r sibs}
+g330 <- state_on_grid(mb   %>% filter(name == "PN4_SID330"))
+k322 <- state_on_grid(skim %>% filter(name == "PN4_SID322"))
+k330 <- state_on_grid(skim %>% filter(name == "PN4_SID330"))
+tibble(
+  comparison = c("skim-322 vs skim-330 (both Zx.0030)",
+                 "GBTS-330 vs skim-322 (the match)",
+                 "GBTS-330 vs skim-330 (its own label)"),
+  donor_Jaccard = c(jac(k322, k330), jac(g330, k322), jac(g330, k330)),
+  concordance   = c(conc(k322, k330), conc(g330, k322), conc(g330, k330)),
+  donor_frac_A_vs_B = c(sprintf("%.3f / %.3f", mean(k322>0,na.rm=T), mean(k330>0,na.rm=T)),
+                        sprintf("%.3f / %.3f", mean(g330>0,na.rm=T), mean(k322>0,na.rm=T)),
+                        sprintf("%.3f / %.3f", mean(g330>0,na.rm=T), mean(k330>0,na.rm=T)))) %>%
+  knitr::kable(digits = 3)
+```
+
+**Read:** skim-322 vs skim-330 is only **J=0.10** — they are *distinct* individuals
+(same donor source, independent recombination), no more alike than random NILs. So
+GBTS-330 matching skim-322 at 0.84 while sharing nothing with skim-330 is **not**
+relatedness — it is a sample swap. Donor fractions agree on the match
+(GBTS-330 0.32 ≈ skim-322 0.30) and disagree on the label (skim-330 0.11).
+
+## Chromosome painting — the swap, in colour
+
+Top = GBTS `PN4_SID330` (labelled); middle = skim `PN4_SID322` (the J=0.84 match);
+bottom = skim `PN4_SID330` (its own label, J=0.10). Palette: REF gold, HET green,
+ALT purple.
+
+```{r painting, fig.width=13, fig.height=4.2}
+pal <- c(REF = "gold", HET = "springgreen4", ALT = "purple4")
+lane <- function(seg, nm, lab) seg %>% filter(name == nm) %>%
+  transmute(chr, start_bp, end_bp, state = factor(state, 0:2, c("REF","HET","ALT")), lane = lab)
+paint <- bind_rows(
+  lane(mb,   "PN4_SID330", "GBTS  PN4_SID330  (labelled)"),
+  lane(skim, "PN4_SID322", "skim  PN4_SID322  (J=0.84 match)"),
+  lane(skim, "PN4_SID330", "skim  PN4_SID330  (own label, J=0.10)")) %>%
+  mutate(chr  = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)),
+         lane = factor(lane, levels = c("GBTS  PN4_SID330  (labelled)",
+                                        "skim  PN4_SID322  (J=0.84 match)",
+                                        "skim  PN4_SID330  (own label, J=0.10)")))
+ggplot(paint, aes(xmin = start_bp/1e6, xmax = end_bp/1e6, ymin = 0, ymax = 1, fill = state)) +
+  geom_rect() +
+  facet_grid(lane ~ chr, scales = "free_x", space = "free_x", switch = "y") +
+  scale_fill_manual(values = pal, drop = FALSE) +
+  scale_x_continuous(labels = scales::unit_format(unit = "", scale = 1)) +
+  labs(title = "PN4_SID330 identity — GBTS-330 matches skim-322, not skim-330",
+       subtitle = "gold REF · green HET · purple ALT", x = "Position (Mb)", fill = "Genotype") +
+  ggpubr::theme_classic2(base_size = 11) +
+  theme(legend.position = "bottom", strip.background = element_blank(),
+        strip.text.y.left = element_text(angle = 0, hjust = 1),
+        panel.spacing.x = unit(0.05, "lines"), panel.spacing.y = unit(0.2, "lines"),
+        axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+        axis.title.y = element_blank(), axis.line.y = element_blank(),
+        axis.text.x = element_text(size = 6))
+```
+
+**Read:** the GBTS-330 and skim-322 lanes share the same introgressions in the same
+places — the chr4 ALT block, the chr6 and chr9 het blocks, the chr3 het/ALT region.
+The skim-330 lane (its own label) carries entirely different blocks (chr2, chr3
+only) and shares essentially nothing with GBTS-330.
+
+## Conclusion
+
+- The GBTS (MolBreeding) sample labelled **`PN4_SID330`** (well **4B6**) is in fact
+  **`PN4_SID322`**: donor Jaccard 0.84 / concordance 0.91 vs skim-322, vs 0.10 vs
+  its own label, decisive over 1393 candidates.
+- It is a **swap**, not relatedness: skim-322 and skim-330 are distinct individuals
+  (J=0.10) despite the shared Zx.0030 source.
+- The skim `PN4_SID330` is correctly labelled (a distinct low-donor individual);
+  the error is on the GBTS side.
+- **Action:** exclude or relabel GBTS `PN4_SID330` in any per-sample GBTS-vs-skim
+  comparison. Confirming *how* the swap happened (e.g. a neighbouring-well pipetting
+  slip) needs the master DNA-plate layout placing `PN4_SID322`, which is not in the
+  available metadata — the identity itself is certain regardless.
+```
