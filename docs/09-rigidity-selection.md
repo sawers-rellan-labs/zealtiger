@@ -77,6 +77,49 @@ Also: a fixed `r` gives *variable physical resolution* across samples (3.6 Mb at
 λ=0.15, 0.6 Mb at λ=1.4). For uniform, conservative FP control, calibrate `r` to
 the lowest-coverage sample you intend to keep.
 
+## The built-in autotune fails at this coverage (use the sweep)
+
+`optimize_R(fit, method = "exact", ell_eff = NULL)` from the fork
+([faustovrz/RTIGER@optimize-julia-core](rtiger-fork)) was run on converged
+multi-sample fits and recommends a rigidity that is both **wrong and unfittable**:
+
+| samples | min coverage (driver) | `optimize_R` r | truth-optimal r | autotune warning |
+|---|---|---|---|---|
+| 10 | 0.268× | **256** | 2 | SE curve non-unimodal; returned coarse max |
+| 100 | 0.146× | **512** | 2 | optimum at grid boundary; "may lie beyond it" |
+
+`ell_eff` auto-estimated to ≈1.0 in both cases (no marker-dependence correction),
+so the blow-up is the FPR objective itself, not the block correction. Two
+independent sanity failures:
+
+1. **The recommendation is unfittable.** `r = 256` (and 512) abort with
+   *"observations smaller than 2× rigidity"* — a chromosome has fewer than `2r`
+   informative markers (the same floor as [07](07-rtiger-fitting.md)). The
+   autotune is extrapolating to rigidities the data cannot support.
+2. **The truth sweep says the opposite.** F1 and crossover recovery degrade
+   monotonically with `r`; the optimum is the floor `r = 2`, and even the
+   fittable `r = 128` already misses ~half the crossovers (CO bias −10.3).
+
+**Why it picks the grid maximum.** `optimize_R` minimizes expected segmentation
+error = false segments (FPR) + missed segments (FNR), over a power-of-two grid.
+At ~0.15× coverage the typical marker carries ~1 read, so the beta-binomial
+emissions for mat/het/pat overlap almost completely — the per-marker
+log-likelihood-ratio increment between states has tiny mean separation and large
+variance. FPR(u; r) therefore stays high until `r` is large, so the objective
+keeps pushing `r` up. Two conservatism choices make it worse and asymmetric:
+`average_coverage = min over samples` (uses the single worst sample) and the
+false-positive side is weighted by `CO_max = 10 × crossovers_per_megabase` while
+real segments use the plain rate — so missing true segments is cheap and false
+segments are expensive. The SE_total curve never turns back up over [2, 512]
+(no interior minimum), so it returns the boundary.
+
+**The tell that it tracks the worst sample, not segmentation quality:** going
+from 10 → 100 samples only *lowered the min coverage* (0.268× → 0.146×), which
+pushed the recommendation from 256 → 512. It is essentially a function of one
+number — the lowest-coverage sample's depth — not of how well any `r` recovers
+segments. This is the regime the fork's own message flags ("suggested r is
+approximate, validate by sweep").
+
 ## Recommended procedure
 
 Don't trust a single autotuned number — **sweep** it. Fit at fixed `r` over a
