@@ -63,7 +63,8 @@ sizes <- ed_all |> count(taxon, name = "n") |> arrange(desc(n)) |> filter(n >= m
 if (!is.na(taxon_only)) sizes <- sizes |> filter(taxon == taxon_only)
 if (nrow(sizes) == 0) stop("No taxon groups to fit (check args / min_n).")
 
-fits_dir <- file.path(root, "fits_taxa"); dir.create(fits_dir, recursive = TRUE, showWarnings = FALSE)
+fits_dir <- file.path(root, if (length(args) >= 6 && nzchar(args[6])) args[6] else "fits_taxa")
+dir.create(fits_dir, recursive = TRUE, showWarnings = FALSE)
 cat(sprintf("Per-taxon RTIGER: %d taxa, rigidity=%d, threads=%d, save.results=%s\n",
             nrow(sizes), r, threads, save_it))
 cat(sprintf("Largest group: %s (n=%d) — the memory/runtime stress fit.\n", sizes$taxon[1], sizes$n[1]))

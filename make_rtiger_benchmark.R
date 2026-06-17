@@ -28,12 +28,37 @@ args <- commandArgs(trailingOnly = TRUE)
 # (SNP50K ~0.16; GBTS seqcapture ~0.002 — near-complete).
 env_num <- function(k, d) { v <- Sys.getenv(k); if (nzchar(v)) as.numeric(v) else d }
 env_chr <- function(k, d) { v <- Sys.getenv(k); if (nzchar(v)) v else d }
+
+# ---- data-driven coverage calibration from the real skim -------------------
+# lambda mean + Gamma shape are ESTIMATED from the real skim per-sample depth
+# (QC'd to >= floor), not hardcoded. Cached (real_skim_lambda.csv) so we don't
+# re-read every count file each run; computed from the count files if the cache
+# is absent. Env LAMBDA_MEAN/LAMBDA_SHAPE override; the literals below are only a
+# fallback when the real skim mount is absent (e.g. a clean clone).
+lambda_floor    <- env_num("LAMBDA_MIN", 0.10)
+real_lambda_csv <- "results/sim_calibration/real_skim_lambda.csv"
+skim_design     <- "data/rtiger_50K/expDesign_all.csv"
+real_lambda <- if (fs::file_exists(real_lambda_csv)) {
+  readr::read_csv(real_lambda_csv, show_col_types = FALSE)$lambda
+} else if (fs::file_exists(skim_design)) {
+  ed <- readr::read_csv(skim_design, show_col_types = FALSE)
+  lam <- vapply(ed$files, function(p)
+    mean(Reduce(`+`, data.table::fread(p, header = FALSE, select = c(4, 6)))), numeric(1))
+  fs::dir_create(dirname(real_lambda_csv))
+  readr::write_csv(tibble::tibble(name = ed$name, lambda = lam), real_lambda_csv)
+  lam
+} else NULL
+cov <- if (!is.null(real_lambda)) fit_lambda_gamma(real_lambda, floor = lambda_floor) else
+  list(mean = 0.43, shape = 8, n = NA_integer_, source = "fallback literal (no real skim)")
+cat(sprintf("Coverage calibration [%s]: lambda_mean %.3f, Gamma shape %.2f (n=%s)\n",
+            cov$source, cov$mean, cov$shape, as.character(cov$n)))
+
 params <- list(
   n_lines      = if (length(args) >= 1) as.integer(args[1]) else 100L,
   n_markers    = as.integer(env_num("N_MARKERS", 50000)),
-  lambda_mean  = env_num("LAMBDA_MEAN", 0.43),    # mean coverage
-  lambda_shape = env_num("LAMBDA_SHAPE", 2.5),    # Gamma shape (Inf = constant)
-  lambda_min   = env_num("LAMBDA_MIN", 0.15),     # low-coverage floor
+  lambda_mean  = env_num("LAMBDA_MEAN", cov$mean),     # estimated from real skim
+  lambda_shape = env_num("LAMBDA_SHAPE", cov$shape),   # estimated Gamma shape (~8)
+  lambda_min   = lambda_floor,                          # low-coverage floor
   pi_floor     = env_num("PI_FLOOR", 0.161),      # exp-floor structural missingness
   k_decay      = env_num("K_DECAY", 1.042),       # exp-floor coverage decay
   error        = env_num("ERROR", 0.005),         # per-base sequencing error

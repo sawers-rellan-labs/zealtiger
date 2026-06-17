@@ -205,3 +205,23 @@ truth_segments_from_dosage <- function(markers, dosage) {
     dplyr::arrange(.data$chr, .data$start_bp) %>%
     dplyr::select("chr", "start_bp", "end_bp", "state", "n_markers")
 }
+
+#' Estimate the per-sample coverage Gamma (mean + shape) from real depths
+#'
+#' Data-driven replacement for a hardcoded `lambda_shape`: QC-filters per-sample
+#' lambda to `>= floor` (drops failed/near-empty libraries), then method-of-
+#' moments `shape = mean^2 / var`. MoM is robust and dependency-free — MLE
+#' (`MASS::fitdistr`) returns NaN on near-zero lambda. On the real SNP50K skim
+#' (~1,378 QC'd samples at floor 0.10) this gives shape ~8, vs the old hardcoded 2.5.
+#'
+#' @param lambda Numeric per-sample mean depths (over all markers).
+#' @param floor Drop samples below this (match the coverage floor).
+#'
+#' @return list(mean, shape, n, source = "real skim").
+#' @export
+fit_lambda_gamma <- function(lambda, floor = 0.10) {
+  x <- lambda[is.finite(lambda) & lambda >= floor]
+  stopifnot(length(x) >= 2L)
+  m <- mean(x); v <- stats::var(x)
+  list(mean = m, shape = m^2 / v, n = length(x), source = "real skim")
+}
