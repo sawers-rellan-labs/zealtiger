@@ -84,3 +84,54 @@ hotelling_fractions <- function(F, p0, comp = c("Het", "ALT")) {
        F_stat = Ff, p_F = stats::pf(Ff, 2, N - 2, lower.tail = FALSE),
        table = tab, N = N)
 }
+
+#' Two-panel forest plot of the fraction validation
+#'
+#' Fractions span ~2 orders of magnitude (REF ~0.86 vs Het ~0.03), so a single
+#' linear forest plot can show magnitude or intervals but not both. This splits
+#' them: (A) absolute fractions on a log10 axis (magnitude + expected marker),
+#' (B) standardized deviation (estimate - expected)/SE with a shaded +/-1.96 band
+#' (the scale-free pass criterion). Shared y (states).
+#'
+#' @param tab The `table` element from `hotelling_fractions()`.
+#' @param title Optional plot title.
+#'
+#' @return A patchwork object (A | B).
+#' @export
+plot_fraction_forest <- function(tab, title = NULL) {
+  ord <- c("REF", "ALT", "Het")                     # high -> low, top -> bottom
+  tab$state <- factor(tab$state, levels = rev(ord))
+  tab$z <- (tab$estimate - tab$expected) / tab$se
+  tab$pass <- ifelse(tab$in_ci, "in CI", "out")
+  pal <- c("in CI" = "#2c7fb8", "out" = "#d7301f")
+
+  pA <- ggplot2::ggplot(tab, ggplot2::aes(y = .data$state)) +
+    ggplot2::geom_segment(ggplot2::aes(x = .data$ci_lo, xend = .data$ci_hi,
+                                       yend = .data$state, colour = .data$pass),
+                          linewidth = 0.8) +
+    ggplot2::geom_point(ggplot2::aes(x = .data$estimate, colour = .data$pass), size = 2.6) +
+    ggplot2::geom_point(ggplot2::aes(x = .data$expected), shape = 124, size = 6,
+                        colour = "black") +   # expected = vertical tick
+    ggplot2::scale_x_log10() +
+    ggplot2::scale_colour_manual(values = pal, guide = "none") +
+    ggplot2::labs(x = "Mb fraction (log scale) — point=estimate ±95% CI, tick=expected",
+                  y = NULL, subtitle = "A. Magnitude") +
+    ggplot2::theme_bw(base_size = 11)
+
+  pB <- ggplot2::ggplot(tab, ggplot2::aes(y = .data$state)) +
+    ggplot2::annotate("rect", xmin = -1.96, xmax = 1.96, ymin = -Inf, ymax = Inf,
+                      fill = "grey85", alpha = 0.7) +
+    ggplot2::geom_vline(xintercept = 0, linewidth = 0.3) +
+    ggplot2::geom_segment(ggplot2::aes(x = 0, xend = .data$z, yend = .data$state,
+                                       colour = .data$pass), linewidth = 0.8) +
+    ggplot2::geom_point(ggplot2::aes(x = .data$z, colour = .data$pass), size = 2.6) +
+    ggplot2::scale_colour_manual(values = pal, guide = "none") +
+    ggplot2::labs(x = "standardized deviation (estimate − expected)/SE",
+                  y = NULL, subtitle = "B. Inside 95% CI?  (band = ±1.96)") +
+    ggplot2::theme_bw(base_size = 11) +
+    ggplot2::theme(axis.text.y = ggplot2::element_blank())
+
+  p <- patchwork::wrap_plots(pA, pB, widths = c(1, 1))
+  if (!is.null(title)) p <- p + patchwork::plot_annotation(title = title)
+  p
+}

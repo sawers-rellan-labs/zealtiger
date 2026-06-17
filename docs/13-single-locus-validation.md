@@ -284,6 +284,99 @@ Most machinery already exists (the `make_*_benchmark.R` observation models +
 
 ---
 
+## 7. Empirical results (layer 1, n = 1500)
+
+Run with `check_broman_single_locus.R`, `sweep_marker_density.R`, and
+`run_all.R --sim` (n_nil = 1500). All numbers are the simulation truth; no
+genotyping method involved.
+
+### 7.1 f_i validation — PASS
+
+At n = 1500 (20k-marker grid) all three Mb fractions sit inside their 95 % Wald CIs:
+
+| state | expected p₀ | estimate | 95 % CI | in CI |
+|---|---|---|---|---|
+| REF | 0.859375 | 0.85900 | [0.8557, 0.8623] | ✓ |
+| Het | 0.031250 | 0.02985 | [0.0284, 0.0313] | ✓ |
+| ALT | 0.109375 | 0.11115 | [0.1082, 0.1141] | ✓ |
+
+Hotelling/Wald χ²(2) T² = 5.21 (p = 0.074) — borderline, but driven by the
+marker-resolution undercount of Het (§7.2), not Mendelian error. **N_eff(ALT) ≈ 28
+vs 20 000 markers** confirms the ergodicity-limited effective sample size (§5b).
+
+![Forest plot: magnitude (log) + standardized deviation](figures/single_locus_forest.png)
+
+*Two panels because the fractions span ~2 orders of magnitude: (A) log axis for
+magnitude, (B) standardized deviation (estimate−expected)/SE with ±1.96 band for
+the pass criterion (§5b).*
+
+### 7.2 Marker-resolution sweep (N = 1500, 5 reps)
+
+Cohen's d = (mean − expected)/SD (N-independent effect size); z = d·√N (reported,
+but N-inflated — judge by d). Controlled design: the **same** NILs re-measured on
+every grid, replicated 5× for SE. (`marker_sweep_summary.csv`.)
+
+| markers | spacing | Het est | **Het d ± SE** | Het z | ALT d | REF d |
+|---|---|---|---|---|---|---|
+| 1,000 | 2.12 Mb | 0.0279 | **−0.122 ± 0.004** | −4.72 | −0.096 | +0.137 |
+| 2,000 | 1.06 Mb | 0.0293 | −0.068 ± 0.004 | −2.65 | −0.055 | +0.078 |
+| 4,000 | 0.53 Mb | 0.0301 | −0.040 ± 0.004 | −1.53 | −0.033 | +0.046 |
+| 8,000 | 0.27 Mb | 0.0306 | −0.024 ± 0.004 | −0.95 | −0.023 | +0.030 |
+| 20,000 | 0.11 Mb | 0.0308 | −0.015 ± 0.004 | −0.59 | −0.016 | +0.021 |
+| 50,000 | 0.04 Mb | 0.0309 | −0.012 ± 0.004 | −0.45 | −0.013 | +0.017 |
+| 100,000 | 0.02 Mb | 0.0310 | −0.010 ± 0.004 | −0.40 | −0.012 | +0.015 |
+| 200,000 | 0.01 Mb | 0.0310 | −0.010 ± 0.004 | −0.37 | −0.012 | +0.015 |
+
+**Het is monotonically *undercounted* at every density** (d < 0), relaxing toward
+a small residual plateau (d ≈ −0.010, Het 0.0310 vs 0.03125 — ~1 %). It never
+crosses or overshoots p₀. Mechanism: sparse grids miss small Het segments (a Het
+run < marker spacing gets ~0 markers → 0 Mb via the last−first span; Het is the
+smallest/rarest state, so it loses most; ALT/REF mirror it). The residual at high
+density is a measurement artifact (run span loses each Het run's flanking gaps),
+fixable with territory-based Mb; negligible in effect size.
+
+**Significance is N-driven and sparse-grid-driven, not Mendelian:** |z| > 1.96
+only at ≤ 2 000 markers (≥ ~1 Mb spacing). By 4 000 (~0.5 Mb) z = −1.5; beyond
+that the deviation is negligible (|d| ≈ 0.01) but z stays small *only because* d
+is small — at finer effect sizes large N would still inflate z (cf. §2b, the
+large-N GOF pathology).
+
+> An earlier single N = 600 run suggested Het *crossed* p₀ and overshot to
+> d ≈ +0.03. That was pure realization noise — SE(d) ≈ 1/√600 ≈ 0.04 swamps the
+> signal. The replicated N = 1500 result (SE ± 0.004) overturns it: monotone
+> undercount, no crossing. Lesson: assert effect-size trends only with replication.
+
+**Practical floor:** ≳ 4 000 markers (~0.5 Mb spacing) to measure Het faithfully.
+This is the *truth-measurement* floor; the skim's separate problem is low-coverage
+Het *miscalling* (layer 2), a different mechanism.
+
+### 7.3 Continuous introgression run-length distribution (n = 1500)
+
+The nonref (donor-union) introgression segment lengths in Mb — the biological
+baseline every method's calls get compared against (`run_all.R --sim`,
+`nil_segments.csv`; figure `introgression_size.png`).
+
+| model | n segs | median Mb | 90th | 99th | max | dosage |
+|---|---|---|---|---|---|---|
+| m = 10 (primary) | 15,523 | 10.74 | 94.3 | 173 | 249 | 0.1253 |
+| m = 0 (no interference) | 15,466 | 9.44 | 94.5 | 184 | 296 | 0.1242 |
+
+![Introgression size distribution (n=1500)](figures/introgression_size.png)
+
+- **Dosage 0.1253 = 0.125** ✓; mean 297 Mb donor/line (14 % of the 2,130 Mb genome).
+- **Heavily right-skewed** (median ~11 Mb, 90th ~94 Mb) — expected for BC2S3
+  (only 2 backcrosses → long donor blocks) — with a large mass of **small
+  segments** (mode 0–5 Mb).
+- **Interference (m=10 vs m=0):** m=10 raises the median (10.7 vs 9.4) and shortens
+  the extreme tail (max 249 vs 296; p99 173 vs 184) — regularized spacing, fewer
+  tiny and fewer giant segments. Mean CO/genome identical (33.4).
+- **Baseline takeaway:** the small-segment left tail (≲5 Mb), combined with the
+  ~0.5 Mb truth-resolution floor (§7.2) and per-method coverage, is the population
+  methods will under-recover. This distribution is the denominator for
+  "what's recoverable" in layers 2–3.
+
+---
+
 ## 6. Cross-refs
 
 - BC2S3 pedigree + sim: `R/02_simulate.R`; driver `run_all.R` (set

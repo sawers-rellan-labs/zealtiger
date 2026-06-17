@@ -19,7 +19,7 @@ purrr::walk(fs::dir_ls("R", glob = "*.R"), source)
 # ---- parameters (mirror nil_introgression.qmd) ----------------------------
 params <- list(
   map_dir        = "data/maizegdb_consensus_map",
-  n_nil          = 1400L,
+  n_nil          = 1500L,
   n_markers      = 2500L,
   m_interference = 10,    # simcross default; positive interference
   p_escape       = 0,
