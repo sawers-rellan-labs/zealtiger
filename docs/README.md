@@ -33,6 +33,8 @@ Regenerate with `quarto render molbreeding_vs_skim.qmd`.
 | [10-rtiger-fitting-performance.md](10-rtiger-fitting-performance.md) | Why fitting is slow (quadratic in rigidity), autotune cost, scaling |
 | [11-benchmarking-other-tools.md](11-benchmarking-other-tools.md) | Benchmark *your own* ancestry caller: scoring schema + input-adapter gotchas |
 | [12-het-excess-diagnosis.md](12-het-excess-diagnosis.md) | Diagnosing a heterozygote excess in real ancestry calls (selection vs heterosis vs paralogs vs caller) |
+| [13-single-locus-validation.md](13-single-locus-validation.md) | Validate the simulation vs the BC2S3 single-locus expectation (f_i mean/variance, Hotelling, three-f_i bias decomposition) |
+| [14-interference-and-rigidity.md](14-interference-and-rigidity.md) | Where m=10 comes from, why the map can't fit it, and how m sets the truth-optimal rigidity r |
 
 ## Pipeline at a glance
 

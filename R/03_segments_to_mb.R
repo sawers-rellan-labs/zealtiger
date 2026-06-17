@@ -5,7 +5,15 @@
 #' Build a monotone cM -> bp interpolator for one chromosome
 #'
 #' Collapses cM ties to mean bp (so the relation is a function), then returns a
-#' linear interpolator clamped at the ends (`rule = 2`).
+#' Hyman-filtered monotone cubic spline. Anchors must already be monotone (see
+#' `enforce_monotone()`) -- `method = "hyman"` errors on non-monotone input,
+#' which is a useful guard. Unlike a linear ramp, the spline follows the local
+#' curvature of the Marey map, which matters in recombination-cold regions where
+#' a tiny cM range inverts to a huge bp range (dx/dy can exceed ~40 Mb/cM).
+#' Hyman is strictly monotone (flat cM segments stay flat), unlike `monoH.FC`,
+#' which overshoots by ~1e-3 at flat->rising transitions. Queries outside the
+#' anchor range are clamped to the end values (the `rule = 2` behaviour of the
+#' old `approxfun`).
 #'
 #' @param chr_anchors Clean anchors for ONE chromosome (columns cm, bp).
 #'
@@ -18,7 +26,9 @@ make_cm_to_bp <- function(chr_anchors) {
     dplyr::summarise(bp = mean(.data$bp), .groups = "drop") %>%
     dplyr::arrange(.data$cm)
   stopifnot(nrow(d) >= 2)
-  stats::approxfun(d$cm, d$bp, rule = 2)  # rule = 2 clamps at ends
+  f   <- stats::splinefun(d$cm, d$bp, method = "hyman")
+  rng <- range(d$cm)
+  function(cm) f(pmin(pmax(cm, rng[1]), rng[2]))  # clamp at ends (rule = 2 equiv)
 }
 
 #' Convert donor cM segments to physical Mb

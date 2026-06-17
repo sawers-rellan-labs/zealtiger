@@ -14,9 +14,18 @@
 #' Inverse of `make_cm_to_bp()`: maps a physical position to genetic position,
 #' so a marker's bp can be placed on the simulated (cM) mosaic.
 #'
+#' Hyman-filtered monotone cubic spline, matching `make_cm_to_bp()` so one
+#' Marey-map representation serves both directions. Anchors must already be
+#' monotone (`enforce_monotone()`); `method = "hyman"` errors otherwise (a useful
+#' guard). Strictly monotone (flat cM segments stay flat), unlike `monoH.FC`.
+#' Queries outside the anchor range are clamped to the end values (the
+#' `rule = 2` behaviour of the old `approxfun`). In cold regions the cM range per
+#' anchor gap is tiny, so this is ~indistinguishable from linear here; the spline
+#' matters in the inverse (cM -> bp) direction.
+#'
 #' @param chr_anchors Clean anchors for ONE chromosome (columns cm, bp).
 #'
-#' @return A function bp -> cM (linear, clamped at the ends).
+#' @return A function bp -> cM (monotone spline, clamped at the ends).
 #' @export
 make_bp_to_cm <- function(chr_anchors) {
   stopifnot(all(c("cm", "bp") %in% names(chr_anchors)))
@@ -25,7 +34,9 @@ make_bp_to_cm <- function(chr_anchors) {
     dplyr::summarise(cm = mean(.data$cm), .groups = "drop") %>%
     dplyr::arrange(.data$bp)
   stopifnot(nrow(d) >= 2)
-  stats::approxfun(d$bp, d$cm, rule = 2)
+  f   <- stats::splinefun(d$bp, d$cm, method = "hyman")
+  rng <- range(d$bp)
+  function(bp) f(pmin(pmax(bp, rng[1]), rng[2]))  # clamp at ends (rule = 2 equiv)
 }
 
 #' Build a physical marker grid with per-marker cM and ref/alt bases
