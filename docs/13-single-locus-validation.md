@@ -350,26 +350,15 @@ large-N GOF pathology).
 This is the *truth-measurement* floor; the skim's separate problem is low-coverage
 Het *miscalling* (layer 2), a different mechanism.
 
-### 7.3 Continuous introgression run-length distribution (n = 1500)
+### 7.3 Introgression run-length distribution → simulation notebook
 
-The nonref (donor-union) introgression segment lengths in Mb — the biological
-baseline every method's calls get compared against (`run_all.R --sim`,
-`nil_segments.csv`; figure `introgression_size.png`).
+The continuous nonref (donor-union) introgression segment-size distribution (Mb)
+and the m=10 vs m=0 interference comparison are produced and shown in the
+**simulation notebook** `nil_introgression_1500.qmd` (§4 — size distribution +
+interference sensitivity; `nil_segments.csv`, `introgression_size.png`), not here
+(separation of concerns: that is simulation truth, this doc is the *fraction*
+validation). Summary: median ~11 Mb, heavily right-skewed (90th ~94 Mb), dosage 0.125.
 
-| model | n segs | median Mb | 90th | 99th | max | dosage |
-|---|---|---|---|---|---|---|
-| m = 10 (primary) | 15,523 | 10.74 | 94.3 | 173 | 249 | 0.1253 |
-| m = 0 (no interference) | 15,466 | 9.44 | 94.5 | 184 | 296 | 0.1242 |
-
-![Introgression size distribution (n=1500)](figures/introgression_size.png)
-
-- **Dosage 0.1253 = 0.125** ✓; mean 297 Mb donor/line (14 % of the 2,130 Mb genome).
-- **Heavily right-skewed** (median ~11 Mb, 90th ~94 Mb) — expected for BC2S3
-  (only 2 backcrosses → long donor blocks) — with a large mass of **small
-  segments** (mode 0–5 Mb).
-- **Interference (m=10 vs m=0):** m=10 raises the median (10.7 vs 9.4) and shortens
-  the extreme tail (max 249 vs 296; p99 173 vs 184) — regularized spacing, fewer
-  tiny and fewer giant segments. Mean CO/genome identical (33.4).
 - **Baseline takeaway:** the small-segment left tail (≲5 Mb), combined with the
   ~0.5 Mb truth-resolution floor (§7.2) and per-method coverage, is the population
   methods will under-recover. This distribution is the denominator for
