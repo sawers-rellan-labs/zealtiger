@@ -246,6 +246,69 @@ under-calls). The calibrated three-`f_i` decomposition
 (`skim_sim_calibration.qmd`, `gbts_sim_calibration.qmd`) attributes this to real
 biology, not method bias.
 
+## Chromosome painting — all 16 lines, GBTS vs skim
+
+Full-genome ancestry painting for every GBTS sample, with its two method lanes
+stacked: **top = GBTS r=2, bottom = skim r=5**. Chromosomes are proportional-width
+facet columns; segments are painted over their exact `start_bp→end_bp` extent
+(`geom_rect`, not binned). Palette follows the BzeaSeq `call_ancestry` convention
+(`REF` gold, `HET` springgreen4, `ALT` purple4). Discordance reads as a colour
+flip between a sample's two lanes — the dominant pattern is GBTS green (het) over
+skim gold (recurrent), the ~0.4× skim's het under-call. The two B73-bulk checks
+(`PN4_SID326`, `PN6_SID576`) show a GBTS lane only (no skim match) and read
+near-all-gold — the built-in control. Sample labels in **bold** are flagged
+`LowQuality` in the sample-map QC column.
+
+```{r chr-painting, fig.width=12, fig.height=16}
+pal <- c(REF = "gold", HET = "springgreen4", ALT = "purple4")
+# B73-bulk checks pinned at the top, then NILs by increasing GBTS introgression
+ord <- c(checks, dose %>% filter(!name %in% checks) %>% arrange(gbts_r2) %>% pull(name))
+
+# LowQuality samples (sample_map QC flag) get a bold facet-strip label (markdown)
+lowq <- smap$sample_id[smap$quality == "LowQuality" & !is.na(smap$quality)]
+name_lab <- function(x) if_else(x %in% lowq, paste0("**", x, "**"), x)
+
+paint <- bind_rows(
+  mb   %>% transmute(name, chr, start_bp, end_bp, state, method = "GBTS r=2"),
+  skim %>% filter(name %in% unique(mb$name)) %>%
+           transmute(name, chr, start_bp, end_bp, state, method = "skim r=5")) %>%
+  mutate(state  = factor(state, 0:2, c("REF", "HET", "ALT")),
+         chr    = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)),
+         name   = factor(name_lab(name), levels = name_lab(ord)),
+         # two stacked lanes per sample: GBTS on top, skim below
+         ylo = if_else(method == "GBTS r=2", 0.52, 0.00),
+         yhi = if_else(method == "GBTS r=2", 1.00, 0.48))
+
+ggplot(paint, aes(xmin = start_bp/1e6, xmax = end_bp/1e6,
+                  ymin = ylo, ymax = yhi, fill = state)) +
+  geom_rect() +
+  facet_grid(name ~ chr, scales = "free_x", space = "free_x", switch = "y") +
+  scale_fill_manual(values = pal, drop = FALSE) +
+  scale_x_continuous(labels = scales::unit_format(unit = "", scale = 1)) +
+  labs(title = "Ancestry calls — 16 lines, GBTS r=2 (top lane) vs skim r=5 (bottom lane)",
+       subtitle = "within each sample: top = GBTS, bottom = skim | gold REF, green HET, purple ALT",
+       x = "Position (Mb)", fill = "Genotype") +
+  ggpubr::theme_classic2(base_size = 9) +
+  theme(legend.position = "bottom",
+        strip.background = element_blank(),
+        strip.text.x = element_text(face = "bold"),
+        strip.text.y.left = ggtext::element_markdown(angle = 0, hjust = 1, size = 7),
+        panel.spacing.x = unit(0.05, "lines"),
+        panel.spacing.y = unit(0.05, "lines"),
+        axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+        axis.title.y = element_blank(), axis.line.y = element_blank(),
+        axis.text.x = element_text(size = 6))
+```
+
+**Read:** wherever a sample's two lanes disagree it is almost always GBTS calling
+het/donor where the skim calls recurrent — the coverage-limited skim collapses
+small heterozygous tracts to background. The B73-bulk checks are near-all-gold,
+confirming polarity and the caller's specificity on a known-recurrent genome.
+
+> A separate notebook, `gmm_hmm_caller_comparison.qmd`, brings in the BzeaSeq
+> Gaussian-mixture-HMM skim caller and compares all three callers (GBTS r=2,
+> RTIGER skim r=5, GMM-HMM skim) on these same 16 lines.
+
 ## Findings
 
 - **Calibrated rigidity, per platform.** Skim r=5, GBTS r=2 (truth-derived;
