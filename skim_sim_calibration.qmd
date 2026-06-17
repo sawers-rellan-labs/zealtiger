@@ -1,0 +1,196 @@
+---
+title: "SNP50K skim — simulation-calibrated ancestry calling"
+author: "Fausto Rodríguez-Zapata"
+date: "`r Sys.Date()`"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    df-print: paged
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+params:
+  out_dir:      "results/sim_calibration"   # ISOLATED — does not clobber the old notebook
+  bench:        "results/sim_calibration/benchmark"  # new-Gamma degraded-sim benchmark (shape 8)
+  skim_design:  "data/rtiger_50K/expDesign_all.csv"
+  skim_calls:   "data/rtiger_50K/calls_taxa_r5.csv"  # real skim RTIGER calls (r=5 per-taxon, refit)
+  n_skim_obs:   60      # real skim count files sampled for the coverage stats (render speed)
+  seed:         1
+---
+
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
+> Simulation-calibrated ancestry calling for the **SNP50K skim** (Source 2, ~0.4×).
+> Outputs are **isolated** to `results/sim_calibration/`; the frozen direct
+> comparison (`docs/molbreeding_vs_skim.html`) is untouched. The GBTS companion is
+> `gbts_sim_calibration.qmd`; the cross-platform comparison is
+> `molbreeding_vs_skim_calibrated.qmd`. Methodology: `docs/15-rigidity-and-scoring.md`,
+> `docs/13-single-locus-validation.md`, `docs/14-interference-and-rigidity.md`.
+
+## What this does
+
+A three-layer, simulation-calibrated benchmark of the skim ancestry caller:
+(layer 2) **calibrate the coverage model from the real skim** — the per-sample λ
+Gamma shape is *fit* (≈8), not assumed (the old 2.5) — so the degraded sim matches
+the real skim's coverage; (layer 3) call RTIGER on the degraded truth at the
+**derived rigidity r=5** (the FP+FN argmin from the truth sweep; `docs/15`), scored
+against the known truth; then the **three-`f_i` bias decomposition**
+([`docs/13` §5c-d](13-single-locus-validation.md)): p₀ (neutral breeding) vs
+degraded-sim (method bias) vs real calls (bias + biology). The simulation baseline
+is what separates **method bias** from **real biology**.
+
+## Setup
+
+```{r setup}
+library(tidyverse); library(data.table)
+purrr::walk(fs::dir_ls("R", glob = "*.R"), source)
+set.seed(params$seed)
+fs::dir_create(file.path(params$out_dir, "figures"))
+
+p0 <- single_locus_p0(n_bc = 2L, n_self = 3L)   # breeding-scheme expectation
+
+# per-file raw-count coverage stats (missingness / depth / observed-het-rate)
+count_stats <- function(path, name) {
+  d <- fread(path, header = FALSE, col.names = c("chr","pos","rb","ref","ab","alt"))
+  dep <- d$ref + d$alt
+  data.frame(name = name, missing = mean(dep == 0), mean_depth = mean(dep),
+             het_rate = mean(d$ref > 0 & d$alt > 0))
+}
+# per-sample REF/Het/ALT Mb fractions from a state-segment table
+seg_fractions <- function(seg) {
+  seg %>% mutate(mb = (end_bp - start_bp) / 1e6) %>%
+    group_by(name) %>%
+    summarise(REF = sum(mb[state == 0]), Het = sum(mb[state == 1]),
+              ALT = sum(mb[state == 2]), .groups = "drop") %>%
+    mutate(tot = REF + Het + ALT) %>% filter(tot > 0) %>%
+    transmute(name, REF = REF/tot, Het = Het/tot, ALT = ALT/tot)
+}
+cat(sprintf("p0  REF %.3f  Het %.3f  ALT %.3f\n", p0["REF"], p0["Het"], p0["ALT"]))
+```
+
+---
+
+# Skim (Source 2, SNP50K ~0.4×)
+
+## Layer 2 — Observation model
+
+Does the coverage model reproduce the **real** skim's coverage behaviour? The
+exp-floor missingness (`draw_allele_counts`, π=0.161, k=1.042) plus the per-sample
+λ **Gamma fit from the real skim** (mean 0.44, **shape ≈8**, floor 0.10 — not the
+old assumed 2.5). Compare missingness %, mean depth, and *observed* het-rate
+(sites with both ref>0 and alt>0 in raw counts) between real skim and the
+degraded simulation.
+
+```{r layer2-observation}
+ed <- read_csv(params$skim_design, show_col_types = FALSE) %>% slice_sample(n = params$n_skim_obs)
+real_stats <- purrr::map2_dfr(ed$files, ed$name, count_stats) %>% mutate(source = "real skim")
+sf <- fs::dir_ls(file.path(params$bench, "counts"), glob = "*.tsv")
+sim_stats <- purrr::map2_dfr(as.character(sf), tools::file_path_sans_ext(basename(sf)),
+                             count_stats) %>% mutate(source = "degraded sim")
+obs <- bind_rows(real_stats, sim_stats)
+
+obs %>% group_by(source) %>%
+  summarise(n = n(), missing = mean(missing), mean_depth = mean(mean_depth),
+            obs_het_rate = mean(het_rate), .groups = "drop") %>%
+  knitr::kable(digits = 4)
+```
+
+```{r layer2-plot, fig.width=8, fig.height=3}
+obs %>% select(source, missing, mean_depth) %>%
+  pivot_longer(c(missing, mean_depth)) %>%
+  ggplot(aes(value, fill = source)) +
+  geom_density(alpha = 0.5) + facet_wrap(~name, scales = "free") +
+  scale_fill_manual(values = c("real skim" = "purple4", "degraded sim" = "grey50")) +
+  labs(x = NULL, fill = NULL, title = "Skim coverage: real vs degraded-sim") +
+  theme_bw() + theme(legend.position = "bottom")
+```
+
+**Read:** with the **fitted** Gamma (shape ≈8 vs the old 2.5) the missingness
+*and* depth distributions now match real (real CV ≈0.35 ≈ sim) — the old shape 2.5
+was over-dispersed; observed het-rate is tiny in both (≈0.1–0.3 %), the severe
+raw-count het-undercall ~1.5-read coverage forces. The observation model is validated.
+
+## Layer 3 — Recovery (degraded sim, r = 5)
+
+RTIGER on the degraded truth at the **derived r=5** (the FP+FN argmin from the
+truth sweep; `docs/15`), scored against the known truth (`R/06_score_rtiger.R`).
+This is the **method-bias** term: what the skim pipeline does to a *known-neutral* truth.
+
+```{r layer3-recovery}
+sc <- file.path(params$bench, "scoring")
+read_csv(file.path(sc, "segment_scores.csv"), show_col_types = FALSE) %>%
+  select(class, n_truth, n_called, precision, recall, F1, med_start_err_kb) %>%
+  knitr::kable(digits = 3, caption = "Segment recovery (reciprocal overlap ≥ 0.5)")
+read_csv(file.path(sc, "crossover_scores.csv"), show_col_types = FALSE) %>%
+  knitr::kable(digits = 3, caption = "Crossover-count recovery")
+```
+
+**Read:** donor segments recover well (F1 ≈ 0.95); **het is the weaker class**
+(F1 ≈ 0.89, recall ≈ 0.83 — small het segments missed) and crossovers undercount
+(bias ≈ −1.7). This is the skim's method bias at the *segment* level. Note (next
+section) it largely cancels at the *genome-fraction* level.
+
+## Three-`f_i` decomposition
+
+(1) p₀ (neutral breeding) — (2) degraded-sim calls (method bias) — (3) real skim
+calls (bias + biology). The correct reference for the real data is **(2)**, not
+p₀.
+
+```{r three-fi}
+sim_f  <- seg_fractions(read_rtiger_segments(file.path(params$bench, "rtiger_out_r5", "rtiger_result.rds")))
+real_f <- seg_fractions(read_csv(params$skim_calls, show_col_types = FALSE) %>%
+                          transmute(name, chr, start_bp, end_bp, state))
+fi <- tibble(
+  f_i = factor(c("(1) p0 breeding", "(2) degraded-sim r5", "(3) real skim r5"),
+               levels = c("(1) p0 breeding", "(2) degraded-sim r5", "(3) real skim r5")),
+  REF = c(p0["REF"], mean(sim_f$REF), mean(real_f$REF)),
+  Het = c(p0["Het"], mean(sim_f$Het), mean(real_f$Het)),
+  ALT = c(p0["ALT"], mean(sim_f$ALT), mean(real_f$ALT)),
+  n   = c(NA, nrow(sim_f), nrow(real_f)))
+knitr::kable(fi, digits = 4)
+cat(sprintf("(2)-(1) method bias:  Het %+.4f  ALT %+.4f\n",
+            fi$Het[2]-fi$Het[1], fi$ALT[2]-fi$ALT[1]))
+cat(sprintf("(3)-(2) real biology: Het %+.4f  ALT %+.4f\n",
+            fi$Het[3]-fi$Het[2], fi$ALT[3]-fi$ALT[2]))
+write_csv(fi, file.path(params$out_dir, "skim_three_fi_r5.csv"))
+```
+
+```{r three-fi-plot, fig.width=7, fig.height=3.5}
+fi %>% select(-n) %>% pivot_longer(c(REF, Het, ALT), names_to = "state") %>%
+  mutate(state = factor(state, c("REF", "Het", "ALT"))) %>%
+  ggplot(aes(state, value, fill = f_i)) +
+  geom_col(position = "dodge") +
+  scale_fill_manual(values = c("(1) p0 breeding"="grey60", "(2) degraded-sim r5"="#2c7fb8",
+                               "(3) real skim r5"="purple4")) +
+  labs(x = NULL, y = "genome Mb fraction", fill = NULL,
+       title = "Three f_i: real skim diverges from breeding+method-bias baseline") +
+  theme_bw() + theme(legend.position = "bottom")
+```
+
+**Read — the payoff.** Method bias on the *fraction* is negligible
+(`(2)−(1)` ≈ Het −0.002 / ALT −0.006): RTIGER at r=5 recovers genome-wide
+fractions near p₀ even though it misses ~17 % of het *segments* (the missed het is
+small, so little Mb is lost). The real signal is `(3)−(2)`: **Het ≈ +0.047 and
+ALT ≈ −0.069** — the real skim NILs carry roughly **2.6× the heterozygosity and
+~⅓ the homozygous-donor** the neutral BC2S3 scheme predicts (donor dosage **0.072
+vs 0.125**), and this is **not** a method artifact. That's a genuine biological
+deviation (heterozygote excess / donor-homozygote deficit → selection against
+donor homozygotes, residual heterozygosity, or paralog mis-mapping inflating
+het) — the question `docs/12-het-excess-diagnosis.md` takes up. The simulation
+baseline is what makes this separable: without (2) you couldn't tell method bias
+from biology. The GBTS platform reaches the **same** conclusion independently
+(`gbts_sim_calibration.qmd`); the cross-platform comparison is
+`molbreeding_vs_skim_calibrated.qmd`.
+
+## Notes
+
+- Outputs isolated under `params$out_dir` (incl. the new-Gamma benchmark
+  `…/benchmark/`); the old shared `results/rtiger_benchmark/` and the r=8
+  `fits_taxa/` production are untouched.
+- The degraded-sim benchmark is **n=100, calibrated Gamma (shape 8), fit at r=5**;
+  the real skim is **refit at r=5** (`fits_taxa_r5/` → `calls_taxa_r5.csv`, isolated
+  from the r=8 production). Regenerating at n=1500 with the Hyman-spline cM→bp is a
+  later refinement.
