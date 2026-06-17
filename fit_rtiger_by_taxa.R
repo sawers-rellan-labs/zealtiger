@@ -17,7 +17,7 @@
 # Usage:
 #   Rscript fit_rtiger_by_taxa.R [taxon] [rigidity] [save_results] [min_n] [threads]
 #     taxon        : run only this taxon (e.g. Zx); "" / omitted = all
-#     rigidity     : default 8 (RTIGER autotune pick; see nil_introgression.qmd)
+#     rigidity     : default 8 (RTIGER autotune pick; see nil_introgression_1400.qmd)
 #     save_results : default 0/FALSE
 #     min_n        : skip taxa smaller than this (default 1)
 #     threads      : Julia EM threads (also set JULIA_NUM_THREADS before startup)

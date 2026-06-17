@@ -1,6 +1,6 @@
 # Stage 1 — Compile the maize map (B73 NAM v5)
 #
-# Functions only; the orchestration lives in nil_introgression.qmd / run_all.R.
+# Functions only; the orchestration lives in nil_introgression_1400.qmd / run_all.R.
 
 #' Parse one MaizeGDB consensus-map chromosome file to v5 anchors
 #'

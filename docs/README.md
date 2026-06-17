@@ -5,11 +5,11 @@
 Step-by-step record of the pipeline, the decisions made, and the gotchas hit.
 Read in order; each file maps to one stage of the work.
 
-**Rendered notebook:** [`nil_introgression.html`](nil_introgression.html) —
+**Rendered notebook:** [`nil_introgression_1400.html`](nil_introgression_1400.html) —
 self-contained HTML of Stages 1–4 (map QC → 1400-NIL simulation → cM→Mb →
 size-distribution figures → interference comparison → crossovers) plus the
 RTIGER r=3 benchmark results. Regenerate with
-`quarto render nil_introgression.qmd` (the source `.qmd` is at the repo root).
+`quarto render nil_introgression_1400.qmd` (the source `.qmd` is at the repo root).
 
 **Rendered notebook:** [`molbreeding_vs_skim.html`](molbreeding_vs_skim.html) — concordance
 of the MolBreeding GBTS calls (source #5, **real ~110× allele counts**) vs the SNP50K skim

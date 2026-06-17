@@ -47,7 +47,7 @@ plan(multisession)
 
 map_dir <- params$map_dir
 
-fs::dir_create("results/figures")
+fs::dir_create("results/n1400/figures")
 
 # Diagnostics
 cat("simcross:", as.character(packageVersion("simcross")),
@@ -129,7 +129,7 @@ losses flag consensus-vs-v5 disagreement (often pericentromeric).
 anchors_clean <- enforce_monotone(anchors_raw)
 drop_report   <- report_map_qc(anchors_raw, anchors_clean)
 
-saveRDS(anchors_clean, "results/maize_map_v5_clean.rds")
+saveRDS(anchors_clean, "results/n1400/maize_map_v5_clean.rds")
 
 # Diagnostics
 cat("Clean anchors:", nrow(anchors_clean),
@@ -157,7 +157,7 @@ chr_cm_lengths <- anchors_clean %>%
   dplyr::summarise(L = max(cm), .groups = "drop") %>%
   dplyr::arrange(chr)
 
-saveRDS(marker_grid, "results/maize_map_v5_grid2500.rds")
+saveRDS(marker_grid, "results/n1400/maize_map_v5_grid2500.rds")
 
 # Diagnostics
 cat("Markers retained:", nrow(marker_grid),
@@ -173,7 +173,7 @@ monotone and sensibly shaped per chromosome.
 
 **Approach**: cM-vs-Mb scatter, clean anchors overlaid, faceted by chr.
 
-**Expected outcome**: `results/marey_maps.pdf`. **Inspect before Stage 2.**
+**Expected outcome**: `results/n1400/marey_maps.pdf`. **Inspect before Stage 2.**
 
 ```{r marey_plot}
 marey <- anchors_clean %>%
@@ -184,7 +184,7 @@ marey <- anchors_clean %>%
        title = "Marey maps (monotone clean anchors)") +
   theme_bw()
 
-ggsave("results/marey_maps.pdf", marey, width = 11, height = 8)
+ggsave("results/n1400/marey_maps.pdf", marey, width = 11, height = 8)
 marey
 ```
 
@@ -292,8 +292,8 @@ segments_mb <- segments_to_mb(
 
 assert_within_chr_length(segments_mb, anchors_clean)
 
-saveRDS(segments_mb, "results/nil_segments.rds")
-readr::write_csv(segments_mb, "results/nil_segments.csv")
+saveRDS(segments_mb, "results/n1400/nil_segments.rds")
+readr::write_csv(segments_mb, "results/n1400/nil_segments.csv")
 
 # Diagnostics
 cat("Segments converted:", nrow(segments_mb),
@@ -317,8 +317,8 @@ filled to the full `n_nil` set so zero-introgression lines are represented.
 ```{r nil_summary}
 nil_summary <- summarise_nils(segments_mb, params$n_nil)
 
-saveRDS(nil_summary, "results/nil_summary.rds")
-readr::write_csv(nil_summary, "results/nil_summary.csv")
+saveRDS(nil_summary, "results/n1400/nil_summary.rds")
+readr::write_csv(nil_summary, "results/n1400/nil_summary.csv")
 
 # Diagnostics
 cat("Mean total donor Mb/line:", round(mean(nil_summary$total_mb), 1),
@@ -333,7 +333,7 @@ cat("Mean total donor Mb/line:", round(mean(nil_summary$total_mb), 1),
 **Approach**: (a) total donor Mb per line, (b) per-segment Mb, (c) ECDF of
 segment Mb with median + 90th percentile annotated.
 
-**Expected outcome**: Panels saved to `results/figures/`.
+**Expected outcome**: Panels saved to `results/n1400/figures/`.
 
 ```{r distribution_plots}
 med_total <- median(nil_summary$total_mb)
@@ -375,9 +375,9 @@ minor_ticks <- function(width)
 dist_panel <- (p_total + minor_ticks(50)) /
               (p_seg   + minor_ticks(10)) /
               (p_ecdf  + minor_ticks(10))
-ggsave("results/figures/introgression_size.pdf", dist_panel,
+ggsave("results/n1400/figures/introgression_size.pdf", dist_panel,
        width = 7, height = 10)
-ggsave("results/figures/introgression_size.png", dist_panel,
+ggsave("results/n1400/figures/introgression_size.png", dist_panel,
        width = 7, height = 10, dpi = 150)
 dist_panel
 ```
@@ -418,15 +418,15 @@ cmp_summary <- cmp %>%
   dplyr::summarise(n_seg = dplyr::n(), median_mb = median(mb),
                    p90_mb = quantile(mb, 0.9), p99_mb = quantile(mb, 0.99),
                    max_mb = max(mb), .groups = "drop")
-readr::write_csv(cmp_summary, "results/interference_comparison.csv")
+readr::write_csv(cmp_summary, "results/n1400/interference_comparison.csv")
 
 p_cmp <- ggplot(cmp, aes(mb, colour = model)) +
   stat_ecdf() +
   labs(x = "Donor segment size (Mb)", y = "ECDF",
        title = "Interference sensitivity: segment-size tail", colour = NULL) +
   theme_bw() + theme(legend.position = "bottom")
-ggsave("results/figures/interference_comparison.pdf", p_cmp, width = 7, height = 5)
-ggsave("results/figures/interference_comparison.png", p_cmp, width = 7, height = 5,
+ggsave("results/n1400/figures/interference_comparison.pdf", p_cmp, width = 7, height = 5)
+ggsave("results/n1400/figures/interference_comparison.png", p_cmp, width = 7, height = 5,
        dpi = 150)
 
 cmp_summary
@@ -479,8 +479,8 @@ co_per_mb_vector <- setNames(co_per_chr$max_co_per_mb,
                              paste0("chr", co_per_chr$chr))
 
 readr::write_csv(dplyr::mutate(co_genome, co_per_mb = n_co / genome_mb),
-                 "results/nil_crossovers.csv")
-readr::write_csv(co_per_chr, "results/crossovers_per_chr.csv")
+                 "results/n1400/nil_crossovers.csv")
+readr::write_csv(co_per_chr, "results/n1400/crossovers_per_chr.csv")
 
 # Diagnostics
 cat(sprintf(
@@ -505,7 +505,7 @@ co_per_chr
 **Approach**: Write params + versions to JSON, including both interference runs
 and the crossover statistics.
 
-**Expected outcome**: `results/run_metadata.json`.
+**Expected outcome**: `results/n1400/run_metadata.json`.
 
 ```{r metadata}
 jsonlite::write_json(
@@ -530,7 +530,7 @@ jsonlite::write_json(
     rtiger_crossovers_per_megabase = co_stats$max_co_per_mb,
     date        = as.character(Sys.time())
   ),
-  "results/run_metadata.json", pretty = TRUE, auto_unbox = TRUE
+  "results/n1400/run_metadata.json", pretty = TRUE, auto_unbox = TRUE
 )
 ```
 

@@ -1,0 +1,164 @@
+---
+title: "Single-locus validation of the BC2S3 simulation"
+author: "Fausto Rodríguez-Zapata"
+date: "`r Sys.Date()`"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    df-print: paged
+    embed-resources: true   # self-contained single file (publishable under docs/)
+execute:
+  warning: false
+  message: false
+params:
+  map: "results/maize_map_v5_clean.rds"
+  n: 1500
+  markers: 20000
+  m: 10
+  p: 0
+  seed: 1
+  sweep_csv: "results/single_locus_check/marker_sweep_summary.csv"
+---
+
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
+Does the Broman/simcross BC2S3 simulation reproduce the **single-locus
+breeding-scheme expectation** for the REF/Het/ALT genome fractions? This notebook
+runs that check. The full reasoning — why it is a *circularity* check, why
+Hotelling and not Pearson, why Mb on real marker coordinates, the ergodicity
+distinction, and the three-`f_i` bias decomposition — is the prose companion
+[`docs/13-single-locus-validation.md`](13-single-locus-validation.md). The
+*size-distribution* and interference panels live in the simulation notebook
+(`nil_introgression_1400.qmd`); RTIGER recovery is layer 2 (a later notebook).
+
+## Setup
+
+```{r setup}
+library(tidyverse)
+library(simcross)
+library(patchwork)
+purrr::walk(fs::dir_ls("R", glob = "*.R"), source)  # incl. R/07_single_locus.R
+set.seed(params$seed)
+
+anchors <- readRDS(params$map)
+ped     <- bc2s3_pedigree()
+ccl     <- anchors |>
+  dplyr::group_by(chr) |>
+  dplyr::summarise(L = max(cm), .groups = "drop") |>
+  dplyr::arrange(chr)
+cat("simcross:", as.character(packageVersion("simcross")),
+    "| anchors:", nrow(anchors), "| N:", params$n, "| markers:", params$markers, "\n")
+```
+
+## 1. The single-locus expectation (BC2S3 transition matrix)
+
+The genotype distribution at any single locus after F1 → 2 backcrosses → 3
+selfings, from the breeding-scheme transition matrices (map- and
+interference-independent — a marginal quantity).
+
+```{r p0}
+p0 <- single_locus_p0(n_bc = 2L, n_self = 3L)
+tibble(state = names(p0), expected = as.numeric(p0)) |>
+  mutate(note = c("hom recurrent", "het", "hom donor")) |>
+  knitr::kable(digits = 6)
+cat(sprintf("donor dosage = ALT + 0.5*Het = %.4f (expect 0.1250)\n",
+            p0["ALT"] + 0.5 * p0["Het"]))
+```
+
+## 2. f_i validation (Mb-based, Hotelling)
+
+Simulate `n` NILs, tabulate per-NIL Mb fractions on a marker grid, and test the
+population means against `p0` with the design-correct Hotelling/Wald χ²(2)
+(sample = unit; empirical between-sample covariance — **not** per-marker
+binomial, which linkage overdispersion would make reject a correct sampler).
+
+```{r fi-check}
+markers <- build_marker_grid(anchors, n_markers = params$markers)
+F <- t(vapply(seq_len(params$n), function(i)
+  state_fractions_mb(markers,
+    simulate_sample_dosage(ped, ccl, markers, m = params$m, p = params$p)),
+  numeric(3)))
+colnames(F) <- c("REF", "Het", "ALT")
+res <- hotelling_fractions(F, p0)
+knitr::kable(res$table, digits = 5)
+cat(sprintf("Hotelling T^2 = %.3f (df=2), chi2 p = %.4g | N_eff(ALT) = %.1f vs %d markers\n",
+            res$T2, res$p_chisq,
+            with(res$table[res$table$state == "ALT", ], expected*(1-expected)/sd_fi^2),
+            nrow(markers)))
+cat(if (all(res$table$in_ci)) "PASS: all expectations inside 95% Wald CIs.\n" else
+    "CHECK: an expectation outside its CI.\n")
+```
+
+The fractions span ~2 orders of magnitude, so a single linear forest plot can
+show magnitude *or* intervals but not both. Panel **A** (log axis) carries
+magnitude; panel **B** (standardized deviation, ±1.96 band) carries the pass
+criterion — scale-free.
+
+```{r forest, fig.width=10, fig.height=3.2}
+plot_fraction_forest(res$table,
+  title = sprintf("BC2S3 vs single-locus expectation (n=%d): all states inside 95%% CI",
+                  params$n))
+```
+
+`N_eff ≈ 28` (not the marker count) is the ergodicity-limited effective sample
+size: with ~33 crossovers/genome the per-NIL fraction averages over few
+independent blocks, so the right SE is `sd(f_i)/√N`, not a per-marker binomial
+(see [`docs/13` §5b](13-single-locus-validation.md)).
+
+## 3. Marker-resolution sweep
+
+Cohen's d = (mean − expected)/SD (N-independent effect size) and z = d·√N, vs
+marker density, from the replicated controlled sweep (`sweep_marker_density.R`,
+N=1500 × 5 reps; same NILs re-measured on every grid). Loaded from the committed
+summary if present.
+
+```{r sweep}
+if (file.exists(params$sweep_csv)) {
+  sw <- readr::read_csv(params$sweep_csv, show_col_types = FALSE)
+  sw |>
+    transmute(markers, spacing_Mb = round(spacing_Mb, 2),
+              Het_est = round(het_est_mean, 4),
+              Het_d = sprintf("%+.3f ± %.3f", het_d_mean, het_d_se),
+              Het_z = round(het_z_mean, 2),
+              ALT_d = round(alt_d_mean, 3), REF_d = round(ref_d_mean, 3)) |>
+    knitr::kable()
+} else {
+  cat("Run: Rscript sweep_marker_density.R --n=1500 --reps=5\n",
+      "(writes", params$sweep_csv, ")\n")
+}
+```
+
+```{r sweep-plot, fig.width=7, fig.height=4}
+if (file.exists(params$sweep_csv)) {
+  sw <- readr::read_csv(params$sweep_csv, show_col_types = FALSE)
+  ggplot(sw, aes(spacing_Mb, het_d_mean)) +
+    annotate("rect", xmin = -Inf, xmax = Inf, ymin = -0.05, ymax = 0.05,
+             fill = "grey90") +
+    geom_hline(yintercept = 0, linewidth = 0.3) +
+    geom_ribbon(aes(ymin = het_d_mean - het_d_se, ymax = het_d_mean + het_d_se),
+                alpha = 0.25, fill = "#2c7fb8") +
+    geom_line(colour = "#2c7fb8") + geom_point(colour = "#2c7fb8") +
+    scale_x_log10() +
+    labs(x = "marker spacing (Mb, log)", y = "Het Cohen's d (mean ± SE over reps)",
+         title = "Het is monotonically undercounted at coarse spacing",
+         subtitle = "grey band = |d| < 0.05 (negligible); undercount significant only below ~0.5 Mb") +
+    theme_bw()
+}
+```
+
+**Reading it:** Het is *undercounted* at every density (d < 0), worst at sparse
+grids (d ≈ −0.12 at ~2 Mb spacing) where small Het segments fall below the marker
+spacing and are missed; it relaxes to a negligible residual (d ≈ −0.01) and is
+statistically significant only below ~0.5 Mb spacing (≳4000 markers). This is a
+*truth-measurement* floor, distinct from the skim's low-coverage Het miscalling
+(layer 2). Full table and the N=600→N=1500 correction:
+[`docs/13` §7.2](13-single-locus-validation.md).
+
+## Conclusion
+
+The simulation reproduces the BC2S3 single-locus fractions (all inside 95% CI;
+dosage 0.125). The only deviation is a marker-resolution undercount of Het,
+negligible above ~0.5 Mb spacing. Layer 1 (truth) is validated; method
+observation/recovery is layers 2–3.

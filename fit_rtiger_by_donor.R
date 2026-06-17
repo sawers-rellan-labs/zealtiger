@@ -23,7 +23,7 @@
 #     donor        : run only this accession (e.g. Zx.0580); "" / omitted = all
 #     rigidity     : default 8 (RTIGER autotune pick on the SNP50K simulation, and
 #                    the value both empirical platforms autotune to; see
-#                    agent/autotune_rtiger_benchmark.R and nil_introgression.qmd)
+#                    agent/autotune_rtiger_benchmark.R and nil_introgression_1400.qmd)
 #     save_results : default 0/FALSE (skip per-sample bigWig/PDF export)
 #     min_n        : skip donor groups smaller than this (default 1 = fit all)
 #     threads      : Julia EM threads (default 1; 4 cuts walltime ~35% per group)

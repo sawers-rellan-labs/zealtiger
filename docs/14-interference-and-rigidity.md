@@ -12,8 +12,8 @@ and how it relates to the truth-optimal RTIGER rigidity `r`. Companion to
 
 m=10 is the **simcross (Broman) default**, adopted because positive interference
 is biologically defensible for maize. It is **not estimated** from any data here.
-Labelled as such throughout: `run_all.R:24`, `nil_introgression.qmd:19`,
-`R/02_simulate.R:140`, `nil_introgression.qmd:388`.
+Labelled as such throughout: `run_all.R:24`, `nil_introgression_1400.qmd:19`,
+`R/02_simulate.R:140`, `nil_introgression_1400.qmd:388`.
 
 The codebase does a **sensitivity analysis** instead of a fit: it runs both
 m=10 (primary) and m=0 (no interference) — `run_all.R:168-169` — and compares

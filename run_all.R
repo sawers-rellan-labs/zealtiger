@@ -16,7 +16,7 @@ suppressMessages({
 })
 purrr::walk(fs::dir_ls("R", glob = "*.R"), source)
 
-# ---- parameters (mirror nil_introgression.qmd) ----------------------------
+# ---- parameters (mirror nil_introgression_1400.qmd) ----------------------------
 params <- list(
   map_dir        = "data/maizegdb_consensus_map",
   n_nil          = 1500L,
