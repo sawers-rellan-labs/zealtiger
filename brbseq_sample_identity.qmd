@@ -1,0 +1,273 @@
+---
+title: "BRB-seq sample-identity check — best Skim-RTI / MolB-RTI match per BrB-RTI sample"
+author: "Fausto Rodríguez-Zapata"
+date: "`r Sys.Date()`"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    df-print: paged
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+params:
+  brb_calls:  "results/sim_calibration/brbseq_calls/calls_common_schema.csv"            # BrB-RTI, calibrated r=5
+  skim_calls: "data/rtiger_50K/calls_taxa_r5.csv"                                       # Skim-RTI, per-taxon r=5 (1,393 samples)
+  mb_calls:   "results/sim_calibration/gbts_calls/SNP_wsfilt/calls_common_schema.csv"   # MolB-RTI, wsfilt r=2 (16 samples)
+  mb_counts:  "results/sim_calibration/gbts_calls/SNP_wsfilt/counts"                    # wsfilt marker grid (9,157)
+---
+
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
+Mislabeling check for the **BRB-seq** run. For every BrB-RTI sample we search the
+**full Skim-RTI pool** (1,393 SNP50K samples) and the **MolB-RTI** set (16 target-
+sequencing samples) for the best genotype match — the same donor-pattern comparison
+used for the `PN4_SID330` swap (`agent/find_pn4_sid330_match.R`,
+`agent/gbts330_vs_skim322.png`). If a BrB sample's donor pattern matches a
+**differently-named** sample better than its own label, that flags a likely swap.
+
+**Metric.** Each call set is projected onto the common wideseq grid (9,157 sites);
+similarity is the **donor Jaccard** `J = |donor_a ∩ donor_b| / |donor_a ∪ donor_b|`
+(donor = state ∈ {het, hom-donor}), with marker-level concordance reported alongside.
+Jaccard keys on *where the introgressions are*, which is what identifies a line.
+
+> Caveat: BrB-RTI is sparse 3′ RNA-seq and over-segments, so its donor sets are
+> noisy — absolute J is low. The **rank** of the own-label vs the best match is the
+> signal, not the absolute value.
+
+## Setup
+
+```{r setup}
+library(tidyverse); library(data.table); library(GenomicRanges); library(ggpubr)
+pal <- c(REF = "gold", HET = "springgreen4", ALT = "purple4")
+
+brb  <- read_csv(params$brb_calls,  show_col_types = FALSE)
+skim <- read_csv(params$skim_calls, show_col_types = FALSE)
+mb   <- read_csv(params$mb_calls,   show_col_types = FALSE)
+
+cf   <- read_tsv(list.files(params$mb_counts, full.names = TRUE)[1],
+                 col_names = c("chr_label","bp","rb","rc","ab","ac"), show_col_types = FALSE)
+grid <- tibble(chr = as.integer(sub("chr","",cf$chr_label)), bp = cf$bp) %>%
+  mutate(gi = row_number())
+
+# project a (possibly multi-sample) segment table onto the grid -> matrix [n_grid x n_sample]
+project_matrix <- function(seg) {
+  sk  <- as.data.table(seg)[, .(name, chr = as.character(chr), start_bp, end_bp, state)]
+  gdt <- as.data.table(grid)[, .(gi, chr = as.character(chr), start = bp, end = bp)]
+  setkey(sk, chr, start_bp, end_bp)
+  ov  <- foverlaps(gdt, sk, by.x = c("chr","start","end"),
+                   by.y = c("chr","start_bp","end_bp"), type = "within", nomatch = NULL)
+  nm  <- sort(unique(ov$name))
+  m   <- matrix(NA_integer_, nrow = nrow(grid), ncol = length(nm), dimnames = list(NULL, nm))
+  m[cbind(ov$gi, match(ov$name, nm))] <- ov$state
+  m
+}
+
+M_brb  <- project_matrix(brb)
+M_skim <- project_matrix(skim)
+M_mb   <- project_matrix(mb)
+
+# donor Jaccard / concordance of a query vector vs every column of M
+jac_vec  <- function(q, M) apply(M, 2, function(v) {
+  ok <- !is.na(q) & !is.na(v); a <- q[ok] > 0; b <- v[ok] > 0
+  u <- sum(a | b); if (u == 0) 0 else sum(a & b) / u })
+conc_vec <- function(q, M) apply(M, 2, function(v) {
+  ok <- !is.na(q) & !is.na(v); if (!any(ok)) NA_real_ else mean(q[ok] == v[ok]) })
+
+brb_samples <- colnames(M_brb)
+cat(sprintf("BrB-RTI samples: %d | Skim-RTI pool: %d | MolB-RTI pool: %d | grid: %d sites\n",
+            ncol(M_brb), ncol(M_skim), ncol(M_mb), nrow(grid)))
+```
+
+## Best match per BrB sample
+
+For each BrB-RTI sample, the top Skim-RTI and top MolB-RTI match by donor Jaccard,
+with the **own-label** sample's rank and J in each pool. A flag is raised when the
+best match is **not** the own label (and clearly beats it).
+
+```{r ranking}
+rank_pool <- function(q, M, self) {
+  J <- jac_vec(q, M); C <- conc_vec(q, M)
+  dt <- data.table(name = colnames(M), donorJ = J, concord = C,
+                   cand_donor = colMeans(M > 0, na.rm = TRUE))[order(-donorJ)]
+  dt[, rank := .I]
+  best <- dt[1]
+  own  <- if (self %in% dt$name) dt[name == self] else NULL
+  list(dt = dt, best = best, own = own)
+}
+
+summ <- map_dfr(brb_samples, function(s) {
+  q  <- M_brb[, s]
+  rs <- rank_pool(q, M_skim, s)
+  rm <- rank_pool(q, M_mb,   s)
+  tibble(
+    brb_sample      = s,
+    brb_donor_frac  = mean(q > 0, na.rm = TRUE),
+    skim_best       = rs$best$name,
+    skim_best_J     = rs$best$donorJ,
+    skim_own_rank   = if (is.null(rs$own)) NA_integer_ else rs$own$rank,
+    skim_own_J      = if (is.null(rs$own)) NA_real_    else rs$own$donorJ,
+    molb_best       = rm$best$name,
+    molb_best_J     = rm$best$donorJ,
+    molb_own_rank   = if (is.null(rm$own)) NA_integer_ else rm$own$rank,
+    molb_own_J      = if (is.null(rm$own)) NA_real_    else rm$own$donorJ,
+    skim_swap = !is.na(skim_own_rank) & skim_best != s & skim_best_J > 1.5 * pmax(skim_own_J, 1e-6),
+    molb_swap = !is.na(molb_own_rank) & molb_best != s & molb_best_J > 1.5 * pmax(molb_own_J, 1e-6))
+})
+knitr::kable(summ, digits = 3,
+             caption = "Top Skim-RTI / MolB-RTI match per BrB-RTI sample, vs own-label rank/J. *_swap = best match is not the own label and beats it >1.5×.")
+
+# full rankings to disk for inspection
+dir.create("agent", showWarnings = FALSE)
+walk(brb_samples, function(s) {
+  rs <- rank_pool(M_brb[, s], M_skim, s)$dt
+  fwrite(rs, sprintf("agent/brb_%s_skim_match_ranking.csv", s))
+})
+```
+
+## Accession cross-check — label vs BRB-metadata vs genotype match
+
+Does the genotype-recovered identity match the **pedigree/accession** in
+`BRBseq_metadata.csv` (keyed by the SID number) rather than the `PN#_SID#` plate
+label (from `molbreeding_45k_sample_map.tsv`)? The skim pool's accessions come from
+`data/rtiger_50K/expDesign_all.csv`.
+
+```{r accession-check}
+# normalize pedigrees: the MolBreeding map appends a trailing ".B" that the BRB
+# metadata omits, so chop it uniformly before any comparison
+chop_B <- function(x) sub("\\.B$", "", x)
+
+ed   <- read_csv("data/rtiger_50K/expDesign_all.csv", show_col_types = FALSE) %>%
+  select(name, skim_acc = donor)
+meta <- read_csv("data/BRBseq_metadata.csv", show_col_types = FALSE) %>%
+  transmute(sid = sample_id, metadata_acc = accession,
+            metadata_pedigree = chop_B(genotype))
+mol  <- read_tsv("data/molbreeding_45k_sample_map.tsv", show_col_types = FALSE) %>%
+  transmute(name = sample_id, label_pedigree = chop_B(genotype),
+            label_acc = sub("_.*", "", genotype))
+
+acc <- summ %>%
+  transmute(brb = brb_sample, skim_best, J = round(skim_best_J, 2)) %>%
+  mutate(sid               = as.integer(sub(".*_SID", "", brb)),
+         label_acc         = mol$label_acc[match(brb, mol$name)],
+         label_pedigree    = mol$label_pedigree[match(brb, mol$name)],
+         metadata_pedigree = meta$metadata_pedigree[match(sid, meta$sid)],
+         metadata_acc      = meta$metadata_acc[match(sid, meta$sid)],
+         match_acc         = ed$skim_acc[match(skim_best, ed$name)],
+         metadata_eq_genotype = metadata_acc == match_acc,
+         label_eq_genotype    = label_acc == match_acc) %>%
+  select(brb, label_pedigree, metadata_pedigree, label_acc, metadata_acc,
+         skim_best, match_acc, J, metadata_eq_genotype, label_eq_genotype)
+knitr::kable(acc, caption = "Per BrB sample: plate-label pedigree/accession (molbreeding map) vs BRBseq_metadata pedigree/accession (.B normalized) vs the genotype-recovered (best skim match) accession.")
+cat(sprintf("genotype match == BRBseq_metadata accession : %d / %d\n",
+            sum(acc$metadata_eq_genotype, na.rm = TRUE), nrow(acc)))
+cat(sprintf("genotype match == plate-label accession      : %d / %d\n",
+            sum(acc$label_eq_genotype, na.rm = TRUE), nrow(acc)))
+
+# is .B the whole story? compare the BRB-run pedigree set to the MolB/skim NIL set
+brb_peds <- meta$metadata_pedigree[match(acc$sid, meta$sid)]
+mol_peds <- mol$label_pedigree
+cat(sprintf("\nBRB-run pedigrees ∩ MolB/skim NIL pedigrees (.B normalized): %d shared\n",
+            length(intersect(brb_peds, mol_peds))))
+```
+
+**Read:** the plate-label (`PN#_SID#` via the molbreeding map) matches the
+genotype-recovered identity for **0/8** samples; the **`BRBseq_metadata` pedigree
+accession matches for 6/8**. So the `PN#_SID#` plate index does **not** track the
+NIL — the **pedigree string is the correct identifier**, and the genotype confirms
+it. (`PN4_SID326`, labelled "B73-bulk", is actually **Zx.0020** by both metadata and
+genotype — explaining why that "check" never read ≈ 0 donor.) The two mismatches
+(SID290, SID309) are the lowest-J matches, i.e. BRB RNA-seq noise, not a metadata
+error.
+
+Pedigrees were normalized by chopping the trailing `.B` that the MolBreeding map
+appends but the BRB metadata omits. That formatting difference is *not* the cause:
+even after normalizing, the BRB-run pedigrees share **zero** exact strings with the
+MolB/skim PN4 NIL set — the BRB run sequenced a **different panel of NILs**, so this
+is genuine mislabeling, not a string-formatting artifact.
+
+## Sample-by-sample painting
+
+For each BrB-RTI sample (top lane), the **best Skim-RTI match** and **best MolB-RTI
+match**, plus the **own-label** Skim-RTI and MolB-RTI lanes for contrast. When the
+best match equals the own label the lane is annotated `(= own label)`.
+
+```{r paintings, results='asis', fig.width=12, fig.height=3.4}
+lane <- function(seg, nm, lab) {
+  d <- seg %>% filter(name == nm)
+  if (!nrow(d)) return(NULL)
+  d %>% transmute(chr, start_bp, end_bp,
+                  state = factor(state, 0:2, c("REF","HET","ALT")), lane = lab)
+}
+
+for (s in brb_samples) {
+  sk_best <- summ$skim_best[summ$brb_sample == s]; sk_bestJ <- summ$skim_best_J[summ$brb_sample == s]
+  mb_best <- summ$molb_best[summ$brb_sample == s]; mb_bestJ <- summ$molb_best_J[summ$brb_sample == s]
+  sk_ownJ <- summ$skim_own_J[summ$brb_sample == s]; mb_ownJ <- summ$molb_own_J[summ$brb_sample == s]
+
+  lanes <- bind_rows(
+    lane(brb,  s,       sprintf("BrB-RTI  %s  (query)", s)),
+    lane(skim, sk_best, sprintf("Skim-RTI  %s  (best J=%.2f)%s",
+                                sk_best, sk_bestJ, if (sk_best == s) "  = own label" else "")),
+    if (sk_best != s) lane(skim, s, sprintf("Skim-RTI  %s  (own label, J=%.2f)", s, sk_ownJ)),
+    lane(mb,   mb_best, sprintf("MolB-RTI  %s  (best J=%.2f)%s",
+                                mb_best, mb_bestJ, if (mb_best == s) "  = own label" else "")),
+    if (mb_best != s) lane(mb, s, sprintf("MolB-RTI  %s  (own label, J=%.2f)", s, mb_ownJ)))
+
+  lv <- unique(lanes$lane)                     # keep construction order, query on top
+  lanes <- lanes %>% mutate(
+    chr  = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)),
+    lane = factor(lane, levels = rev(lv)))      # rev so first lane sits on top in facet
+
+  cat("\n\n### ", s, "\n\n")
+  p <- ggplot(lanes, aes(xmin = start_bp/1e6, xmax = end_bp/1e6, ymin = 0, ymax = 1, fill = state)) +
+    geom_rect() +
+    facet_grid(lane ~ chr, scales = "free_x", space = "free_x", switch = "y") +
+    scale_fill_manual(values = pal, drop = FALSE) +
+    scale_x_continuous(labels = scales::unit_format(unit = "", scale = 1)) +
+    labs(title = sprintf("BrB-RTI %s — best match vs own label", s),
+         subtitle = "gold REF · green HET · purple ALT", x = "Position (Mb)", fill = "Genotype") +
+    theme_classic2(base_size = 10) +
+    theme(legend.position = "bottom",
+          strip.background = element_blank(),
+          strip.text.y.left = element_text(angle = 0, hjust = 1, size = 8),
+          strip.text.x = element_text(size = 8),
+          panel.spacing.x = unit(0.05, "lines"), panel.spacing.y = unit(0.15, "lines"),
+          axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+          axis.title.y = element_blank(), axis.line.y = element_blank(),
+          axis.text.x = element_text(size = 6))
+  print(p)
+  cat("\n\n")
+}
+```
+
+## Read
+
+Compare each BrB-RTI query lane to its best-match and own-label lanes. A sample is a
+**clean label** when its best Skim-RTI and best MolB-RTI matches are its own name
+(top of the pool). A **suspected swap** is when the best match is a different sample
+that clearly outscores the own label — read off the `skim_swap` / `molb_swap` flags
+in the summary table and confirmed visually by donor-block overlap in the painting.
+
+**What the table shows — broad BRB-seq mislabeling.** For 7 of the 8 BrB samples the
+best Skim-RTI match is a **different, non-PN4 line** with high Jaccard, while the own
+label sits hundreds-to-thousands of ranks down at `J ≈ 0`. The match is genuine, not
+a Jaccard artifact: a near-`J = 1` requires the donor *blocks* to coincide in
+location and extent (an all-donor candidate would score only ≈ the query's donor
+fraction). The clearest case is **`PN4_SID320` → skim `PN3_SID272` (J = 0.98)**: the
+query's chr1 (~50 Mb het + 200–300 Mb donor) and chr5 (30–160 Mb) blocks match
+PN3_SID272, not its own label (chr1-*end* + a chr5 het block, shared by *both* its
+own MolB-RTI and Skim-RTI lanes at J ≈ 0.41). **`PN4_SID290` → skim `PN11_SID970`
+(J = 0.59)** likewise shares chr4-start + a chr9 het block and entirely lacks the
+chr7 introgression that defines the real SID290.
+
+Crucially, each sample's **own-label MolB-RTI and Skim-RTI lanes agree with each
+other** (DNA platforms), so the skim/target-sequencing labels are mutually
+consistent and it is the **BRB-seq labels that are off** — consistent with the
+independent clue that `BRBseq_metadata.csv` assigns different accessions to these SID
+numbers than `molbreeding_45k_sample_map.tsv`. The likely root cause is the BRB
+plate→well→SID naming, not the sequencing; the best-match column is a first estimate
+of each BrB tube's true genotype identity. (`PN4_SID330`, the known MolB/skim swap,
+is the reference positive control.)
