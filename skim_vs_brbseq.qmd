@@ -13,11 +13,16 @@ execute:
   warning: false
   message: false
 params:
-  brb_calls:  "results/sim_calibration/brbseq_calls/calls_common_schema.csv"            # BrB-RTI, calibrated r=5
+  brb_calls:  "results/sim_calibration/brbseq_calls_r109/calls_common_schema.csv"        # BrB-RTI, KS-optimal r=109
   skim_calls: "data/rtiger_50K/calls_taxa_r5.csv"                                       # Skim-RTI, per-taxon r=5
   brb_meta:   "data/BRBseq_metadata.csv"                                                # BRB sample_id -> pedigree
   skim_ped:   "data/skim_sample_pedigree.csv"                                           # skim sample -> pedigree (.B dropped)
   mb_counts:  "results/sim_calibration/gbts_calls/SNP_wsfilt/counts"                    # wideseq grid (9,157)
+  brb_cov:    "results/sim_calibration/brbseq_coverage.csv"                             # BRB-seq per-sample mean coverage (all 379)
+  skim_cov:   "results/sim_calibration/real_skim_lambda.csv"                            # SNP50K skim per-sample mean coverage (all 1,393)
+  brb_sweep:  "results/sim_calibration/brbseq_sweep_calls_r109/calls_common_schema.csv"  # BrB-RTI r=109 calls for the sweep samples + B73
+  skim_sweep: "results/sim_calibration/skim_sweep_calls/calls_common_schema.csv"        # Skim-RTI r=5 calls for the sweep samples + B73
+  members:    "results/sim_calibration/coverage_sweep_members.csv"                      # the two 10-NIL coverage sweeps
 ---
 
 **Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
@@ -75,6 +80,198 @@ cat(sprintf("BrB-RTI samples: %d | with a pedigree-matched skim sample: %d | unm
             paste(pairs$brb_name[is.na(pairs$skim_name)], collapse = ", ")))
 ```
 
+## Coverage by platform — full dataset
+
+Mean per-sample sequencing coverage on each platform, paired **by NIL pedigree**
+across the **whole** dataset (every BRB-seq sample joined to its same-pedigree skim
+sample). SNP50K-skim λ from `real_skim_lambda.csv` (mean depth over the 50K grid);
+BRB-seq λ from `brbseq_coverage.csv` (mean depth over the brbseq SNP sites). One
+point = one NIL. The mean of each platform is drawn as a dotted reference line.
+
+```{r coverage-data}
+brb_cov <- read_csv(params$brb_cov, show_col_types = FALSE) %>%
+  mutate(sid = as.integer(sub(".*_SID", "", name)),
+         nil = brbmeta$nil[match(sid, brbmeta$sid)]) %>%
+  filter(!is.na(nil)) %>% transmute(nil, brb_name = name, brb_cov = lambda)
+skim_cov <- read_csv(params$skim_cov, show_col_types = FALSE) %>%
+  mutate(nil = skimped$pedigree[match(name, skimped$sample)]) %>%
+  filter(!is.na(nil)) %>%
+  group_by(nil) %>% summarise(skim_name = dplyr::first(name), skim_cov = dplyr::first(lambda), .groups = "drop")
+cov <- inner_join(brb_cov, skim_cov, by = "nil")
+ms <- mean(cov$skim_cov); mb <- mean(cov$brb_cov)
+cat(sprintf("%d pedigree-matched NILs | mean coverage: SNP50K skim %.3f× | BRB-seq %.3f×\n",
+            nrow(cov), ms, mb))
+```
+
+### Coverage-matched series — grid the varying platform across its central 90%
+
+To sweep one platform's coverage while controlling the other, we **grid the varying
+platform across its central 90% (P5–P95)** on 10 evenly-spaced steps; at each step we
+take the NIL whose varying coverage falls in that step, **preferring the one whose
+held coverage is closest to its mean**. The result is ~10 NILs spread evenly along
+the varying axis with the held axis pinned ≈ its mean (feasible because the two
+coverages are uncorrelated).
+
+```{r grid-sample}
+# grid `vary` across its P5–P95 (n steps); at each step pick the NIL nearest the grid
+# point, breaking toward the one whose `hold` coverage is closest to `hold_mean`.
+grid_series <- function(df, vary, hold, hold_mean, n = 10, q = c(0.05, 0.95)) {
+  v <- df[[vary]]; h <- df[[hold]]
+  gr   <- seq(quantile(v, q[1]), quantile(v, q[2]), length.out = n)
+  step <- (gr[n] - gr[1]) / (n - 1)
+  chosen <- integer(0); idx <- integer(0)
+  for (g in gr) {
+    cand <- which(abs(v - g) <= step/2 & !(seq_along(v) %in% chosen))   # NILs in this grid step
+    if (!length(cand)) cand <- setdiff(order(abs(v - g)), chosen)[1]    # fallback: nearest free
+    pick <- cand[which.min(abs(h[cand] - hold_mean))]                   # prefer near held-mean
+    chosen <- c(chosen, pick); idx <- c(idx, pick)
+  }
+  df[idx, , drop = FALSE] %>% mutate(grid_target = gr)
+}
+vary_brb  <- grid_series(cov, "brb_cov",  "skim_cov", ms)   # sweep BRB-seq, hold skim ≈ mean
+vary_skim <- grid_series(cov, "skim_cov", "brb_cov", mb)    # sweep skim,    hold BRB  ≈ mean
+cat(sprintf("BRB-seq central 90%%: [%.2f, %.2f]× | skim central 90%%: [%.3f, %.3f]×\n",
+            quantile(cov$brb_cov,.05), quantile(cov$brb_cov,.95),
+            quantile(cov$skim_cov,.05), quantile(cov$skim_cov,.95)))
+```
+
+### Scatter — mean lines + the two gridded series
+
+```{r coverage-scatter, fig.width=7.5, fig.height=6}
+cov2 <- cov %>% mutate(series = case_when(
+  nil %in% vary_brb$nil & nil %in% vary_skim$nil ~ "both series",
+  nil %in% vary_brb$nil  ~ "vary BRB (skim≈mean)",
+  nil %in% vary_skim$nil ~ "vary skim (BRB≈mean)",
+  TRUE ~ "other"))
+ggplot(cov2, aes(skim_cov, brb_cov)) +
+  geom_vline(xintercept = ms, linetype = "dotted") +
+  geom_hline(yintercept = mb, linetype = "dotted") +
+  geom_point(aes(colour = series, size = series == "other"), alpha = 0.8) +
+  scale_size_manual(values = c(`TRUE` = 1.3, `FALSE` = 2.7), guide = "none") +
+  scale_colour_manual(values = c(other = "grey75", `vary BRB (skim≈mean)` = "firebrick",
+                                 `vary skim (BRB≈mean)` = "royalblue3", `both series` = "purple3"),
+                      name = NULL) +
+  labs(x = "SNP50K skim mean coverage (×)", y = "BRB-seq mean coverage (×)",
+       title = "Per-NIL coverage — SNP50K skim vs BRB-seq",
+       subtitle = sprintf("dotted = platform mean (skim %.2f×, BRB %.2f×) | 10-point grid across each varying platform's central 90%%",
+                          ms, mb)) +
+  theme_bw()
+```
+
+### The two coverage-matched series
+
+**Vary BRB-seq** across its central 90%, **skim held ≈ mean** — sorted by BRB-seq λ:
+
+```{r series-brb}
+vary_brb %>% arrange(brb_cov) %>%
+  transmute(NIL = nil, brb_cov = round(brb_cov,3), skim_cov = round(skim_cov,3),
+            grid_target = round(grid_target,2), brb_sample = brb_name, skim_sample = skim_name) %>%
+  knitr::kable(caption = "Skim held ≈ mean; BRB-seq λ stepped across its central 90% (P5–P95).")
+```
+
+**Vary skim** across its central 90%, **BRB-seq held ≈ mean** — sorted by skim λ:
+
+```{r series-skim}
+vary_skim %>% arrange(skim_cov) %>%
+  transmute(NIL = nil, skim_cov = round(skim_cov,3), brb_cov = round(brb_cov,3),
+            grid_target = round(grid_target,3), skim_sample = skim_name, brb_sample = brb_name) %>%
+  knitr::kable(caption = "BRB-seq held ≈ mean; skim λ stepped across its central 90% (P5–P95).")
+```
+
+**Read:** BRB-seq (3′ RNA-seq) mean depth (~2.8×) sits well above the ~0.4× SNP50K
+skim, and the two platforms' coverages are uncorrelated across NILs (library-driven).
+Each series steps one platform evenly across its central-90% coverage while holding
+the other ≈ its mean — a coverage-controlled sweep for asking how the ancestry calls
+move with the varying platform's depth, with the other platform's coverage held out
+as a confounder.
+
+## Coverage-sweep chromosome painting
+
+Ancestry calls for the two 10-NIL coverage sweeps, painted as the coverage of the
+*varying* platform climbs (rows ordered low→high; the row label prefixes the varying
+λ). Two tracks per NIL — **top = Skim-RTI (r=5), bottom = BrB-RTI (r=109)** — and a
+**B73 control** row pinned at top (forced, not pedigree-matched: skim `PN10_SID893`,
+BRB `PN1_SID15`). skim B73 is fit from the 50K counts.
+
+**BrB-RTI rigidity = r=109 (KS-calibrated).** RTIGER's rigidity is in *marker* units,
+but BRB-seq SNPs cluster within genes (non-iid spacing), so the even-grid FP+FN
+benchmark badly under-estimates it (r=5). Instead we chose r by **minimizing the KS
+distance** `D = sup_x|F_called − F_sim|` between the BrB-RTI donor-block size
+distribution (pooled, all 379 BRB samples) and the n=1500 BC2S3 simulation's — a log₂
+grid (2→256) then golden-section refine gave a clean valley at **r=109** (`D=0.112`;
+called median block 11.9 Mb ≈ the sim's 10.74 Mb). Curve in
+`results/sim_calibration/brbseq_ks/brbseq_ks_refined.csv`. At r=109 the **B73 control
+reads 0.00 donor on skim and ~0.09 on BrB-RTI** (down from ~0.32 at r=5) — the higher
+rigidity collapses the spurious short RNA donor-calls, lowering the false-donor floor.
+
+```{r sweep-paint-setup}
+brb_sw  <- read_csv(params$brb_sweep,  show_col_types = FALSE)
+skim_sw <- read_csv(params$skim_sweep, show_col_types = FALSE)
+mem     <- read_csv(params$members,    show_col_types = FALSE)
+BRB_B73 <- "PN1_SID15"; SKIM_B73 <- "PN10_SID893"
+
+lane2 <- function(seg, nm, method, rowlab) {
+  d <- seg %>% filter(name == nm)
+  if (!nrow(d)) return(NULL)
+  tibble(row = rowlab, chr = d$chr, start_bp = d$start_bp, end_bp = d$end_bp,
+         state = factor(d$state, 0:2, c("REF","HET","ALT")), method = method)
+}
+sweep_paint <- function(which) {
+  m <- mem %>% filter(sweep == which) %>% arrange(vary_cov) %>%
+    mutate(rowlab = sprintf("%.2f×<br>%s", vary_cov, gsub("_", "<br>", nil)))
+  nil_rows <- pmap_dfr(list(m$skim_name, m$brb_name, m$rowlab), function(sk, br, rl)
+    bind_rows(lane2(skim_sw, sk, "Skim-RTI", rl), lane2(brb_sw, br, "BrB-RTI", rl)))
+  b73 <- bind_rows(lane2(skim_sw, SKIM_B73, "Skim-RTI", "**B73 control**"),
+                   lane2(brb_sw,  BRB_B73,  "BrB-RTI",  "**B73 control**"))
+  lvls <- c("**B73 control**", m$rowlab)            # B73 on top, then low→high coverage
+  bind_rows(b73, nil_rows) %>%
+    mutate(chr = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)),
+           row = factor(row, levels = rev(lvls)),
+           method = factor(method, c("Skim-RTI","BrB-RTI")),
+           ylo = if_else(method == "Skim-RTI", 0.52, 0.00),
+           yhi = if_else(method == "Skim-RTI", 1.00, 0.48))
+}
+paint_plot <- function(df, title, sub) {
+  ggplot(df, aes(xmin = start_bp/1e6, xmax = end_bp/1e6, ymin = ylo, ymax = yhi, fill = state)) +
+    geom_rect() +
+    facet_grid(row ~ chr, scales = "free_x", space = "free_x", switch = "y") +
+    scale_fill_manual(values = pal, drop = FALSE) +
+    scale_x_continuous(labels = scales::unit_format(unit = "", scale = 1)) +
+    scale_y_continuous(breaks = c(0.24, 0.76), labels = c("BrB-RTI","Skim-RTI"),
+                       expand = expansion(mult = 0.02), position = "right") +
+    labs(title = title, subtitle = sub, x = "Position (Mb)", fill = "Genotype") +
+    ggpubr::theme_classic2(base_size = 9) +
+    theme(legend.position = "bottom", strip.background = element_blank(),
+          strip.text.x = element_text(face = "bold"),
+          strip.text.y.left = ggtext::element_markdown(angle = 0, hjust = 1, size = 5.5, lineheight = 0.8),
+          panel.spacing.x = unit(0.05, "lines"), panel.spacing.y = unit(0.18, "lines"),
+          axis.text.y.right = element_text(size = 9), axis.ticks.y = element_blank(),
+          axis.title.y = element_blank(), axis.line.y = element_blank(),
+          axis.text.x = element_text(size = 6))
+}
+```
+
+### Vary BRB-seq (skim ≈ mean)
+
+```{r sweep-vary-brb, fig.width=12, fig.height=12}
+paint_plot(sweep_paint("vary_BRB"),
+           "Coverage sweep — vary BRB-seq depth, skim held ≈ mean",
+           "rows: B73 control then 10 NILs by increasing BRB-seq λ | top Skim-RTI / bottom BrB-RTI | gold REF, green HET, purple ALT")
+```
+
+### Vary skim (BRB-seq ≈ mean)
+
+```{r sweep-vary-skim, fig.width=12, fig.height=12}
+paint_plot(sweep_paint("vary_skim"),
+           "Coverage sweep — vary skim depth, BRB-seq held ≈ mean",
+           "rows: B73 control then 10 NILs by increasing skim λ | top Skim-RTI / bottom BrB-RTI")
+```
+
+**Read:** the **B73 control** anchors both panels — Skim-RTI paints it ~all-REF
+(gold), while BrB-RTI speckles it with spurious het/donor (its RNA false-donor
+floor). Down the sweeps, watch how each platform's calls fill in (or fragment) as its
+own depth rises and as the other platform's depth stays fixed.
+
 ## Pedigree-matched pairs
 
 ```{r pairs-table}
@@ -126,7 +323,7 @@ cat(sprintf("Skim donor-present markers: %d | BrB also donor-present: %.1f%%\n",
 
 ## Chromosome painting — Skim-RTI vs BrB-RTI per NIL
 
-Two tracks per NIL (**top = Skim-RTI r=5, bottom = BrB-RTI r=5**), grouped and labelled
+Two tracks per NIL (**top = Skim-RTI r=5, bottom = BrB-RTI r=109**), grouped and labelled
 by the `.B`-dropped **pedigree** (wrapped at the left); the method label is at the right.
 NILs ordered by donor Jaccard (best agreement first).
 
@@ -156,7 +353,7 @@ ggplot(paint, aes(xmin = start_bp/1e6, xmax = end_bp/1e6, ymin = ylo, ymax = yhi
   scale_y_continuous(breaks = c(0.24, 0.76), labels = c("BrB-RTI","Skim-RTI"),
                      expand = expansion(mult = 0.02), position = "right") +
   labs(title = "Skim-RTI vs BrB-RTI — pedigree-matched NILs",
-       subtitle = "per NIL: top = Skim-RTI (r=5), bottom = BrB-RTI (r=5) | gold REF, green HET, purple ALT",
+       subtitle = "per NIL: top = Skim-RTI (r=5), bottom = BrB-RTI (r=109) | gold REF, green HET, purple ALT",
        x = "Position (Mb)", fill = "Genotype") +
   ggpubr::theme_classic2(base_size = 9) +
   theme(legend.position = "bottom", strip.background = element_blank(),
