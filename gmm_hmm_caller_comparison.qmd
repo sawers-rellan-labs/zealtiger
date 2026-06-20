@@ -1,5 +1,5 @@
 ---
-title: "Ancestry callers compared — GBTS, RTIGER skim, and Gaussian-mixture HMM"
+title: "Ancestry callers compared — MolB-RTI, Skim-RTI, and Skim-BIN"
 author: "Fausto Rodríguez-Zapata"
 date: "`r Sys.Date()`"
 format:
@@ -13,7 +13,7 @@ execute:
   warning: false
   message: false
 params:
-  mb_calls:   "results/sim_calibration/gbts_calls/SNP_wsfilt/calls_common_schema.csv"  # GBTS real counts, wsfilt, r=2
+  mb_calls:   "results/sim_calibration/gbts_calls/SNP_wsfilt/calls_common_schema.csv"  # target-seq real counts, wsfilt, r=2
   mb_counts:  "results/sim_calibration/gbts_calls/SNP_wsfilt/counts"                    # wsfilt marker grid (9,157)
   skim_calls: "data/rtiger_50K/calls_taxa_r5.csv"                                       # skim RTIGER, per-taxon r=5
   gmm_calls:  "data/bzeaseq_ancestry/gmm_hmm_segments_16lines.tsv"                      # BzeaSeq Gaussian-mixture HMM (skim)
@@ -24,20 +24,27 @@ params:
 
 **Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
 
-Three ancestry callers on the **same 16 BZea lines**, painted side by side:
+Three ancestry call sets on the **same 16 BZea lines**, painted side by side:
 
-- **GBTS r=2** — MolBreeding ~110× target-capture, RTIGER at the truth-derived
-  rigidity (`docs/15-rigidity-and-scoring.md`).
-- **RTIGER skim r=5** — SNP50K ~0.4× skim, RTIGER at the truth-derived rigidity.
-- **GMM-HMM skim** — the BzeaSeq caller on the **same skim data** (1 Mb bins,
+- **MolB-RTI (r=2)** — MolBreeding ~110× target-capture sequencing, RTIGER at the
+  truth-derived rigidity (`docs/15-rigidity-and-scoring.md`).
+- **Skim-RTI (r=5)** — SNP50K ~0.4× skim, RTIGER at the truth-derived rigidity.
+- **Skim-BIN** — the BzeaSeq caller on the **same skim reads** (1 Mb bins,
   Gaussian mixture on `ALT_FREQ`, then HMM-smoothed; `BzeaSeq/docs/call_ancestry.Rmd`).
 
 This is the companion to the two-way `molbreeding_vs_skim_calibrated.qmd` (which is
-GBTS vs RTIGER skim only). The point here is to add an **independent skim caller**
-and ask whether the GBTS-vs-skim gap is a RTIGER artifact or a platform effect.
-Palette follows the BzeaSeq convention: `REF` gold, `HET` springgreen4, `ALT`
-purple4. Calls are segments on B73 NAM v5 (0/REF, 1/HET, 2/ALT). The two B73-bulk
-checks (`PN4_SID326`, `PN6_SID576`) have no RTIGER-skim lane (GBTS-only).
+MolB-RTI vs Skim-RTI only). The point here is to add an **independent skim caller**
+(Skim-BIN) and ask whether the MolB-vs-Skim gap is a RTIGER artifact or a platform
+effect. Palette follows the BzeaSeq convention: `REF` gold, `HET` springgreen4,
+`ALT` purple4. Calls are segments on B73 NAM v5 (0/REF, 1/HET, 2/ALT). The two
+B73-bulk checks (`PN4_SID326`, `PN6_SID576`) have no Skim-RTI lane (MolB-only).
+
+**Naming (source × caller).** Call sets are labelled `Source-Caller`. Sources:
+**Skim** (SNP50K ~0.4× skim reads), **MolB** (MolBreeding target-capture sequencing ~110×).
+Callers: **RTI** = RTIGER (per-marker HMM); **BIN** = BzeaSeq 1 Mb-bin GMM-HMM. So
+the three lanes are **MolB-RTI (r=2)**, **Skim-RTI (r=5)** and **Skim-BIN** —
+`Skim-RTI` and `Skim-BIN` are the *same skim reads* through different filters +
+callers (50K-SNP RTIGER vs 27M→1 Mb-bin GMM-HMM). `Skim-BIN` has no rigidity.
 
 ## Setup
 
@@ -46,10 +53,10 @@ library(tidyverse)
 set.seed(params$seed)
 pal <- c(REF = "gold", HET = "springgreen4", ALT = "purple4")
 
-mb   <- read_csv(params$mb_calls,   show_col_types = FALSE)   # GBTS wsfilt, r=2
+mb   <- read_csv(params$mb_calls,   show_col_types = FALSE)   # target-seq wsfilt, r=2
 skim <- read_csv(params$skim_calls, show_col_types = FALSE)   # skim RTIGER, r=5
 smap <- read_tsv(params$sample_map, show_col_types = FALSE)
-gmm  <- read_tsv(params$gmm_calls,  show_col_types = FALSE) %>%   # GMM-HMM skim
+gmm  <- read_tsv(params$gmm_calls,  show_col_types = FALSE) %>%   # Skim-BIN (GMM-HMM)
   transmute(name = sample, chr = as.integer(sub("chr","",chrom)),
             start_bp = start, end_bp = end, state = state_chr <- genotype)
 
@@ -75,20 +82,20 @@ as_paint <- function(seg, method, numeric_state = TRUE) {
 
 ## Chromosome painting — all three callers
 
-Three lanes per sample: **top = GBTS r=2, middle = RTIGER skim r=5, bottom =
-GMM-HMM skim**. Lines ordered by GBTS donor dosage (B73 checks pinned at the top);
+Three lanes per sample: **top = MolB-RTI (r=2), middle = Skim-RTI (r=5), bottom =
+Skim-BIN**. Lines ordered by MolB-RTI donor dosage (B73 checks pinned at the top);
 `LowQuality` lines in **bold**.
 
 ```{r painting-3way, fig.width=12, fig.height=20}
 paint3 <- bind_rows(
-  as_paint(mb,   "GBTS r=2"),
-  as_paint(skim %>% filter(name %in% unique(mb$name)), "RTIGER skim r=5"),
-  as_paint(gmm,  "GMM-HMM skim", numeric_state = FALSE)) %>%
+  as_paint(mb,   "MolB-RTI (r=2)"),
+  as_paint(skim %>% filter(name %in% unique(mb$name)), "Skim-RTI (r=5)"),
+  as_paint(gmm,  "Skim-BIN", numeric_state = FALSE)) %>%
   mutate(chr    = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)),
          name   = factor(name_lab(name), levels = name_lab(ord)),
-         method = factor(method, c("GBTS r=2","RTIGER skim r=5","GMM-HMM skim")),
-         ylo = case_when(method == "GBTS r=2" ~ 0.69, method == "RTIGER skim r=5" ~ 0.35, TRUE ~ 0.00),
-         yhi = case_when(method == "GBTS r=2" ~ 1.00, method == "RTIGER skim r=5" ~ 0.66, TRUE ~ 0.32))
+         method = factor(method, c("MolB-RTI (r=2)","Skim-RTI (r=5)","Skim-BIN")),
+         ylo = case_when(method == "MolB-RTI (r=2)" ~ 0.69, method == "Skim-RTI (r=5)" ~ 0.35, TRUE ~ 0.00),
+         yhi = case_when(method == "MolB-RTI (r=2)" ~ 1.00, method == "Skim-RTI (r=5)" ~ 0.66, TRUE ~ 0.32))
 
 ggplot(paint3, aes(xmin = start_bp/1e6, xmax = end_bp/1e6,
                    ymin = ylo, ymax = yhi, fill = state)) +
@@ -96,8 +103,8 @@ ggplot(paint3, aes(xmin = start_bp/1e6, xmax = end_bp/1e6,
   facet_grid(name ~ chr, scales = "free_x", space = "free_x", switch = "y") +
   scale_fill_manual(values = pal, drop = FALSE) +
   scale_x_continuous(labels = scales::unit_format(unit = "", scale = 1)) +
-  labs(title = "Ancestry calls — 16 lines, 3 callers per sample",
-       subtitle = "per sample top→bottom: GBTS r=2 / RTIGER skim r=5 / GMM-HMM skim | gold REF, green HET, purple ALT | bold = LowQuality",
+  labs(title = "Ancestry calls — 16 lines, 3 call sets per sample",
+       subtitle = "per sample top→bottom: MolB-RTI (r=2) / Skim-RTI (r=5) / Skim-BIN | gold REF, green HET, purple ALT | bold = LowQuality",
        x = "Position (Mb)", fill = "Genotype") +
   ggpubr::theme_classic2(base_size = 9) +
   theme(legend.position = "bottom",
@@ -111,11 +118,11 @@ ggplot(paint3, aes(xmin = start_bp/1e6, xmax = end_bp/1e6,
         axis.text.x = element_text(size = 6))
 ```
 
-**Read:** the two skim lanes (RTIGER, GMM-HMM) are near-copies of each other and
-both sit **below** the GBTS lane. The skim/GBTS gap is a platform effect
+**Read:** the two skim lanes (Skim-RTI, Skim-BIN) are near-copies of each other and
+both sit **below** the MolB-RTI lane. The Skim/MolB gap is a platform effect
 reproduced by two independent skim callers, not a single-caller artifact.
 `PN4_SID330` is the lone sample where the two skim lanes agree with each other but
-**disagree in pattern** with GBTS — the sample-identity swap flagged in
+**disagree in pattern** with MolB-RTI — the sample-identity swap flagged in
 `molbreeding_vs_skim_calibrated.qmd`.
 
 ## Donor genome-fraction — the three callers quantified
@@ -129,10 +136,10 @@ frac <- function(seg, lab, numeric_state = TRUE) {
     summarise(!!paste0(lab,"_donor") := sum(mb[donor])/sum(mb),
               !!paste0(lab,"_het")   := sum(mb[is_het])/sum(mb), .groups = "drop")
 }
-tab <- frac(mb, "gbts") %>%
-  left_join(frac(skim %>% filter(name %in% unique(mb$name)), "rtiger"), by = "name") %>%
-  left_join(frac(gmm, "gmm", numeric_state = FALSE), by = "name") %>%
-  arrange(gbts_donor)
+tab <- frac(mb, "MolB-RTI") %>%
+  left_join(frac(skim %>% filter(name %in% unique(mb$name)), "Skim-RTI"), by = "name") %>%
+  left_join(frac(gmm, "Skim-BIN", numeric_state = FALSE), by = "name") %>%
+  arrange(`MolB-RTI_donor`)
 knitr::kable(tab, digits = 3)
 
 cat("\nmeans (NILs only, B73 checks dropped):\n")
@@ -141,28 +148,28 @@ tab %>% filter(!name %in% checks) %>%
   knitr::kable()
 ```
 
-**Read:** RTIGER-skim and GMM-HMM-skim donor fractions are near-identical per
-sample (means donor 0.093 vs 0.081, het 0.062 vs 0.059) and both sit below GBTS
+**Read:** Skim-RTI and Skim-BIN donor fractions are near-identical per
+sample (means donor 0.093 vs 0.081, het 0.062 vs 0.059) and both sit below MolB-RTI
 (donor 0.141, het 0.116). Two independent skim callers reproduce the same
-under-call relative to GBTS — so the gap is platform/coverage (and/or GBTS r=2
-over-calling), not a RTIGER quirk. `PN4_SID330`: both skim callers ~0.08 donor vs
-GBTS 0.29 — independent corroboration that this line's GBTS and skim DNA are not
-the same sample.
+under-call relative to MolB-RTI — so the gap is platform/coverage (and/or MolB-RTI
+r=2 over-calling), not a RTIGER quirk. `PN4_SID330`: both skim callers ~0.08 donor
+vs MolB-RTI 0.29 — independent corroboration that this line's MolB and skim DNA are
+not the same sample.
 
-## Two-way — GBTS vs GMM-HMM skim
+## Two-way — MolB-RTI vs Skim-BIN
 
-The GBTS-vs-skim comparison through the GMM-HMM caller alone (top = GBTS r=2,
-bottom = GMM-HMM skim), the GMM-HMM analog of the RTIGER two-way figure in
+The MolB-vs-Skim comparison through the BIN caller alone (top = MolB-RTI (r=2),
+bottom = Skim-BIN), the Skim-BIN analog of the Skim-RTI two-way figure in
 `molbreeding_vs_skim_calibrated.qmd`.
 
 ```{r painting-2way-gmm, fig.width=12, fig.height=16}
 paint2 <- bind_rows(
-  as_paint(mb, "GBTS r=2"),
-  as_paint(gmm, "GMM-HMM skim", numeric_state = FALSE)) %>%
+  as_paint(mb, "MolB-RTI (r=2)"),
+  as_paint(gmm, "Skim-BIN", numeric_state = FALSE)) %>%
   mutate(chr    = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)),
          name   = factor(name_lab(name), levels = name_lab(ord)),
-         ylo = if_else(method == "GBTS r=2", 0.52, 0.00),
-         yhi = if_else(method == "GBTS r=2", 1.00, 0.48))
+         ylo = if_else(method == "MolB-RTI (r=2)", 0.52, 0.00),
+         yhi = if_else(method == "MolB-RTI (r=2)", 1.00, 0.48))
 
 ggplot(paint2, aes(xmin = start_bp/1e6, xmax = end_bp/1e6,
                    ymin = ylo, ymax = yhi, fill = state)) +
@@ -170,7 +177,7 @@ ggplot(paint2, aes(xmin = start_bp/1e6, xmax = end_bp/1e6,
   facet_grid(name ~ chr, scales = "free_x", space = "free_x", switch = "y") +
   scale_fill_manual(values = pal, drop = FALSE) +
   scale_x_continuous(labels = scales::unit_format(unit = "", scale = 1)) +
-  labs(title = "Ancestry calls — 16 lines, GBTS r=2 (top) vs GMM-HMM skim (bottom)",
+  labs(title = "Ancestry calls — 16 lines, MolB-RTI (r=2) (top) vs Skim-BIN (bottom)",
        subtitle = "gold REF, green HET, purple ALT | bold = LowQuality",
        x = "Position (Mb)", fill = "Genotype") +
   ggpubr::theme_classic2(base_size = 9) +
@@ -187,9 +194,9 @@ ggplot(paint2, aes(xmin = start_bp/1e6, xmax = end_bp/1e6,
 
 ## Notes
 
-- GMM-HMM calls staged from the BzeaSeq pipeline output
+- Skim-BIN calls staged from the BzeaSeq pipeline output
   `all_samples_ancestry_segments.bed` (the lab-meeting call set) to
   `data/bzeaseq_ancestry/gmm_hmm_segments_16lines.tsv`; not recomputed here.
-- The GMM-HMM and RTIGER-skim callers run on the **same skim data**; their close
-  agreement is an independent check that the GBTS-vs-skim divergence is not a
-  caller artifact.
+- Skim-BIN and Skim-RTI run on the **same skim reads** (different filters + callers);
+  their close agreement is an independent check that the MolB-vs-Skim divergence is
+  not a caller artifact.

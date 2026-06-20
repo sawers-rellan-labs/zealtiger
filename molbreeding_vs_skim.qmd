@@ -1,5 +1,5 @@
 ---
-title: "MolBreeding GBTS (real counts) vs SNP50K skim — ancestry-call concordance"
+title: "MolB-RTI vs Skim-RTI vs BrB-RTI — ancestry-call concordance (real counts, shared r=8)"
 author: "Fausto Rodríguez-Zapata"
 date: "`r Sys.Date()`"
 format:
@@ -13,9 +13,10 @@ execute:
   warning: false
   message: false
 params:
-  mb_calls:   "data/molbreeding_gbts/SNP_wsfilt/calls_common_schema.csv"  # GBTS real counts, wideseq-filtered, r=8, all 16
-  mb_full:    "data/molbreeding_gbts/SNP/calls_common_schema.csv"         # GBTS real counts, all 20,347 v5 SNPs, r=8
+  mb_calls:   "data/molbreeding_gbts/SNP_wsfilt/calls_common_schema.csv"  # target-seq real counts, wideseq-filtered, r=8, all 16
+  mb_full:    "data/molbreeding_gbts/SNP/calls_common_schema.csv"         # target-seq real counts, all 20,347 v5 SNPs, r=8
   skim_calls: "data/rtiger_50K/calls_taxa_r8.csv"                         # skim, per-taxon r=8
+  brb_calls:  "data/brbseq/calls_common_schema.csv"                       # BRB-seq 3' RNA-seq real counts, r=8 (no wsfilt)
   sample_map: "data/molbreeding_45k_sample_map.tsv"
   mb_counts:  "data/molbreeding_gbts/SNP_wsfilt/counts"                   # filtered marker grid (RTIGER 6-col)
   sim_seg:    "results/rtiger_45k_benchmark/truth_segments.csv"           # consensus-map simulation (NULL)
@@ -25,9 +26,22 @@ params:
 **Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
 
 Cross-validation of ancestry source **#2 (SNP50K skim, ~0.4×)** against source **#5
-(MolBreeding GBTS)** for the BZea NILs genotyped on both platforms.
+(MolBreeding target sequencing)** for the BZea NILs genotyped on both platforms, with a third
+real-count platform — **BRB-seq 3′ bulk RNA-seq (~1.5–3×)** — layered in as an
+additional cross-check on the NILs it shares.
 
-**This is the real-count pipeline.** MolBreeding source #5 is **GBTS target-capture
+**BRB-seq layer (source #6).** GATK `CollectAllelicCounts` over the brbseq
+joint-called SNP sites gives per-sample `REF_COUNT`/`ALT_COUNT` with REF = B73 NAM
+v5 and ALT = observed alternate, so — like the skim and target sequencing — it is fed to RTIGER
+as **real allele counts** (`fit_rtiger_brbseq.R`, r = 8, MLE, no wsfilt: the brbseq
+sites are used as-is, since RNA-seq covers only expressed regions and overlaps the
+wideseq donor panel at too few markers to filter). BRB-seq run_full sequenced plates
+PN1–PN4 (SID 1–384), so it overlaps the comparison only on the **8 PN4 samples**
+(7 teosinte NILs + the `PN4_SID326` B73-bulk check); the PN6/PN12 NILs have no
+BRB-seq counterpart here. BRB-seq sections below are therefore restricted to those
+8 samples, while the target-sequencing-vs-skim comparison keeps all 16.
+
+**This is the real-count pipeline.** MolBreeding source #5 is **target-capture
 sequencing** (~110× depth, ~0.2% missing), *not* a hybridization array — so it is fed to
 RTIGER as **real allele counts** (`REF_COUNT`/`ALT_COUNT` from the GATK table), exactly
 like the skim, rather than the 0/1/2 pseudo-counts of the earlier array-style attempt.
@@ -52,15 +66,24 @@ Calls are RTIGER segments on B73 NAM v5 (`name, chr, start_bp, end_bp, state`;
 > modeled recombination process (MaizeGDB consensus map, ~1,783 cM; `m=10` interference;
 > BC2S3 pedigree), **not ground truth**.
 
+**Naming.** Call sets are labelled `Source-Caller`. Sources: **Skim** (SNP50K
+~0.4× skim), **MolB** (MolBreeding target-capture sequencing, ~110×), **BrB** (BRB-seq 3′
+RNA-seq). Caller here is **RTI** = RTIGER, run on all three at a shared **r=8**. MolB
+has two RTIGER marker sets: **MolB-RTI (wsfilt)** (wideseq donor panel, 9,157 SNPs;
+the primary) and **MolB-RTI (full)** (all 20,347 lifted v5 SNPs). The consensus-map
+simulation is **Null**. (A 1 Mb-bin GMM-HMM caller, **BIN**, is compared elsewhere;
+it does not appear here.)
+
 ## Setup
 
 ```{r setup}
 library(tidyverse); library(GenomicRanges); library(S4Vectors)
 source("R/06_score_rtiger.R")
 
-mb      <- read_csv(params$mb_calls,   show_col_types = FALSE)   # GBTS wsfilt, r=8
-mb_full <- read_csv(params$mb_full,    show_col_types = FALSE)   # GBTS full,  r=8
+mb      <- read_csv(params$mb_calls,   show_col_types = FALSE)   # target-seq wsfilt, r=8
+mb_full <- read_csv(params$mb_full,    show_col_types = FALSE)   # target-seq full,  r=8
 skim    <- read_csv(params$skim_calls, show_col_types = FALSE)   # skim, per-taxon r=8
+brb     <- read_csv(params$brb_calls,  show_col_types = FALSE)   # BRB-seq RNA, r=8 (no wsfilt)
 smap    <- read_tsv(params$sample_map, show_col_types = FALSE)
 sl      <- read_csv(params$seqlengths, show_col_types = FALSE)
 sim_seg <- read_csv(params$sim_seg,    show_col_types = FALSE)
@@ -73,8 +96,13 @@ spacing <- sum(sl$len) / nrow(grid)
 
 # samples present on both platforms (the 2 B73 checks have no skim NIL match)
 samples <- intersect(unique(mb$name), unique(skim$name))
-cat(sprintf("MolBreeding GBTS samples: %d (all kept, no QC) | shared with skim: %d\n",
+# BRB-seq overlaps only the PN4 subset (run_full = plates PN1-PN4)
+brb_samples <- intersect(unique(brb$name), unique(mb$name))
+cat(sprintf("MolB samples: %d (all kept, no QC) | shared with Skim: %d\n",
             n_distinct(mb$name), length(samples)))
+cat(sprintf("BrB samples: %d | shared with MolB: %d | also with Skim: %d\n",
+            n_distinct(brb$name), length(brb_samples),
+            length(intersect(brb_samples, samples))))
 cat(sprintf("wideseq markers: %d (~%.0f kb spacing; r=8 detection limit ≈ %.1f Mb)\n",
             nrow(grid), spacing/1e3, 8*spacing/1e6))
 
@@ -104,12 +132,14 @@ checks <- c("PN4_SID326", "PN6_SID576")
 dose <- dosage(mb) %>% dplyr::rename(gbts_wsfilt = dosage) %>%
   left_join(dosage(mb_full) %>% dplyr::rename(gbts_full = dosage), by = "name") %>%
   left_join(dosage(skim)    %>% dplyr::rename(skim = dosage),       by = "name") %>%
+  left_join(dosage(brb)     %>% dplyr::rename(brbseq = dosage),     by = "name") %>%
   mutate(is_B73_check = name %in% checks) %>% arrange(gbts_full)
 dose
-cat(sprintf("mean donor dosage — GBTS full %.3f | GBTS wsfilt %.3f | skim (shared) %.3f\n",
+cat(sprintf("mean donor dosage — MolB-RTI full %.3f | MolB-RTI wsfilt %.3f | Skim-RTI (shared) %.3f | BrB-RTI (shared) %.3f\n",
             mean(dose$gbts_full), mean(dose$gbts_wsfilt),
-            mean(dose$skim[!is.na(dose$skim)])))
-cat(sprintf("B73-bulk checks dosage (GBTS full): %s — expect ≈ 0\n",
+            mean(dose$skim[!is.na(dose$skim)]),
+            mean(dose$brbseq[!is.na(dose$brbseq)])))
+cat(sprintf("B73-bulk checks dosage (MolB-RTI full): %s — expect ≈ 0\n",
             paste(sprintf("%s=%.3f", checks,
                           dose$gbts_full[match(checks, dose$name)]), collapse = ", ")))
 ```
@@ -123,27 +153,77 @@ paired <- map_dfr(samples, function(s) {
 })
 ```
 
-## Confusion matrix — GBTS vs skim
+## Confusion matrix — MolB-RTI vs Skim-RTI
 
-Rows = GBTS state (wideseq-filtered, r=8), cols = skim (per-taxon r=8); cell = count (row %).
+Rows = MolB-RTI state (wsfilt, r=8), cols = Skim-RTI (per-taxon r=8); cell = count (row %).
 
 ```{r confusion}
 cm <- table(gbts = factor(paired$gbts, 0:2), skim = factor(paired$skim, 0:2))
 overall <- sum(diag(cm)) / sum(cm)
 prop <- sweep(cm, 1, rowSums(cm), "/")
 disp <- matrix(sprintf("%d (%.1f%%)", cm, 100*prop), nrow = 3,
-               dimnames = list(`gbts \\ skim` = c("0 recurrent","1 het","2 donor"),
+               dimnames = list(`MolB-RTI \\ Skim-RTI` = c("0 recurrent","1 het","2 donor"),
                                c("0 recurrent","1 het","2 donor")))
 knitr::kable(disp, align = "r",
-             caption = sprintf("GBTS (rows) vs skim (cols): count (row %%). Overall concordance %.3f.", overall))
+             caption = sprintf("MolB-RTI (rows) vs Skim-RTI (cols): count (row %%). Overall concordance %.3f.", overall))
 dp <- paired$gbts %in% c(1, 2)
-cat(sprintf("GBTS donor-present markers: %d | skim also donor-present: %.1f%%\n",
+cat(sprintf("MolB-RTI donor-present markers: %d | Skim-RTI also donor-present: %.1f%%\n",
             sum(dp), 100*mean(paired$skim[dp] %in% c(1,2))))
-cat(sprintf("GBTS homozygous-donor markers: %d | skim also hom-donor: %.1f%%\n",
+cat(sprintf("MolB-RTI homozygous-donor markers: %d | Skim-RTI also hom-donor: %.1f%%\n",
             sum(paired$gbts == 2), 100*mean(paired$skim[paired$gbts == 2] == 2)))
 ```
 
-## Segment scale & crossover count — GBTS vs skim vs null
+## BrB-RTI cross-check (3′ RNA-seq, shared PN4 NILs)
+
+BrB-RTI state on the common grid for the `r length(brb_samples)` shared samples,
+against MolB-RTI (reference) and Skim-RTI. RNA-seq covers only expressed regions at
+low depth, so RTIGER sees sparse ALT reads and fragments — treat BrB-RTI as a noisy
+qualitative read of donor presence, not a segment-resolution caller.
+
+```{r brb-grid}
+paired_b <- map_dfr(brb_samples, function(s) {
+  g <- state_at(mb, s); r <- state_at(brb, s); k <- state_at(skim, s)
+  ok <- !is.na(g) & !is.na(r)
+  tibble(name = s, gbts = g[ok], brbseq = r[ok],
+         skim = if (s %in% samples) k[ok] else NA_integer_)
+})
+```
+
+Rows = BrB-RTI state, cols = MolB-RTI (wsfilt, r=8); cell = count (row %).
+
+```{r brb-vs-gbts}
+cm_bg <- table(brbseq = factor(paired_b$brbseq, 0:2), gbts = factor(paired_b$gbts, 0:2))
+prop  <- sweep(cm_bg, 1, rowSums(cm_bg), "/")
+disp  <- matrix(sprintf("%d (%.1f%%)", cm_bg, 100*prop), nrow = 3,
+                dimnames = list(`BrB-RTI \\ MolB-RTI` = c("0 recurrent","1 het","2 donor"),
+                                c("0 recurrent","1 het","2 donor")))
+knitr::kable(disp, align = "r",
+             caption = sprintf("BrB-RTI (rows) vs MolB-RTI (cols): count (row %%). Overall concordance %.3f.",
+                               sum(diag(cm_bg))/sum(cm_bg)))
+dp <- paired_b$gbts %in% c(1, 2)
+cat(sprintf("MolB-RTI donor-present markers: %d | BrB-RTI also donor-present: %.1f%%\n",
+            sum(dp), 100*mean(paired_b$brbseq[dp] %in% c(1,2))))
+cat(sprintf("BrB-RTI donor-present markers: %d | MolB-RTI also donor-present: %.1f%%\n",
+            sum(paired_b$brbseq %in% c(1,2)),
+            100*mean(paired_b$gbts[paired_b$brbseq %in% c(1,2)] %in% c(1,2))))
+```
+
+Rows = BrB-RTI state, cols = Skim-RTI (per-taxon r=8); cell = count (row %). Restricted
+to samples on all three platforms.
+
+```{r brb-vs-skim}
+pb3   <- paired_b %>% filter(!is.na(skim))
+cm_bk <- table(brbseq = factor(pb3$brbseq, 0:2), skim = factor(pb3$skim, 0:2))
+prop  <- sweep(cm_bk, 1, rowSums(cm_bk), "/")
+disp  <- matrix(sprintf("%d (%.1f%%)", cm_bk, 100*prop), nrow = 3,
+                dimnames = list(`BrB-RTI \\ Skim-RTI` = c("0 recurrent","1 het","2 donor"),
+                                c("0 recurrent","1 het","2 donor")))
+knitr::kable(disp, align = "r",
+             caption = sprintf("BrB-RTI (rows) vs Skim-RTI (cols): count (row %%). Overall concordance %.3f.",
+                               sum(diag(cm_bk))/sum(cm_bk)))
+```
+
+## Segment scale & crossover count — MolB-RTI vs Skim-RTI vs Null
 
 ```{r seg-scale}
 metrics <- function(seg, lab, nsamp) {
@@ -157,40 +237,52 @@ metrics <- function(seg, lab, nsamp) {
 }
 mb_s   <- mb   %>% filter(name %in% samples)
 skim_s <- skim %>% filter(name %in% samples)
+brb_s  <- brb  %>% filter(name %in% brb_samples)
 bind_rows(
-  metrics(mb_s,    "GBTS wsfilt (r=8)", length(samples)),
-  metrics(mb_full %>% filter(name %in% samples), "GBTS full (r=8)", length(samples)),
-  metrics(skim_s,  "skim (r=8)",        length(samples)),
-  metrics(sim_seg, "simulation (null)", n_distinct(sim_seg$name))
+  metrics(mb_s,    "MolB-RTI (wsfilt, r=8)", length(samples)),
+  metrics(mb_full %>% filter(name %in% samples), "MolB-RTI (full, r=8)", length(samples)),
+  metrics(skim_s,  "Skim-RTI (r=8)",        length(samples)),
+  metrics(brb_s,   "BrB-RTI (r=8, PN4 only)", length(brb_samples)),
+  metrics(sim_seg, "Null (simulation)", n_distinct(sim_seg$name))
 )
 ```
 
 ## Introgression-size distribution
 
 ```{r intro-sizes}
-gbts_b <- donor_blocks(mb_s)   %>% mutate(src = "GBTS wsfilt (r=8)")
-skim_b <- donor_blocks(skim_s) %>% mutate(src = "skim (r=8)")
+gbts_b <- donor_blocks(mb_s)   %>% mutate(src = "MolB-RTI (wsfilt, r=8)")
+skim_b <- donor_blocks(skim_s) %>% mutate(src = "Skim-RTI (r=8)")
+brb_b  <- donor_blocks(brb_s)  %>% mutate(src = "BrB-RTI (r=8, PN4)")
 sim_b  <- donor_blocks(sim_seg)
-ggplot(bind_rows(gbts_b, skim_b), aes(x = size_mb, fill = src)) +
+ggplot(bind_rows(gbts_b, skim_b, brb_b), aes(x = size_mb, fill = src)) +
   geom_histogram(aes(y = after_stat(density)), position = "identity", alpha = 0.5, bins = 30) +
   geom_freqpoly(data = sim_b, aes(x = size_mb, y = after_stat(density)),
                 bins = 30, colour = "grey20", linewidth = 0.9, inherit.aes = FALSE) +
-  scale_fill_manual(values = c("GBTS wsfilt (r=8)" = "forestgreen", "skim (r=8)" = "purple4")) +
+  scale_fill_manual(values = c("MolB-RTI (wsfilt, r=8)" = "forestgreen", "Skim-RTI (r=8)" = "purple4",
+                               "BrB-RTI (r=8, PN4)" = "orange3")) +
   scale_x_log10() +
   labs(x = "introgression size (Mb, log scale)", y = "density", fill = NULL,
-       title = "Introgression-size distribution (all 16 NILs, 2-state, r=8)",
-       subtitle = "grey line = consensus-map simulation (null expectation)") + theme_bw()
+       title = "Introgression-size distribution (2-state, r=8)",
+       subtitle = "MolB-RTI/Skim-RTI = all 16 NILs; BrB-RTI = 8 shared PN4; grey line = Null (consensus-map simulation)") +
+  theme_bw()
 ```
 
 ## Donor-call composition — het vs homozygous donor
 
 ```{r donor-composition}
+# per-name marker total differs by source (MolB/Skim on full grid, BrB on its
+# shared subset), so each carries its own denominator
+tot_gs <- count(paired,   name, name = "tot")
+tot_b  <- count(paired_b, name, name = "tot")
 comp <- bind_rows(
-  paired %>% transmute(name, platform = "GBTS wsfilt (r=8)", state = gbts),
-  paired %>% transmute(name, platform = "skim (r=8)",        state = skim)) %>%
-  filter(state %in% c(1, 2)) %>% count(name, platform, state) %>%
-  left_join(count(paired, name, name = "tot"), by = "name") %>%
-  mutate(pct = n/tot, state = factor(state, c(1,2), c("het","homozygous donor")))
+  paired   %>% transmute(name, platform = "MolB-RTI (wsfilt, r=8)", state = gbts) %>%
+    filter(state %in% c(1,2)) %>% count(name, platform, state) %>% left_join(tot_gs, by = "name"),
+  paired   %>% transmute(name, platform = "Skim-RTI (r=8)",        state = skim) %>%
+    filter(state %in% c(1,2)) %>% count(name, platform, state) %>% left_join(tot_gs, by = "name"),
+  paired_b %>% transmute(name, platform = "BrB-RTI (r=8, PN4)", state = brbseq) %>%
+    filter(state %in% c(1,2)) %>% count(name, platform, state) %>% left_join(tot_b, by = "name")) %>%
+  mutate(pct = n/tot, state = factor(state, c(1,2), c("het","homozygous donor")),
+         platform = factor(platform, c("MolB-RTI (wsfilt, r=8)", "Skim-RTI (r=8)", "BrB-RTI (r=8, PN4)")))
 ord <- paired %>% group_by(name) %>% summarise(d = mean(gbts)/2) %>% arrange(d) %>% pull(name)
 comp$name <- factor(comp$name, levels = ord)
 ggplot(comp, aes(y = name, x = pct, fill = state)) +
@@ -198,22 +290,94 @@ ggplot(comp, aes(y = name, x = pct, fill = state)) +
   scale_fill_manual(values = c("het" = "forestgreen", "homozygous donor" = "purple4")) +
   scale_x_continuous(labels = scales::percent) +
   labs(x = "% of genome called donor", y = NULL, fill = NULL,
-       title = "Donor calls as % of genome (recurrent not drawn)") + theme_bw()
+       title = "Donor calls as % of genome (recurrent not drawn)",
+       subtitle = "BrB-RTI covers only the 8 shared PN4 samples") + theme_bw()
 ```
+
+## Chromosome painting — MolB-RTI vs Skim-RTI vs BrB-RTI
+
+Full-genome ancestry painting, three lanes per sample: **top = MolB-RTI (wsfilt,
+r=8), middle = Skim-RTI (r=8), bottom = BrB-RTI (r=8)**. Chromosomes are
+proportional-width facet columns; segments are painted over their exact
+`start_bp→end_bp` extent (`geom_rect`). Palette follows the BzeaSeq convention
+(`REF` gold, `HET` springgreen4, `ALT` purple4). Lines are ordered by MolB-RTI donor
+dosage with the two B73-bulk checks pinned on top; `LowQuality` lines (sample-map QC
+flag) are in **bold**. The BrB-RTI lane is present only for the 8 shared PN4 samples
+— the other lines show a blank bottom lane (no BRB-seq counterpart in `run_full`).
+
+```{r chr-painting, fig.width=12, fig.height=16}
+pal <- c(REF = "gold", HET = "springgreen4", ALT = "purple4")
+as_paint <- function(seg, method) tibble(
+  name = seg$name, chr = seg$chr, start_bp = seg$start_bp, end_bp = seg$end_bp,
+  state = factor(seg$state, 0:2, c("REF","HET","ALT")), method = method)
+
+dose_ord <- mb %>% mutate(len = end_bp - start_bp + 1) %>% group_by(name) %>%
+  summarise(d = sum(len * state/2)/sum(len), .groups = "drop")
+ord  <- c(checks, dose_ord %>% filter(!name %in% checks) %>% arrange(d) %>% pull(name))
+lowq <- smap$sample_id[smap$quality == "LowQuality" & !is.na(smap$quality)]
+name_lab <- function(x) if_else(x %in% lowq, paste0("**", x, "**"), x)
+
+paint3 <- bind_rows(
+  as_paint(mb,                                      "MolB-RTI (wsfilt, r=8)"),
+  as_paint(skim %>% filter(name %in% unique(mb$name)), "Skim-RTI (r=8)"),
+  as_paint(brb,                                     "BrB-RTI (r=8)")) %>%
+  mutate(chr    = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)),
+         name   = factor(name_lab(name), levels = name_lab(ord)),
+         method = factor(method, c("MolB-RTI (wsfilt, r=8)","Skim-RTI (r=8)","BrB-RTI (r=8)")),
+         ylo = case_when(method == "MolB-RTI (wsfilt, r=8)" ~ 0.69, method == "Skim-RTI (r=8)" ~ 0.35, TRUE ~ 0.00),
+         yhi = case_when(method == "MolB-RTI (wsfilt, r=8)" ~ 1.00, method == "Skim-RTI (r=8)" ~ 0.66, TRUE ~ 0.32))
+
+ggplot(paint3, aes(xmin = start_bp/1e6, xmax = end_bp/1e6,
+                   ymin = ylo, ymax = yhi, fill = state)) +
+  geom_rect() +
+  facet_grid(name ~ chr, scales = "free_x", space = "free_x", switch = "y") +
+  scale_fill_manual(values = pal, drop = FALSE) +
+  scale_x_continuous(labels = scales::unit_format(unit = "", scale = 1)) +
+  labs(title = "Ancestry calls — 16 lines, 3 source–caller combos per sample",
+       subtitle = "per sample top→bottom: MolB-RTI (wsfilt) / Skim-RTI / BrB-RTI (all r=8) | gold REF, green HET, purple ALT | bold = LowQuality | blank bottom lane = no BrB-RTI",
+       x = "Position (Mb)", fill = "Genotype") +
+  ggpubr::theme_classic2(base_size = 9) +
+  theme(legend.position = "bottom",
+        strip.background = element_blank(),
+        strip.text.x = element_text(face = "bold"),
+        strip.text.y.left = ggtext::element_markdown(angle = 0, hjust = 1, size = 7),
+        panel.spacing.x = unit(0.05, "lines"),
+        panel.spacing.y = unit(0.05, "lines"),
+        axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+        axis.title.y = element_blank(), axis.line.y = element_blank(),
+        axis.text.x = element_text(size = 6))
+```
+
+**Read:** the BrB-RTI lane (bottom) is sparse and speckled relative to the MolB-RTI
+and Skim-RTI lanes — short, scattered donor blocks rather than the long contiguous
+introgressions MolB-RTI resolves, and present only for the 8 PN4 lines. It picks up
+the largest MolB-RTI donor regions in places but misses most, consistent with the
+~13% marker-level donor recall above.
 
 ## Findings
 
-- **Real-count pipeline.** Source #5 is GBTS sequencing (~110×), so RTIGER runs on real
+- **Real-count pipeline.** Source #5 is target-capture sequencing (~110×), so RTIGER runs on real
   `REF_COUNT`/`ALT_COUNT` like the skim — not the array-style 0/1/2 pseudo-counts. All 16
   samples pass with no QC filter; the data is uniformly high-quality (missing ~0.2%).
 - **Polarity & controls check out.** Per-sample donor dosage is low (BC2S3-like, far from
   the ~0.875 of a flipped polarity), and the two B73-bulk checks read ≈ 0 donor — a
   built-in validity test passed without external truth.
-- **Cross-source concordance with the skim is high** at marker level; per-sample dosage
-  tracks the skim in rank on the shared NILs, with GBTS reading somewhat more donor
-  (especially het) than the coverage-limited skim — the expected direction (the ~110×
-  GBTS resolves heterozygosity the ~0.4× skim misses).
+- **Cross-source concordance between MolB-RTI and Skim-RTI is high** at marker level;
+  per-sample dosage tracks Skim-RTI in rank on the shared NILs, with MolB-RTI reading
+  somewhat more donor (especially het) than the coverage-limited Skim-RTI — the expected
+  direction (the ~110× target-sequencing platform resolves heterozygosity the ~0.4× skim misses).
 - **The simulation is a null, not truth** — consensus-map (~1,783 cM) modeled expectation;
   divergence from it is an observation, not an error. "Resolution" = the detection limit
   ≈ r × marker spacing at r=8, distinct from the (larger) median segment size, a result.
+- **BrB-RTI (source #6) is a noisy qualitative layer, not a segment caller.** It is fed to
+  RTIGER as real counts like the others, but 3′ RNA-seq covers only expressed regions at
+  ~1.5–3× with sparse ALT reads, so the HMM fragments into many short donor blocks and the
+  per-sample donor dosage is compressed toward zero (well below the MolB-RTI/Skim-RTI estimate
+  and the BC2S3 ≈ 0.125 expectation). On the 8 shared PN4 NILs the headline MolB-RTI concordance
+  (~0.80) is almost entirely recurrent-state agreement: BrB-RTI recovers only ~13% of the
+  MolB-RTI donor markers, and most of its own donor calls are not confirmed by MolB-RTI. It does
+  not resolve het-vs-homozygous donor or block boundaries, and the `PN4_SID326` B73-bulk check
+  does **not** read cleanly recurrent (RNA noise over-segments it). So BrB-RTI here is at best
+  a coarse hint of where teosinte is, not an independent ancestry map — useful as a sanity
+  layer, not a caller.
 ```
