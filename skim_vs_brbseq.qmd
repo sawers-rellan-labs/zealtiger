@@ -1,0 +1,181 @@
+---
+title: "Skim-RTI vs BrB-RTI — ancestry concordance on pedigree-matched NILs"
+author: "Fausto Rodríguez-Zapata"
+date: "`r Sys.Date()`"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    df-print: paged
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+params:
+  brb_calls:  "results/sim_calibration/brbseq_calls/calls_common_schema.csv"            # BrB-RTI, calibrated r=5
+  skim_calls: "data/rtiger_50K/calls_taxa_r5.csv"                                       # Skim-RTI, per-taxon r=5
+  brb_meta:   "data/BRBseq_metadata.csv"                                                # BRB sample_id -> pedigree
+  skim_ped:   "data/skim_sample_pedigree.csv"                                           # skim sample -> pedigree (.B dropped)
+  mb_counts:  "results/sim_calibration/gbts_calls/SNP_wsfilt/counts"                    # wideseq grid (9,157)
+---
+
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
+Skim-RTI vs BrB-RTI ancestry concordance, matched **by NIL pedigree string** — not by
+the `PN#_SID#` plate index, which is mislabeled in the BRB-seq run
+(`docs/brbseq-sample-mislabeling.md`, `docs/brbseq_sample_identity.html`). The BRB-seq
+plate id does not track the NIL; the **pedigree string is the cross-experiment
+identifier**. The only formatting difference between the two metadata files is a
+trailing **`.B`** the MolBreeding/skim registry appends and the BRB metadata omits, so
+we **drop `.B`** before joining.
+
+- BrB-RTI sample identity: `BRBseq_metadata.csv` (`sample_id` → `genotype`, drop `.B`).
+- Skim-RTI sample identity: the BZea registry (`sample_metatada.csv` → staged as
+  `data/skim_sample_pedigree.csv`, already `.B`-dropped).
+
+MolB-RTI is **not** included: the right NILs aren't in the 16-sample MolBreeding set,
+so it shares no pedigree with the BRB-seq run.
+
+## Setup
+
+```{r setup}
+library(tidyverse); library(data.table); library(GenomicRanges); library(ggpubr)
+pal <- c(REF = "gold", HET = "springgreen4", ALT = "purple4")
+chop <- function(x) sub("\\.B$", "", x)
+
+brb  <- read_csv(params$brb_calls,  show_col_types = FALSE)
+skim <- read_csv(params$skim_calls, show_col_types = FALSE)
+brbmeta <- read_csv(params$brb_meta, show_col_types = FALSE) %>%
+  transmute(sid = sample_id, nil = chop(genotype))
+skimped <- read_csv(params$skim_ped, show_col_types = FALSE)   # sample, pedigree (.B-dropped)
+
+# assign each call set its NIL pedigree
+brb  <- brb  %>% mutate(sid = as.integer(sub(".*_SID", "", name)),
+                        nil = brbmeta$nil[match(sid, brbmeta$sid)])
+skim <- skim %>% mutate(nil = skimped$pedigree[match(name, skimped$sample)])
+
+# pair BRB <-> skim on shared pedigree (one skim sample per NIL)
+brb_nil  <- brb  %>% distinct(brb_name = name, nil)
+skim_nil <- skim %>% filter(!is.na(nil)) %>% distinct(skim_name = name, nil)
+pairs <- brb_nil %>% left_join(skim_nil, by = "nil") %>% arrange(nil)
+
+# common wideseq grid + state-on-grid
+cf   <- read_tsv(list.files(params$mb_counts, full.names = TRUE)[1],
+                 col_names = c("chr_label","bp","rb","rc","ab","ac"), show_col_types = FALSE)
+grid <- tibble(chr = as.integer(sub("chr","",cf$chr_label)), bp = cf$bp)
+gg   <- GRanges(grid$chr, IRanges(grid$bp, width = 1))
+state_on_grid <- function(seg, nm) {
+  d <- seg[seg$name == nm, ]
+  d$state[findOverlaps(gg, GRanges(d$chr, IRanges(d$start_bp, d$end_bp)), select = "first")]
+}
+
+cat(sprintf("BrB-RTI samples: %d | with a pedigree-matched skim sample: %d | unmatched: %s\n",
+            n_distinct(brb$name), sum(!is.na(pairs$skim_name)),
+            paste(pairs$brb_name[is.na(pairs$skim_name)], collapse = ", ")))
+```
+
+## Pedigree-matched pairs
+
+```{r pairs-table}
+matched <- pairs %>% filter(!is.na(skim_name))
+jac_one <- function(s_nil) {
+  p <- matched[matched$nil == s_nil, ]
+  b <- state_on_grid(brb,  p$brb_name); k <- state_on_grid(skim, p$skim_name)
+  ok <- !is.na(b) & !is.na(k); bd <- b[ok] > 0; kd <- k[ok] > 0
+  u <- sum(bd | kd)
+  tibble(donor_J = if (u == 0) NA_real_ else sum(bd & kd)/u,
+         concord = mean(b[ok] == k[ok]),
+         brb_donor = mean(bd), skim_donor = mean(kd))
+}
+pair_tab <- matched %>% mutate(m = map(nil, jac_one)) %>% unnest(m) %>%
+  transmute(NIL = nil, brb_label = brb_name, skim_sample = skim_name,
+            donor_J = round(donor_J, 2), concord = round(concord, 3),
+            brb_donor = round(brb_donor, 3), skim_donor = round(skim_donor, 3)) %>%
+  arrange(desc(donor_J))
+knitr::kable(pair_tab,
+             caption = "Skim-RTI vs BrB-RTI per pedigree-matched NIL: donor Jaccard, marker concordance, donor fraction. (PN#_SID# plate labels shown for provenance only.)")
+```
+
+**Read:** high `donor_J` = the two platforms agree on *where* the teosinte is for that
+NIL. A low value where the pedigree matches but the genotype doesn't (watch `Zx.0370`)
+flags a sample whose BRB-seq content disagrees with its stated pedigree — a residual
+identity problem beyond the `.B` fix.
+
+## Confusion matrix — Skim-RTI vs BrB-RTI (pooled, matched NILs)
+
+```{r confusion}
+paired <- map_dfr(matched$nil, function(s_nil) {
+  p <- matched[matched$nil == s_nil, ]
+  b <- state_on_grid(brb, p$brb_name); k <- state_on_grid(skim, p$skim_name)
+  ok <- !is.na(b) & !is.na(k)
+  tibble(nil = s_nil, skim = k[ok], brb = b[ok])
+})
+cm <- table(skim = factor(paired$skim, 0:2), brb = factor(paired$brb, 0:2))
+prop <- sweep(cm, 1, rowSums(cm), "/")
+disp <- matrix(sprintf("%d (%.1f%%)", cm, 100*prop), nrow = 3,
+               dimnames = list(`skim \\ brb` = c("0 recurrent","1 het","2 donor"),
+                               c("0 recurrent","1 het","2 donor")))
+knitr::kable(disp, align = "r",
+             caption = sprintf("Skim-RTI (rows) vs BrB-RTI (cols): count (row %%). Overall concordance %.3f.",
+                               sum(diag(cm))/sum(cm)))
+dp <- paired$skim %in% c(1,2)
+cat(sprintf("Skim donor-present markers: %d | BrB also donor-present: %.1f%%\n",
+            sum(dp), 100*mean(paired$brb[dp] %in% c(1,2))))
+```
+
+## Chromosome painting — Skim-RTI vs BrB-RTI per NIL
+
+Two tracks per NIL (**top = Skim-RTI r=5, bottom = BrB-RTI r=5**), grouped and labelled
+by the `.B`-dropped **pedigree** (wrapped at the left); the method label is at the right.
+NILs ordered by donor Jaccard (best agreement first).
+
+```{r painting, fig.width=12, fig.height=11}
+nil_ord <- pair_tab$NIL
+lane <- function(seg, nm, method, s_nil) {
+  d <- seg[seg$name == nm, ]
+  tibble(nil = s_nil, chr = d$chr, start_bp = d$start_bp, end_bp = d$end_bp,
+         state = factor(d$state, 0:2, c("REF","HET","ALT")), method = method)
+}
+paint <- map_dfr(matched$nil, function(s_nil) {
+  p <- matched[matched$nil == s_nil, ]
+  bind_rows(lane(skim, p$skim_name, "Skim-RTI", s_nil),
+            lane(brb,  p$brb_name,  "BrB-RTI",  s_nil))
+}) %>%
+  mutate(chr  = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)),
+         nil  = factor(gsub("_", "<br>", nil), levels = gsub("_", "<br>", nil_ord)),
+         method = factor(method, c("Skim-RTI","BrB-RTI")),
+         ylo = if_else(method == "Skim-RTI", 0.52, 0.00),
+         yhi = if_else(method == "Skim-RTI", 1.00, 0.48))
+
+ggplot(paint, aes(xmin = start_bp/1e6, xmax = end_bp/1e6, ymin = ylo, ymax = yhi, fill = state)) +
+  geom_rect() +
+  facet_grid(nil ~ chr, scales = "free_x", space = "free_x", switch = "y") +
+  scale_fill_manual(values = pal, drop = FALSE) +
+  scale_x_continuous(labels = scales::unit_format(unit = "", scale = 1)) +
+  scale_y_continuous(breaks = c(0.24, 0.76), labels = c("BrB-RTI","Skim-RTI"),
+                     expand = expansion(mult = 0.02), position = "right") +
+  labs(title = "Skim-RTI vs BrB-RTI — pedigree-matched NILs",
+       subtitle = "per NIL: top = Skim-RTI (r=5), bottom = BrB-RTI (r=5) | gold REF, green HET, purple ALT",
+       x = "Position (Mb)", fill = "Genotype") +
+  ggpubr::theme_classic2(base_size = 9) +
+  theme(legend.position = "bottom", strip.background = element_blank(),
+        strip.text.x = element_text(face = "bold"),
+        strip.text.y.left = ggtext::element_markdown(angle = 0, hjust = 1, size = 6, lineheight = 0.85),
+        panel.spacing.x = unit(0.05, "lines"), panel.spacing.y = unit(0.15, "lines"),
+        axis.text.y.right = element_text(size = 9), axis.ticks.y = element_blank(),
+        axis.title.y = element_blank(), axis.line.y = element_blank(),
+        axis.text.x = element_text(size = 6))
+```
+
+## Findings
+
+- Matched **by pedigree** (dropping `.B`), `r sum(!is.na(pairs$skim_name))`/`r n_distinct(brb$name)`
+  BRB-seq samples have a Skim-RTI partner; `r sum(is.na(pairs$skim_name))` has none in the
+  skim call set.
+- Where the pedigrees genuinely correspond, Skim-RTI and BrB-RTI agree on the donor
+  landscape (high donor Jaccard); BrB-RTI is the sparser, noisier track (low coverage RNA).
+- Any matched NIL with low Jaccard (e.g. `Zx.0370`) is a sample whose BRB-seq genotype
+  disagrees with its stated pedigree — a residual identity issue the `.B` fix does not
+  resolve, to be confirmed by the Hazel rerun (`docs/brbseq-sample-mislabeling.md`).
+```
