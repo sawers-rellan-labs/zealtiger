@@ -68,9 +68,22 @@ dosage <- function(seg) seg %>% mutate(len = end_bp - start_bp + 1) %>%
 gbts_d <- dosage(mb)
 ord <- c(checks, gbts_d %>% filter(!name %in% checks) %>% arrange(d) %>% pull(name))
 
-# LowQuality samples (sample_map QC flag) get a bold facet-strip label (markdown)
+# NIL identifier = the pedigree string (sample_map `genotype`). The two B73-bulk
+# checks share the pedigree "B73-bulk", so disambiguate them by their SID.
+ped_of <- function(x) {
+  g <- smap$genotype[match(x, smap$sample_id)]
+  g <- ifelse(is.na(g), x, g)
+  g <- sub("\\.B$", "", g)                       # drop the inconsistent trailing ".B"
+  dup <- g == "B73-bulk"
+  g[dup] <- paste0("B73-bulk_", sub(".*_(SID[0-9]+)$", "\\1", x[dup]))
+  g
+}
+# wrapped pedigree for facet strips (break at underscores; bold if LowQuality)
 lowq <- smap$sample_id[smap$quality == "LowQuality" & !is.na(smap$quality)]
-name_lab <- function(x) if_else(x %in% lowq, paste0("**", x, "**"), x)
+nil_lab <- function(x) {
+  w <- gsub("_", "<br>", ped_of(x))
+  if_else(x %in% lowq, paste0("**", w, "**"), w)
+}
 
 # normalise each call set to (name, chr, start_bp, end_bp, state=REF/HET/ALT, method)
 as_paint <- function(seg, method, numeric_state = TRUE) {
@@ -82,9 +95,11 @@ as_paint <- function(seg, method, numeric_state = TRUE) {
 
 ## Chromosome painting — all three callers
 
-Three lanes per sample: **top = MolB-RTI (r=2), middle = Skim-RTI (r=5), bottom =
-Skim-BIN**. Lines ordered by MolB-RTI donor dosage (B73 checks pinned at the top);
-`LowQuality` lines in **bold**.
+Three source-method tracks per NIL, each labelled at the right of the row: **top =
+MolB-RTI (r=2), middle = Skim-RTI (r=5), bottom = Skim-BIN**; each NIL is identified
+by its full **pedigree string** (wrapped) at the left, and the tracks are grouped by
+that pedigree. Rows ordered by MolB-RTI donor dosage (B73 checks pinned at the top);
+`LowQuality` pedigrees in **bold**.
 
 ```{r painting-3way, fig.width=12, fig.height=20}
 paint3 <- bind_rows(
@@ -92,28 +107,35 @@ paint3 <- bind_rows(
   as_paint(skim %>% filter(name %in% unique(mb$name)), "Skim-RTI (r=5)"),
   as_paint(gmm,  "Skim-BIN", numeric_state = FALSE)) %>%
   mutate(chr    = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)),
-         name   = factor(name_lab(name), levels = name_lab(ord)),
+         name   = factor(nil_lab(name), levels = nil_lab(ord)),
          method = factor(method, c("MolB-RTI (r=2)","Skim-RTI (r=5)","Skim-BIN")),
          ylo = case_when(method == "MolB-RTI (r=2)" ~ 0.69, method == "Skim-RTI (r=5)" ~ 0.35, TRUE ~ 0.00),
          yhi = case_when(method == "MolB-RTI (r=2)" ~ 1.00, method == "Skim-RTI (r=5)" ~ 0.66, TRUE ~ 0.32))
 
+# per-track source-method label at each lane's y-midpoint (bottom -> top)
+lane_mid <- c(0.16, 0.505, 0.845)
+lane_lab <- c("Skim-BIN", "Skim-RTI", "MolB-RTI")
 ggplot(paint3, aes(xmin = start_bp/1e6, xmax = end_bp/1e6,
                    ymin = ylo, ymax = yhi, fill = state)) +
   geom_rect() +
   facet_grid(name ~ chr, scales = "free_x", space = "free_x", switch = "y") +
   scale_fill_manual(values = pal, drop = FALSE) +
   scale_x_continuous(labels = scales::unit_format(unit = "", scale = 1)) +
-  labs(title = "Ancestry calls — 16 lines, 3 call sets per sample",
-       subtitle = "per sample top→bottom: MolB-RTI (r=2) / Skim-RTI (r=5) / Skim-BIN | gold REF, green HET, purple ALT | bold = LowQuality",
+  scale_y_continuous(breaks = lane_mid, labels = lane_lab,
+                     expand = expansion(mult = 0.02), position = "right") +
+  labs(title = "Ancestry calls — 16 lines × 3 source-method tracks per NIL",
+       subtitle = "track labels at right (MolB-RTI / Skim-RTI / Skim-BIN) | gold REF, green HET, purple ALT | bold = LowQuality",
        x = "Position (Mb)", fill = "Genotype") +
   ggpubr::theme_classic2(base_size = 9) +
   theme(legend.position = "bottom",
         strip.background = element_blank(),
         strip.text.x = element_text(face = "bold"),
-        strip.text.y.left = ggtext::element_markdown(angle = 0, hjust = 1, size = 7),
+        # NIL name rotated 90° CCW (vertical) at the far left of each row group
+        strip.text.y.left = ggtext::element_markdown(angle = 0, hjust = 1, size = 6, lineheight = 0.85),
         panel.spacing.x = unit(0.05, "lines"),
         panel.spacing.y = unit(0.05, "lines"),
-        axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+        # per-track source-method label, horizontal, to the RIGHT of each genome track
+        axis.text.y.right = element_text(size = 9), axis.ticks.y = element_blank(),
         axis.title.y = element_blank(), axis.line.y = element_blank(),
         axis.text.x = element_text(size = 6))
 ```
@@ -139,11 +161,12 @@ frac <- function(seg, lab, numeric_state = TRUE) {
 tab <- frac(mb, "MolB-RTI") %>%
   left_join(frac(skim %>% filter(name %in% unique(mb$name)), "Skim-RTI"), by = "name") %>%
   left_join(frac(gmm, "Skim-BIN", numeric_state = FALSE), by = "name") %>%
-  arrange(`MolB-RTI_donor`)
+  arrange(`MolB-RTI_donor`) %>%
+  mutate(NIL = ped_of(name), .before = 1) %>% select(-name)   # NIL = pedigree id
 knitr::kable(tab, digits = 3)
 
 cat("\nmeans (NILs only, B73 checks dropped):\n")
-tab %>% filter(!name %in% checks) %>%
+tab %>% filter(!grepl("B73-bulk", NIL)) %>%
   summarise(across(where(is.numeric), ~round(mean(., na.rm = TRUE), 3))) %>%
   knitr::kable()
 ```
@@ -167,27 +190,34 @@ paint2 <- bind_rows(
   as_paint(mb, "MolB-RTI (r=2)"),
   as_paint(gmm, "Skim-BIN", numeric_state = FALSE)) %>%
   mutate(chr    = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)),
-         name   = factor(name_lab(name), levels = name_lab(ord)),
+         name   = factor(nil_lab(name), levels = nil_lab(ord)),
          ylo = if_else(method == "MolB-RTI (r=2)", 0.52, 0.00),
          yhi = if_else(method == "MolB-RTI (r=2)", 1.00, 0.48))
 
+# per-track source-method label at each lane's y-midpoint (bottom -> top)
+lane_mid <- c(0.24, 0.76)
+lane_lab <- c("Skim-BIN", "MolB-RTI")
 ggplot(paint2, aes(xmin = start_bp/1e6, xmax = end_bp/1e6,
                    ymin = ylo, ymax = yhi, fill = state)) +
   geom_rect() +
   facet_grid(name ~ chr, scales = "free_x", space = "free_x", switch = "y") +
   scale_fill_manual(values = pal, drop = FALSE) +
   scale_x_continuous(labels = scales::unit_format(unit = "", scale = 1)) +
+  scale_y_continuous(breaks = lane_mid, labels = lane_lab,
+                     expand = expansion(mult = 0.02), position = "right") +
   labs(title = "Ancestry calls — 16 lines, MolB-RTI (r=2) (top) vs Skim-BIN (bottom)",
-       subtitle = "gold REF, green HET, purple ALT | bold = LowQuality",
+       subtitle = "track labels at right | gold REF, green HET, purple ALT | bold = LowQuality",
        x = "Position (Mb)", fill = "Genotype") +
   ggpubr::theme_classic2(base_size = 9) +
   theme(legend.position = "bottom",
         strip.background = element_blank(),
         strip.text.x = element_text(face = "bold"),
-        strip.text.y.left = ggtext::element_markdown(angle = 0, hjust = 1, size = 7),
+        # NIL name rotated 90° CCW (vertical) at the far left of each row group
+        strip.text.y.left = ggtext::element_markdown(angle = 0, hjust = 1, size = 6, lineheight = 0.85),
         panel.spacing.x = unit(0.05, "lines"),
         panel.spacing.y = unit(0.05, "lines"),
-        axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+        # per-track source-method label, horizontal, to the RIGHT of each genome track
+        axis.text.y.right = element_text(size = 9), axis.ticks.y = element_blank(),
         axis.title.y = element_blank(), axis.line.y = element_blank(),
         axis.text.x = element_text(size = 6))
 ```
