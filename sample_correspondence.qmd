@@ -25,7 +25,7 @@ compare the right genome tracks across experiments.
 ### The trap this fixes
 
 All three experiments label fastqs with a `PN#_SID#` prefix
-(`PN{ceil(SID/96)}_SID{SID}`), but the SID numbering is **per-experiment**, so the *same
+(`PN{ceil(SID/96)}_SID{SID}`), but the plate number id is **per-experiment**, so the *same
 prefix is a different biological sample across experiments*. Concretely:
 
 - **Skim** (WGS low-coverage) and **MolBreeding** (target sequencing) **share one id space** —

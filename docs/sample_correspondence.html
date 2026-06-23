@@ -123,7 +123,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p>Curate, for <strong>every sample that has sequence data</strong>, the correspondence between the per-experiment <code>PN#_SID#</code> fastq sample id and the <strong>true biological identity</strong> — so we compare the right genome tracks across experiments.</p>
 <section id="the-trap-this-fixes" class="level3">
 <h3 class="anchored" data-anchor-id="the-trap-this-fixes">The trap this fixes</h3>
-<p>All three experiments label fastqs with a <code>PN#_SID#</code> prefix (<code>PN{ceil(SID/96)}_SID{SID}</code>), but the SID numbering is <strong>per-experiment</strong>, so the <em>same prefix is a different biological sample across experiments</em>. Concretely:</p>
+<p>All three experiments label fastqs with a <code>PN#_SID#</code> prefix (<code>PN{ceil(SID/96)}_SID{SID}</code>), but the plate number id is <strong>per-experiment</strong>, so the <em>same prefix is a different biological sample across experiments</em>. Concretely:</p>
 <ul>
 <li><strong>Skim</strong> (WGS low-coverage) and <strong>MolBreeding</strong> (target sequencing) <strong>share one id space</strong> — same <code>PN#_SID#</code> ⇒ same sample. (Skim-RTI on the SNP50K filter and Skim-BIN on the 27M wideseq filter are the <em>same</em> skim reads.)</li>
 <li><strong>BRB-seq</strong> (3′ RNA) has its <strong>own</strong> <code>PN#_SID#</code> space. Assuming it matched Skim/MolB by prefix is what previously compared incomparable samples.</li>
