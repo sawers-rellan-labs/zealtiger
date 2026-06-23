@@ -1,0 +1,1325 @@
+<!DOCTYPE html>
+<html xmlns="http://www.w3.org/1999/xhtml" lang="en" xml:lang="en"><head>
+
+<meta charset="utf-8">
+<meta name="generator" content="quarto-1.9.38">
+
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+
+
+<title>Cross-experiment sample correspondence — Skim · MolBreeding · BRB-seq</title>
+<style>
+/* Default styles provided by pandoc.
+** See https://pandoc.org/MANUAL.html#variables-for-html for config info.
+*/
+code{white-space: pre-wrap;}
+span.smallcaps{font-variant: small-caps;}
+div.columns{display: flex; gap: min(4vw, 1.5em);}
+div.column{flex: auto; overflow-x: auto;}
+div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+ul.task-list{list-style: none;}
+ul.task-list li input[type="checkbox"] {
+  width: 0.8em;
+  margin: 0 0.8em 0.2em -1em; /* quarto-specific, see https://github.com/quarto-dev/quarto-cli/issues/4556 */ 
+  vertical-align: middle;
+}
+/* CSS for syntax highlighting */
+html { -webkit-text-size-adjust: 100%; }
+pre > code.sourceCode { white-space: pre; position: relative; }
+pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+pre > code.sourceCode > span:empty { height: 1.2em; }
+.sourceCode { overflow: visible; }
+code.sourceCode > span { color: inherit; text-decoration: inherit; }
+div.sourceCode { margin: 1em 0; }
+pre.sourceCode { margin: 0; }
+@media screen {
+div.sourceCode { overflow: auto; }
+}
+@media print {
+pre > code.sourceCode { white-space: pre-wrap; }
+pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+}
+pre.numberSource code
+  { counter-reset: source-line 0; }
+pre.numberSource code > span
+  { position: relative; left: -4em; counter-increment: source-line; }
+pre.numberSource code > span > a:first-child::before
+  { content: counter(source-line);
+    position: relative; left: -1em; text-align: right; vertical-align: baseline;
+    border: none; display: inline-block;
+    -webkit-touch-callout: none; -webkit-user-select: none;
+    -khtml-user-select: none; -moz-user-select: none;
+    -ms-user-select: none; user-select: none;
+    padding: 0 4px; width: 4em;
+  }
+pre.numberSource { margin-left: 3em;  padding-left: 4px; }
+div.sourceCode
+  {   }
+@media screen {
+pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+}
+</style>
+
+
+<script src="sample_correspondence_files/libs/clipboard/clipboard.min.js"></script>
+<script src="sample_correspondence_files/libs/quarto-html/quarto.js" type="module"></script>
+<script src="sample_correspondence_files/libs/quarto-html/tabsets/tabsets.js" type="module"></script>
+<script src="sample_correspondence_files/libs/quarto-html/popper.min.js"></script>
+<script src="sample_correspondence_files/libs/quarto-html/tippy.umd.min.js"></script>
+<script src="sample_correspondence_files/libs/quarto-html/anchor.min.js"></script>
+<link href="sample_correspondence_files/libs/quarto-html/tippy.css" rel="stylesheet">
+<link href="sample_correspondence_files/libs/quarto-html/quarto-syntax-highlighting-15634bcf2e68342d4ad2dfa704d543f6.css" rel="stylesheet" id="quarto-text-highlighting-styles">
+<script src="sample_correspondence_files/libs/bootstrap/bootstrap.min.js"></script>
+<link href="sample_correspondence_files/libs/bootstrap/bootstrap-icons.css" rel="stylesheet">
+<link href="sample_correspondence_files/libs/bootstrap/bootstrap-138a6193a3bd40baf1e627da441a4734.min.css" rel="stylesheet" append-hash="true" id="quarto-bootstrap" data-mode="light">
+
+
+</head>
+
+<body class="quarto-light">
+
+<div id="quarto-content" class="page-columns page-rows-contents page-layout-article">
+<div id="quarto-margin-sidebar" class="sidebar margin-sidebar">
+  <nav id="TOC" role="doc-toc" class="toc-active">
+    <h2 id="toc-title">Table of contents</h2>
+   
+  <ul>
+  <li><a href="#purpose" id="toc-purpose" class="nav-link active" data-scroll-target="#purpose">Purpose</a>
+  <ul class="collapse">
+  <li><a href="#the-trap-this-fixes" id="toc-the-trap-this-fixes" class="nav-link" data-scroll-target="#the-trap-this-fixes">The trap this fixes</a></li>
+  <li><a href="#scope-and-rules" id="toc-scope-and-rules" class="nav-link" data-scroll-target="#scope-and-rules">Scope and rules</a></li>
+  </ul></li>
+  <li><a href="#file-1-skim-brb-seq-matched-by-pedigree" id="toc-file-1-skim-brb-seq-matched-by-pedigree" class="nav-link" data-scroll-target="#file-1-skim-brb-seq-matched-by-pedigree">File 1 — Skim ↔︎ BRB-seq (matched by pedigree)</a></li>
+  <li><a href="#file-2-molbreeding-3-way-molb-skim-brb-seq" id="toc-file-2-molbreeding-3-way-molb-skim-brb-seq" class="nav-link" data-scroll-target="#file-2-molbreeding-3-way-molb-skim-brb-seq">File 2 — MolBreeding 3-way (MolB · Skim · BRB-seq)</a></li>
+  <li><a href="#checks-to-resolve" id="toc-checks-to-resolve" class="nav-link" data-scroll-target="#checks-to-resolve">Checks to resolve</a></li>
+  <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary">Summary</a></li>
+  </ul>
+</nav>
+</div>
+<main class="content" id="quarto-document-content">
+
+<header id="title-block-header" class="quarto-title-block default">
+<div class="quarto-title">
+<h1 class="title">Cross-experiment sample correspondence — Skim · MolBreeding · BRB-seq</h1>
+<p class="subtitle lead">Which sample id in one experiment is the same biological NIL/check in another</p>
+</div>
+
+
+
+<div class="quarto-title-meta">
+
+    
+  
+    
+  </div>
+  
+
+
+</header>
+
+
+<section id="purpose" class="level2">
+<h2 class="anchored" data-anchor-id="purpose">Purpose</h2>
+<p>Curate, for <strong>every sample that has sequence data</strong>, the correspondence between the per-experiment <code>PN#_SID#</code> fastq sample id and the <strong>true biological identity</strong> — so we compare the right genome tracks across experiments.</p>
+<section id="the-trap-this-fixes" class="level3">
+<h3 class="anchored" data-anchor-id="the-trap-this-fixes">The trap this fixes</h3>
+<p>All three experiments label fastqs with a <code>PN#_SID#</code> prefix (<code>PN{ceil(SID/96)}_SID{SID}</code>), but the SID numbering is <strong>per-experiment</strong>, so the <em>same prefix is a different biological sample across experiments</em>. Concretely:</p>
+<ul>
+<li><strong>Skim</strong> (WGS low-coverage) and <strong>MolBreeding</strong> (target sequencing) <strong>share one id space</strong> — same <code>PN#_SID#</code> ⇒ same sample. (Skim-RTI on the SNP50K filter and Skim-BIN on the 27M wideseq filter are the <em>same</em> skim reads.)</li>
+<li><strong>BRB-seq</strong> (3′ RNA) has its <strong>own</strong> <code>PN#_SID#</code> space. Assuming it matched Skim/MolB by prefix is what previously compared incomparable samples.</li>
+</ul>
+<p><strong>Cross-experiment identity key = the pedigree string</strong> (drop the trailing <code>.B</code> the Skim/MolB registry carries; BRB pedigrees have none). The <code>PN#_SID#</code> prefix is <em>not</em> a cross-experiment key.</p>
+</section>
+<section id="scope-and-rules" class="level3">
+<h3 class="anchored" data-anchor-id="scope-and-rules">Scope and rules</h3>
+<ul>
+<li><strong>In scope:</strong> teosinte-introgression <strong>NILs</strong> + the <strong>B73</strong> and <strong>Purple</strong> checks.</li>
+<li><strong>Sequence-data only:</strong> a sample appears only if it has reads (present in the per-sample coverage tables) — metadata-only rows are excluded.</li>
+<li><strong>Label:</strong> NILs → the pedigree string; checks → <code>B73_&lt;prefix&gt;</code> / <code>Purple_&lt;prefix&gt;</code> (each check is unique because checks cannot yet be matched across experiments — see <a href="#checks-to-resolve">Checks</a>).</li>
+<li>Sample class is read from <code>Genotype</code>/<code>sample_group</code>/<code>accession</code>, <strong>never</strong> the <code>check</code> column (it is unreliable — e.g.&nbsp;BRB “Purple Check” rows carry <code>check="no"</code>).</li>
+</ul>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb1"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb1-1"><a href="#cb1-1" aria-hidden="true" tabindex="-1"></a><span class="fu">library</span>(readr); <span class="fu">library</span>(dplyr); <span class="fu">library</span>(stringr); <span class="fu">library</span>(tidyr); <span class="fu">library</span>(knitr)</span>
+<span id="cb1-2"><a href="#cb1-2" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>chop <span class="ot">&lt;-</span> <span class="cf">function</span>(x) <span class="fu">sub</span>(<span class="st">"</span><span class="sc">\\</span><span class="st">.B$"</span>, <span class="st">""</span>, x)   <span class="co"># drop the trailing ".B"</span></span>
+<span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="do">## ---- samples WITH sequence data ----</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>skim_seq <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(params<span class="sc">$</span>skim_seq, <span class="at">show_col_types =</span> <span class="cn">FALSE</span>)<span class="sc">$</span>name   <span class="co"># skim sequenced</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>brb_seq  <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(params<span class="sc">$</span>brb_seq,  <span class="at">show_col_types =</span> <span class="cn">FALSE</span>)<span class="sc">$</span>name   <span class="co"># BRB sequenced</span></span>
+<span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="do">## ---- Skim / MolBreeding id space (shared) ----</span></span>
+<span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>master <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(params<span class="sc">$</span>master, <span class="at">show_col_types =</span> <span class="cn">FALSE</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">pedigree =</span> <span class="fu">ifelse</span>(pedigree <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"NA"</span>, <span class="st">""</span>), <span class="cn">NA</span>, pedigree),</span>
+<span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>         <span class="at">ped      =</span> <span class="fu">ifelse</span>(<span class="sc">!</span><span class="fu">is.na</span>(pedigree), <span class="fu">chop</span>(pedigree), <span class="cn">NA</span>),</span>
+<span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>         <span class="at">chk_grp  =</span> <span class="fu">ifelse</span>(sample_group <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"B73"</span>, <span class="st">"Purple"</span>), sample_group, <span class="cn">NA</span>))</span>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>skim_nil <span class="ot">&lt;-</span> master <span class="sc">%&gt;%</span> <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(ped),     sample <span class="sc">%in%</span> skim_seq) <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(<span class="at">skim_prefix =</span> sample, <span class="at">pedigree =</span> ped)</span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>skim_chk <span class="ot">&lt;-</span> master <span class="sc">%&gt;%</span> <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(chk_grp), sample <span class="sc">%in%</span> skim_seq) <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(<span class="at">skim_prefix =</span> sample, <span class="at">grp =</span> chk_grp)</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="do">## ---- BRB-seq id space (own) ----</span></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>brbm <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(params<span class="sc">$</span>brb_meta, <span class="at">show_col_types =</span> <span class="cn">FALSE</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">brb_prefix =</span> sample_id,                              <span class="co"># already PN#_SID#</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>         <span class="at">is_nil  =</span> <span class="fu">str_detect</span>(Genotype, <span class="st">"_P[0-9]"</span>),           <span class="co"># real pedigree -&gt; NIL</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>         <span class="at">chk_grp =</span> <span class="fu">case_when</span>(Genotype <span class="sc">==</span> <span class="st">"B73"</span> <span class="sc">|</span> accession <span class="sc">==</span> <span class="st">"B73"</span>             <span class="sc">~</span> <span class="st">"B73"</span>,</span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>                             accession <span class="sc">==</span> <span class="st">"Purple"</span> <span class="sc">|</span> <span class="fu">str_detect</span>(Genotype, <span class="st">"Purple"</span>) <span class="sc">~</span> <span class="st">"Purple"</span>,</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>                             <span class="cn">TRUE</span> <span class="sc">~</span> <span class="cn">NA_character_</span>),</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>         <span class="at">ped     =</span> <span class="fu">ifelse</span>(is_nil, <span class="fu">chop</span>(Genotype), <span class="cn">NA</span>))</span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>brb_nil <span class="ot">&lt;-</span> brbm <span class="sc">%&gt;%</span> <span class="fu">filter</span>(is_nil,          brb_prefix <span class="sc">%in%</span> brb_seq) <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(brb_prefix, <span class="at">pedigree =</span> ped)</span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>brb_chk <span class="ot">&lt;-</span> brbm <span class="sc">%&gt;%</span> <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(chk_grp), brb_prefix <span class="sc">%in%</span> brb_seq) <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(brb_prefix, <span class="at">grp =</span> chk_grp)</span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a><span class="do">## ---- MolBreeding target-seq (the 16 map rows ARE the sequenced set) ----</span></span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>molb <span class="ot">&lt;-</span> <span class="fu">read_tsv</span>(params<span class="sc">$</span>mb_map, <span class="at">show_col_types =</span> <span class="cn">FALSE</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(<span class="at">prefix =</span> sample_id, <span class="at">molb_geno =</span> genotype, <span class="at">molb_ped =</span> <span class="fu">chop</span>(genotype))</span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>agg <span class="ot">&lt;-</span> <span class="cf">function</span>(df, key, val) df <span class="sc">%&gt;%</span> <span class="fu">group_by</span>(.data[[key]]) <span class="sc">%&gt;%</span></span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="st">"{val}"</span> <span class="sc">:</span><span class="er">=</span> <span class="fu">paste</span>(<span class="fu">sort</span>(<span class="fu">unique</span>(.data[[val]])), <span class="at">collapse =</span> <span class="st">";"</span>),</span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>            <span class="st">"n_{val}"</span> <span class="sc">:</span><span class="er">=</span> <span class="fu">n_distinct</span>(.data[[val]]), <span class="at">.groups =</span> <span class="st">"drop"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+</div>
+</section>
+</section>
+<section id="file-1-skim-brb-seq-matched-by-pedigree" class="level2">
+<h2 class="anchored" data-anchor-id="file-1-skim-brb-seq-matched-by-pedigree">File 1 — Skim ↔︎ BRB-seq (matched by pedigree)</h2>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb2"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb2-1"><a href="#cb2-1" aria-hidden="true" tabindex="-1"></a>sk <span class="ot">&lt;-</span> <span class="fu">agg</span>(skim_nil, <span class="st">"pedigree"</span>, <span class="st">"skim_prefix"</span>)</span>
+<span id="cb2-2"><a href="#cb2-2" aria-hidden="true" tabindex="-1"></a>br <span class="ot">&lt;-</span> <span class="fu">agg</span>(brb_nil,  <span class="st">"pedigree"</span>, <span class="st">"brb_prefix"</span>) <span class="sc">%&gt;%</span> <span class="fu">rename</span>(<span class="at">brbseq_prefix =</span> brb_prefix, <span class="at">n_brbseq_prefix =</span> n_brb_prefix)</span>
+<span id="cb2-3"><a href="#cb2-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-4"><a href="#cb2-4" aria-hidden="true" tabindex="-1"></a>nil1 <span class="ot">&lt;-</span> <span class="fu">full_join</span>(sk, br, <span class="at">by =</span> <span class="st">"pedigree"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb2-5"><a href="#cb2-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(<span class="at">type =</span> <span class="st">"NIL"</span>, <span class="at">label =</span> pedigree, pedigree,</span>
+<span id="cb2-6"><a href="#cb2-6" aria-hidden="true" tabindex="-1"></a>            skim_prefix, brbseq_prefix,</span>
+<span id="cb2-7"><a href="#cb2-7" aria-hidden="true" tabindex="-1"></a>            <span class="at">in_skim =</span> <span class="sc">!</span><span class="fu">is.na</span>(skim_prefix), <span class="at">in_brbseq =</span> <span class="sc">!</span><span class="fu">is.na</span>(brbseq_prefix)) <span class="sc">%&gt;%</span></span>
+<span id="cb2-8"><a href="#cb2-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(<span class="fu">desc</span>(in_skim <span class="sc">&amp;</span> in_brbseq), pedigree)</span>
+<span id="cb2-9"><a href="#cb2-9" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-10"><a href="#cb2-10" aria-hidden="true" tabindex="-1"></a>chk1 <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
+<span id="cb2-11"><a href="#cb2-11" aria-hidden="true" tabindex="-1"></a>  skim_chk <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(<span class="at">type =</span> grp, <span class="at">label =</span> <span class="fu">paste0</span>(grp, <span class="st">"_"</span>, skim_prefix), <span class="at">pedigree =</span> <span class="cn">NA_character_</span>,</span>
+<span id="cb2-12"><a href="#cb2-12" aria-hidden="true" tabindex="-1"></a>                         skim_prefix, <span class="at">brbseq_prefix =</span> <span class="cn">NA_character_</span>, <span class="at">in_skim =</span> <span class="cn">TRUE</span>,  <span class="at">in_brbseq =</span> <span class="cn">FALSE</span>),</span>
+<span id="cb2-13"><a href="#cb2-13" aria-hidden="true" tabindex="-1"></a>  brb_chk  <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(<span class="at">type =</span> grp, <span class="at">label =</span> <span class="fu">paste0</span>(grp, <span class="st">"_"</span>, brb_prefix), <span class="at">pedigree =</span> <span class="cn">NA_character_</span>,</span>
+<span id="cb2-14"><a href="#cb2-14" aria-hidden="true" tabindex="-1"></a>                         <span class="at">skim_prefix =</span> <span class="cn">NA_character_</span>, <span class="at">brbseq_prefix =</span> brb_prefix, <span class="at">in_skim =</span> <span class="cn">FALSE</span>, <span class="at">in_brbseq =</span> <span class="cn">TRUE</span>))</span>
+<span id="cb2-15"><a href="#cb2-15" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-16"><a href="#cb2-16" aria-hidden="true" tabindex="-1"></a>file1 <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(nil1, chk1)</span>
+<span id="cb2-17"><a href="#cb2-17" aria-hidden="true" tabindex="-1"></a><span class="fu">dir.create</span>(params<span class="sc">$</span>outdir, <span class="at">showWarnings =</span> <span class="cn">FALSE</span>, <span class="at">recursive =</span> <span class="cn">TRUE</span>)</span>
+<span id="cb2-18"><a href="#cb2-18" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(file1, <span class="fu">file.path</span>(params<span class="sc">$</span>outdir, <span class="st">"skim_brbseq_correspondence.csv"</span>))</span>
+<span id="cb2-19"><a href="#cb2-19" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb2-20"><a href="#cb2-20" aria-hidden="true" tabindex="-1"></a>nil1 <span class="sc">%&gt;%</span> <span class="fu">count</span>(<span class="st">`</span><span class="at">NIL status</span><span class="st">`</span> <span class="ot">=</span> <span class="fu">case_when</span>(in_skim <span class="sc">&amp;</span> in_brbseq <span class="sc">~</span> <span class="st">"comparable (both sequenced)"</span>,</span>
+<span id="cb2-21"><a href="#cb2-21" aria-hidden="true" tabindex="-1"></a>                                        in_skim             <span class="sc">~</span> <span class="st">"skim-only"</span>,</span>
+<span id="cb2-22"><a href="#cb2-22" aria-hidden="true" tabindex="-1"></a>                                        <span class="cn">TRUE</span>                <span class="sc">~</span> <span class="st">"BRB-only"</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb2-23"><a href="#cb2-23" aria-hidden="true" tabindex="-1"></a>  <span class="fu">kable</span>(<span class="at">caption =</span> <span class="st">"Skim ↔ BRB-seq NILs by availability"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>Skim ↔︎ BRB-seq NILs by availability</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;">NIL status</th>
+<th style="text-align: right;">n</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">BRB-only</td>
+<td style="text-align: right;">5</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">comparable (both sequenced)</td>
+<td style="text-align: right;">334</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">skim-only</td>
+<td style="text-align: right;">1069</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p><strong>334 NILs are directly comparable</strong> (sequenced on both platforms, matched by pedigree). The full per-NIL table is <strong>not embedded here</strong> — it ships as the CSV for Hannah: <code>results/sample_correspondence/skim_brbseq_correspondence.csv</code> (NILs + checks, with <code>in_skim</code>/<code>in_brbseq</code> flags).</p>
+</section>
+<section id="file-2-molbreeding-3-way-molb-skim-brb-seq" class="level2">
+<h2 class="anchored" data-anchor-id="file-2-molbreeding-3-way-molb-skim-brb-seq">File 2 — MolBreeding 3-way (MolB · Skim · BRB-seq)</h2>
+<p>MolBreeding sequenced only <strong>16 samples</strong>, so rather than a separate Skim↔︎MolBreeding file we give the <strong>full 3-way correspondence for those 16</strong> — their MolB id, the shared Skim id, and (where the same NIL was also sequenced in BRB-seq) the BRB-seq id. MolBreeding and Skim share one id space (same <code>PN#_SID#</code>); the BRB-seq link is by <strong>pedigree</strong> and exists for only a few of the lines (MolBreeding and BRB-seq otherwise share no id space and overlap on just those NILs — hence the wide Skim↔︎BRB correspondence stays in File 1).</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb3"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb3-1"><a href="#cb3-1" aria-hidden="true" tabindex="-1"></a>brb_by_ped <span class="ot">&lt;-</span> brb_nil <span class="sc">%&gt;%</span> <span class="fu">group_by</span>(pedigree) <span class="sc">%&gt;%</span></span>
+<span id="cb3-2"><a href="#cb3-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="at">brbseq_prefix =</span> <span class="fu">paste</span>(<span class="fu">sort</span>(<span class="fu">unique</span>(brb_prefix)), <span class="at">collapse =</span> <span class="st">";"</span>), <span class="at">.groups =</span> <span class="st">"drop"</span>)</span>
+<span id="cb3-3"><a href="#cb3-3" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb3-4"><a href="#cb3-4" aria-hidden="true" tabindex="-1"></a>file2 <span class="ot">&lt;-</span> molb <span class="sc">%&gt;%</span></span>
+<span id="cb3-5"><a href="#cb3-5" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(master <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(<span class="at">prefix =</span> sample, <span class="at">skim_ped =</span> ped, <span class="at">skim_grp =</span> chk_grp), <span class="at">by =</span> <span class="st">"prefix"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb3-6"><a href="#cb3-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">grp   =</span> <span class="fu">case_when</span>(<span class="fu">str_detect</span>(molb_geno, <span class="st">"B73"</span>)    <span class="sc">~</span> <span class="st">"B73"</span>,</span>
+<span id="cb3-7"><a href="#cb3-7" aria-hidden="true" tabindex="-1"></a>                           <span class="fu">str_detect</span>(molb_geno, <span class="st">"Purple"</span>) <span class="sc">~</span> <span class="st">"Purple"</span>,</span>
+<span id="cb3-8"><a href="#cb3-8" aria-hidden="true" tabindex="-1"></a>                           <span class="sc">!</span><span class="fu">is.na</span>(skim_grp)                <span class="sc">~</span> skim_grp,</span>
+<span id="cb3-9"><a href="#cb3-9" aria-hidden="true" tabindex="-1"></a>                           <span class="cn">TRUE</span> <span class="sc">~</span> <span class="cn">NA_character_</span>),</span>
+<span id="cb3-10"><a href="#cb3-10" aria-hidden="true" tabindex="-1"></a>         <span class="at">type  =</span> <span class="fu">ifelse</span>(<span class="sc">!</span><span class="fu">is.na</span>(grp), grp, <span class="st">"NIL"</span>),</span>
+<span id="cb3-11"><a href="#cb3-11" aria-hidden="true" tabindex="-1"></a>         <span class="at">label =</span> <span class="fu">ifelse</span>(type <span class="sc">==</span> <span class="st">"NIL"</span>, molb_ped, <span class="fu">paste0</span>(grp, <span class="st">"_"</span>, prefix)),</span>
+<span id="cb3-12"><a href="#cb3-12" aria-hidden="true" tabindex="-1"></a>         <span class="at">skim_prefix     =</span> <span class="fu">ifelse</span>(prefix <span class="sc">%in%</span> skim_seq, prefix, <span class="cn">NA_character_</span>),</span>
+<span id="cb3-13"><a href="#cb3-13" aria-hidden="true" tabindex="-1"></a>         <span class="at">pedigree_agrees =</span> <span class="fu">ifelse</span>(type <span class="sc">==</span> <span class="st">"NIL"</span>, molb_ped <span class="sc">==</span> skim_ped, <span class="cn">NA</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb3-14"><a href="#cb3-14" aria-hidden="true" tabindex="-1"></a>  <span class="fu">left_join</span>(brb_by_ped, <span class="at">by =</span> <span class="fu">c</span>(<span class="st">"molb_ped"</span> <span class="ot">=</span> <span class="st">"pedigree"</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb3-15"><a href="#cb3-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(type, label, <span class="at">molb_prefix =</span> prefix, skim_prefix, brbseq_prefix,</span>
+<span id="cb3-16"><a href="#cb3-16" aria-hidden="true" tabindex="-1"></a>            molb_ped, skim_ped, pedigree_agrees,</span>
+<span id="cb3-17"><a href="#cb3-17" aria-hidden="true" tabindex="-1"></a>            <span class="at">in_skim =</span> <span class="sc">!</span><span class="fu">is.na</span>(skim_prefix), <span class="at">in_brbseq =</span> <span class="sc">!</span><span class="fu">is.na</span>(brbseq_prefix)) <span class="sc">%&gt;%</span></span>
+<span id="cb3-18"><a href="#cb3-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(type, molb_prefix)</span>
+<span id="cb3-19"><a href="#cb3-19" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(file2, <span class="fu">file.path</span>(params<span class="sc">$</span>outdir, <span class="st">"molbreeding_3way_correspondence.csv"</span>))</span>
+<span id="cb3-20"><a href="#cb3-20" aria-hidden="true" tabindex="-1"></a><span class="fu">kable</span>(file2, <span class="at">caption =</span> <span class="st">"MolBreeding samples across all three experiments (MolB id · Skim id · BRB-seq id)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>MolBreeding samples across all three experiments (MolB id · Skim id · BRB-seq id)</caption>
+<colgroup>
+<col style="width: 3%">
+<col style="width: 15%">
+<col style="width: 8%">
+<col style="width: 8%">
+<col style="width: 9%">
+<col style="width: 15%">
+<col style="width: 15%">
+<col style="width: 10%">
+<col style="width: 5%">
+<col style="width: 6%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">type</th>
+<th style="text-align: left;">label</th>
+<th style="text-align: left;">molb_prefix</th>
+<th style="text-align: left;">skim_prefix</th>
+<th style="text-align: left;">brbseq_prefix</th>
+<th style="text-align: left;">molb_ped</th>
+<th style="text-align: left;">skim_ped</th>
+<th style="text-align: left;">pedigree_agrees</th>
+<th style="text-align: left;">in_skim</th>
+<th style="text-align: left;">in_brbseq</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">B73_PN4_SID326</td>
+<td style="text-align: left;">PN4_SID326</td>
+<td style="text-align: left;">NA</td>
+<td style="text-align: left;">NA</td>
+<td style="text-align: left;">B73-bulk</td>
+<td style="text-align: left;">NA</td>
+<td style="text-align: left;">NA</td>
+<td style="text-align: left;">FALSE</td>
+<td style="text-align: left;">FALSE</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">B73_PN6_SID576</td>
+<td style="text-align: left;">PN6_SID576</td>
+<td style="text-align: left;">NA</td>
+<td style="text-align: left;">NA</td>
+<td style="text-align: left;">B73-bulk</td>
+<td style="text-align: left;">NA</td>
+<td style="text-align: left;">NA</td>
+<td style="text-align: left;">FALSE</td>
+<td style="text-align: left;">FALSE</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">NIL</td>
+<td style="text-align: left;">Zv.0080_P2_P3_P1.1.1.1</td>
+<td style="text-align: left;">PN12_SID1101</td>
+<td style="text-align: left;">PN12_SID1101</td>
+<td style="text-align: left;">PN3_SID265</td>
+<td style="text-align: left;">Zv.0080_P2_P3_P1.1.1.1</td>
+<td style="text-align: left;">Zv.0080_P2_P3_P1.1.1.1</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">TRUE</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">NIL</td>
+<td style="text-align: left;">Zx.0340_P2_P1_P1.1.1.1</td>
+<td style="text-align: left;">PN4_SID290</td>
+<td style="text-align: left;">PN4_SID290</td>
+<td style="text-align: left;">PN2_SID137</td>
+<td style="text-align: left;">Zx.0340_P2_P1_P1.1.1.1</td>
+<td style="text-align: left;">Zx.0340_P2_P1_P1.1.1.1</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">TRUE</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">NIL</td>
+<td style="text-align: left;">Zx.0340_P2_P1_P1.2.1.1</td>
+<td style="text-align: left;">PN4_SID291</td>
+<td style="text-align: left;">PN4_SID291</td>
+<td style="text-align: left;">NA</td>
+<td style="text-align: left;">Zx.0340_P2_P1_P1.2.1.1</td>
+<td style="text-align: left;">Zx.0340_P2_P1_P1.2.1.1</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">FALSE</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">NIL</td>
+<td style="text-align: left;">Zx.0340_P2_P1_P2.2.1.1</td>
+<td style="text-align: left;">PN4_SID293</td>
+<td style="text-align: left;">PN4_SID293</td>
+<td style="text-align: left;">NA</td>
+<td style="text-align: left;">Zx.0340_P2_P1_P2.2.1.1</td>
+<td style="text-align: left;">Zx.0340_P2_P1_P2.2.1.1</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">FALSE</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">NIL</td>
+<td style="text-align: left;">Zx.0150_P2_P1_P1.1.1.1</td>
+<td style="text-align: left;">PN4_SID309</td>
+<td style="text-align: left;">PN4_SID309</td>
+<td style="text-align: left;">NA</td>
+<td style="text-align: left;">Zx.0150_P2_P1_P1.1.1.1</td>
+<td style="text-align: left;">Zx.0150_P2_P1_P1.1.1.1</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">FALSE</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">NIL</td>
+<td style="text-align: left;">Zx.0030_P2_P1_P2.1.1.1</td>
+<td style="text-align: left;">PN4_SID320</td>
+<td style="text-align: left;">PN4_SID320</td>
+<td style="text-align: left;">NA</td>
+<td style="text-align: left;">Zx.0030_P2_P1_P2.1.1.1</td>
+<td style="text-align: left;">Zx.0030_P2_P1_P2.1.1.1</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">FALSE</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">NIL</td>
+<td style="text-align: left;">Zx.0030_P2_P4_P2.1.1.1</td>
+<td style="text-align: left;">PN4_SID330</td>
+<td style="text-align: left;">PN4_SID330</td>
+<td style="text-align: left;">NA</td>
+<td style="text-align: left;">Zx.0030_P2_P4_P2.1.1.1</td>
+<td style="text-align: left;">Zx.0030_P2_P4_P2.1.1.1</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">FALSE</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">NIL</td>
+<td style="text-align: left;">Zx.0560_P2_P3_P2.1.1.1</td>
+<td style="text-align: left;">PN4_SID359</td>
+<td style="text-align: left;">PN4_SID359</td>
+<td style="text-align: left;">NA</td>
+<td style="text-align: left;">Zx.0560_P2_P3_P2.1.1.1</td>
+<td style="text-align: left;">Zx.0560_P2_P3_P2.1.1.1</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">FALSE</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">NIL</td>
+<td style="text-align: left;">Zx.0540_P3_P4_P4.3.1.1</td>
+<td style="text-align: left;">PN6_SID492</td>
+<td style="text-align: left;">PN6_SID492</td>
+<td style="text-align: left;">PN1_SID10</td>
+<td style="text-align: left;">Zx.0540_P3_P4_P4.3.1.1</td>
+<td style="text-align: left;">Zx.0540_P3_P4_P4.3.1.1</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">TRUE</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">NIL</td>
+<td style="text-align: left;">Zx.0440_P1_P1_P1.3.1.1</td>
+<td style="text-align: left;">PN6_SID507</td>
+<td style="text-align: left;">PN6_SID507</td>
+<td style="text-align: left;">NA</td>
+<td style="text-align: left;">Zx.0440_P1_P1_P1.3.1.1</td>
+<td style="text-align: left;">Zx.0440_P1_P1_P1.3.1.1</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">FALSE</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">NIL</td>
+<td style="text-align: left;">Zx.0440_P1_P3_P1.2.1.1</td>
+<td style="text-align: left;">PN6_SID509</td>
+<td style="text-align: left;">PN6_SID509</td>
+<td style="text-align: left;">NA</td>
+<td style="text-align: left;">Zx.0440_P1_P3_P1.2.1.1</td>
+<td style="text-align: left;">Zx.0440_P1_P3_P1.2.1.1</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">FALSE</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">NIL</td>
+<td style="text-align: left;">Zd.0030_P2_P1_P1.2.1.1</td>
+<td style="text-align: left;">PN6_SID524</td>
+<td style="text-align: left;">PN6_SID524</td>
+<td style="text-align: left;">PN2_SID169</td>
+<td style="text-align: left;">Zd.0030_P2_P1_P1.2.1.1</td>
+<td style="text-align: left;">Zd.0030_P2_P1_P1.2.1.1</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">TRUE</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">NIL</td>
+<td style="text-align: left;">Zd.0030_P2_P4_P4.3.1.1</td>
+<td style="text-align: left;">PN6_SID568</td>
+<td style="text-align: left;">PN6_SID568</td>
+<td style="text-align: left;">NA</td>
+<td style="text-align: left;">Zd.0030_P2_P4_P4.3.1.1</td>
+<td style="text-align: left;">Zd.0030_P2_P4_P4.3.1.1</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">FALSE</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">NIL</td>
+<td style="text-align: left;">Zd.0030_P2_P5_P1.2.1.1</td>
+<td style="text-align: left;">PN6_SID575</td>
+<td style="text-align: left;">PN6_SID575</td>
+<td style="text-align: left;">NA</td>
+<td style="text-align: left;">Zd.0030_P2_P5_P1.2.1.1</td>
+<td style="text-align: left;">Zd.0030_P2_P5_P1.2.1.1</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">TRUE</td>
+<td style="text-align: left;">FALSE</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>All 14 MolBreeding NILs share the <strong>same prefix and pedigree</strong> with Skim (<code>pedigree_agrees = TRUE</code>) — confirming Skim and MolBreeding are one id space. <strong>4 of them were also sequenced in BRB-seq</strong> (linked by pedigree; see <code>brbseq_prefix</code>). The 2 <code>B73-bulk</code> checks have no Skim sequence and no pedigree, so no cross-experiment id.</p>
+</section>
+<section id="checks-to-resolve" class="level2">
+<h2 class="anchored" data-anchor-id="checks-to-resolve">Checks to resolve</h2>
+<p>NILs are matched by pedigree; <strong>checks have no pedigree and no shared id across experiments</strong>, so they cannot be matched automatically. Here is exactly what exists, and what needs a decision.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb4"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb4-1"><a href="#cb4-1" aria-hidden="true" tabindex="-1"></a>checks <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
+<span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">experiment =</span> <span class="st">"Skim"</span>,        <span class="at">group =</span> skim_chk<span class="sc">$</span>grp, <span class="at">prefix =</span> skim_chk<span class="sc">$</span>skim_prefix),</span>
+<span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">experiment =</span> <span class="st">"BRB-seq"</span>,     <span class="at">group =</span> brb_chk<span class="sc">$</span>grp,  <span class="at">prefix =</span> brb_chk<span class="sc">$</span>brb_prefix),</span>
+<span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">experiment =</span> <span class="st">"MolBreeding"</span>, <span class="at">group =</span> <span class="st">"B73"</span>,</span>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>         <span class="at">prefix =</span> file2<span class="sc">$</span>prefix[file2<span class="sc">$</span>type <span class="sc">!=</span> <span class="st">"NIL"</span>]))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output cell-output-stderr">
+<pre><code>Warning: Unknown or uninitialised column: `prefix`.</code></pre>
+</div>
+</div>
+<p><strong>How many checks each experiment sequenced</strong> (rows are what need a cross-experiment id):</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>checks <span class="sc">%&gt;%</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(experiment, group, <span class="at">name =</span> <span class="st">"n_sequenced"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> experiment, <span class="at">values_from =</span> n_sequenced, <span class="at">values_fill =</span> <span class="dv">0</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">kable</span>(<span class="at">caption =</span> <span class="st">"Sequenced check samples per experiment × group"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>Sequenced check samples per experiment × group</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;">group</th>
+<th style="text-align: right;">BRB-seq</th>
+<th style="text-align: right;">MolBreeding</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">B73</td>
+<td style="text-align: right;">35</td>
+<td style="text-align: right;">1</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Purple</td>
+<td style="text-align: right;">3</td>
+<td style="text-align: right;">0</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p><strong>Every sequenced check sample, and what it needs</strong> (this is the matching to-do):</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>checks <span class="sc">%&gt;%</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">label =</span> <span class="fu">paste0</span>(group, <span class="st">"_"</span>, prefix),</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>         <span class="at">cross_experiment_match =</span> <span class="fu">case_when</span>(</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>           group <span class="sc">==</span> <span class="st">"Purple"</span> <span class="sc">~</span> <span class="st">"no partner — Purple sequenced only in BRB-seq"</span>,</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>           group <span class="sc">==</span> <span class="st">"B73"</span>    <span class="sc">~</span> <span class="st">"only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim"</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(experiment, group, prefix, label, cross_experiment_match) <span class="sc">%&gt;%</span></span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(group, experiment, prefix) <span class="sc">%&gt;%</span></span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">kable</span>(<span class="at">caption =</span> <span class="st">"Checks to resolve — each needs a corresponding id (or a decision that none exists)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>Checks to resolve — each needs a corresponding id (or a decision that none exists)</caption>
+<colgroup>
+<col style="width: 10%">
+<col style="width: 5%">
+<col style="width: 9%">
+<col style="width: 15%">
+<col style="width: 60%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">experiment</th>
+<th style="text-align: left;">group</th>
+<th style="text-align: left;">prefix</th>
+<th style="text-align: left;">label</th>
+<th style="text-align: left;">cross_experiment_match</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN1_SID15</td>
+<td style="text-align: left;">B73_PN1_SID15</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN1_SID23</td>
+<td style="text-align: left;">B73_PN1_SID23</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN1_SID40</td>
+<td style="text-align: left;">B73_PN1_SID40</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN1_SID52</td>
+<td style="text-align: left;">B73_PN1_SID52</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN1_SID54</td>
+<td style="text-align: left;">B73_PN1_SID54</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN1_SID64</td>
+<td style="text-align: left;">B73_PN1_SID64</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN1_SID77</td>
+<td style="text-align: left;">B73_PN1_SID77</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN1_SID91</td>
+<td style="text-align: left;">B73_PN1_SID91</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN1_SID95</td>
+<td style="text-align: left;">B73_PN1_SID95</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN2_SID103</td>
+<td style="text-align: left;">B73_PN2_SID103</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN2_SID108</td>
+<td style="text-align: left;">B73_PN2_SID108</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN2_SID118</td>
+<td style="text-align: left;">B73_PN2_SID118</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN2_SID119</td>
+<td style="text-align: left;">B73_PN2_SID119</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN2_SID144</td>
+<td style="text-align: left;">B73_PN2_SID144</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN2_SID147</td>
+<td style="text-align: left;">B73_PN2_SID147</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN2_SID153</td>
+<td style="text-align: left;">B73_PN2_SID153</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN2_SID171</td>
+<td style="text-align: left;">B73_PN2_SID171</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN2_SID184</td>
+<td style="text-align: left;">B73_PN2_SID184</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN2_SID191</td>
+<td style="text-align: left;">B73_PN2_SID191</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN3_SID207</td>
+<td style="text-align: left;">B73_PN3_SID207</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN3_SID209</td>
+<td style="text-align: left;">B73_PN3_SID209</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN3_SID213</td>
+<td style="text-align: left;">B73_PN3_SID213</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN3_SID225</td>
+<td style="text-align: left;">B73_PN3_SID225</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN3_SID231</td>
+<td style="text-align: left;">B73_PN3_SID231</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN3_SID232</td>
+<td style="text-align: left;">B73_PN3_SID232</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN3_SID240</td>
+<td style="text-align: left;">B73_PN3_SID240</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN3_SID256</td>
+<td style="text-align: left;">B73_PN3_SID256</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN3_SID277</td>
+<td style="text-align: left;">B73_PN3_SID277</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN4_SID302</td>
+<td style="text-align: left;">B73_PN4_SID302</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN4_SID310</td>
+<td style="text-align: left;">B73_PN4_SID310</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN4_SID315</td>
+<td style="text-align: left;">B73_PN4_SID315</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN4_SID317</td>
+<td style="text-align: left;">B73_PN4_SID317</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN4_SID356</td>
+<td style="text-align: left;">B73_PN4_SID356</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN4_SID367</td>
+<td style="text-align: left;">B73_PN4_SID367</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN4_SID382</td>
+<td style="text-align: left;">B73_PN4_SID382</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">MolBreeding</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">NA</td>
+<td style="text-align: left;">B73_NA</td>
+<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">Purple</td>
+<td style="text-align: left;">PN2_SID146</td>
+<td style="text-align: left;">Purple_PN2_SID146</td>
+<td style="text-align: left;">no partner — Purple sequenced only in BRB-seq</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">Purple</td>
+<td style="text-align: left;">PN4_SID355</td>
+<td style="text-align: left;">Purple_PN4_SID355</td>
+<td style="text-align: left;">no partner — Purple sequenced only in BRB-seq</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">Purple</td>
+<td style="text-align: left;">PN4_SID379</td>
+<td style="text-align: left;">Purple_PN4_SID379</td>
+<td style="text-align: left;">no partner — Purple sequenced only in BRB-seq</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p>Key points: <strong>skim sequenced no checks</strong> (its run covers <code>PN3–PN17</code>, not the check wells), so nothing matches <em>through skim</em>; <strong>MolBreeding</strong> has only 2 <code>B73-bulk</code> (<code>PN4_SID326</code>, <code>PN6_SID576</code>, possibly <em>pooled</em>); <strong>BRB-seq Purple</strong> (<code>PN2_SID146</code>, <code>PN4_SID355</code>, <code>PN4_SID379</code>) has no partner in any other experiment.</p>
+<blockquote class="blockquote">
+<p><strong>For Hannah:</strong> is there a physical-sample key (plant / DNA aliquot / plate provenance) that maps these check wells across the Skim/MolBreeding and BRB-seq experiments? If the B73 checks are interchangeable controls (each should read ≈ pure recurrent, ~0 donor), we may only need to treat them as a <strong>control class per experiment</strong> rather than match them 1:1. Please confirm the intended handling so the labels can be finalized.</p>
+</blockquote>
+</section>
+<section id="summary" class="level2">
+<h2 class="anchored" data-anchor-id="summary">Summary</h2>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tibble</span>(</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">table =</span> <span class="fu">c</span>(<span class="st">"Skim ↔ BRB-seq"</span>, <span class="st">"MolBreeding 3-way"</span>),</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">key   =</span> <span class="fu">c</span>(<span class="st">"pedigree (.B-dropped)"</span>, <span class="st">"shared PN#_SID# (Skim); pedigree (BRB)"</span>),</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">NILs  =</span> <span class="fu">c</span>(<span class="fu">sum</span>(nil1<span class="sc">$</span>in_skim <span class="sc">&amp;</span> nil1<span class="sc">$</span>in_brbseq), <span class="fu">sum</span>(file2<span class="sc">$</span>type<span class="sc">==</span><span class="st">"NIL"</span>)),</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">note  =</span> <span class="fu">c</span>(<span class="st">"comparable on both platforms"</span>,</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>            <span class="fu">sprintf</span>(<span class="st">"16 MolB samples; %d also in BRB-seq"</span>, <span class="fu">sum</span>(file2<span class="sc">$</span>in_brbseq))),</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">file =</span> <span class="fu">file.path</span>(params<span class="sc">$</span>outdir, <span class="fu">c</span>(<span class="st">"skim_brbseq_correspondence.csv"</span>,<span class="st">"molbreeding_3way_correspondence.csv"</span>))</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span> <span class="fu">kable</span>(<span class="at">caption =</span> <span class="st">"Deliverables"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>Deliverables</caption>
+<colgroup>
+<col style="width: 11%">
+<col style="width: 23%">
+<col style="width: 3%">
+<col style="width: 21%">
+<col style="width: 40%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">table</th>
+<th style="text-align: left;">key</th>
+<th style="text-align: right;">NILs</th>
+<th style="text-align: left;">note</th>
+<th style="text-align: left;">file</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">Skim ↔︎ BRB-seq</td>
+<td style="text-align: left;">pedigree (.B-dropped)</td>
+<td style="text-align: right;">334</td>
+<td style="text-align: left;">comparable on both platforms</td>
+<td style="text-align: left;">results/sample_correspondence/skim_brbseq_correspondence.csv</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">MolBreeding 3-way</td>
+<td style="text-align: left;">shared PN#_SID# (Skim); pedigree (BRB)</td>
+<td style="text-align: right;">14</td>
+<td style="text-align: left;">16 MolB samples; 4 also in BRB-seq</td>
+<td style="text-align: left;">results/sample_correspondence/molbreeding_3way_correspondence.csv</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<ul>
+<li><strong>Skim ↔︎ BRB-seq:</strong> 334 comparable NILs (by pedigree).</li>
+<li><strong>MolBreeding 3-way:</strong> all 14 MolB NILs map to Skim (shared id); 4 are also in BRB-seq (by pedigree).</li>
+<li><strong>Checks remain unresolved</strong> pending a cross-experiment key (see above).</li>
+</ul>
+</section>
+
+</main>
+<!-- /main column -->
+<script id="quarto-html-after-body" type="application/javascript">
+  window.document.addEventListener("DOMContentLoaded", function (event) {
+    const icon = "";
+    const anchorJS = new window.AnchorJS();
+    anchorJS.options = {
+      placement: 'right',
+      icon: icon
+    };
+    anchorJS.add('.anchored');
+    const isCodeAnnotation = (el) => {
+      for (const clz of el.classList) {
+        if (clz.startsWith('code-annotation-')) {                     
+          return true;
+        }
+      }
+      return false;
+    }
+    const onCopySuccess = function(e) {
+      // button target
+      const button = e.trigger;
+      // don't keep focus
+      button.blur();
+      // flash "checked"
+      button.classList.add('code-copy-button-checked');
+      var currentTitle = button.getAttribute("title");
+      button.setAttribute("title", "Copied!");
+      let tooltip;
+      if (window.bootstrap) {
+        button.setAttribute("data-bs-toggle", "tooltip");
+        button.setAttribute("data-bs-placement", "left");
+        button.setAttribute("data-bs-title", "Copied!");
+        tooltip = new bootstrap.Tooltip(button, 
+          { trigger: "manual", 
+            customClass: "code-copy-button-tooltip",
+            offset: [0, -8]});
+        tooltip.show();    
+      }
+      setTimeout(function() {
+        if (tooltip) {
+          tooltip.hide();
+          button.removeAttribute("data-bs-title");
+          button.removeAttribute("data-bs-toggle");
+          button.removeAttribute("data-bs-placement");
+        }
+        button.setAttribute("title", currentTitle);
+        button.classList.remove('code-copy-button-checked');
+      }, 1000);
+      // clear code selection
+      e.clearSelection();
+    }
+    const getTextToCopy = function(trigger) {
+      const outerScaffold = trigger.parentElement.cloneNode(true);
+      const codeEl = outerScaffold.querySelector('code');
+      for (const childEl of codeEl.children) {
+        if (isCodeAnnotation(childEl)) {
+          childEl.remove();
+        }
+      }
+      return codeEl.innerText;
+    }
+    const clipboard = new window.ClipboardJS('.code-copy-button:not([data-in-quarto-modal])', {
+      text: getTextToCopy
+    });
+    clipboard.on('success', onCopySuccess);
+    if (window.document.getElementById('quarto-embedded-source-code-modal')) {
+      const clipboardModal = new window.ClipboardJS('.code-copy-button[data-in-quarto-modal]', {
+        text: getTextToCopy,
+        container: window.document.getElementById('quarto-embedded-source-code-modal')
+      });
+      clipboardModal.on('success', onCopySuccess);
+    }
+      var localhostRegex = new RegExp(/^(?:http|https):\/\/localhost\:?[0-9]*\//);
+      var mailtoRegex = new RegExp(/^mailto:/);
+        var filterRegex = new RegExp('/' + window.location.host + '/');
+      var isInternal = (href) => {
+          return filterRegex.test(href) || localhostRegex.test(href) || mailtoRegex.test(href);
+      }
+      // Inspect non-navigation links and adorn them if external
+     var links = window.document.querySelectorAll('a[href]:not(.nav-link):not(.navbar-brand):not(.toc-action):not(.sidebar-link):not(.sidebar-item-toggle):not(.pagination-link):not(.no-external):not([aria-hidden]):not(.dropdown-item):not(.quarto-navigation-tool):not(.about-link)');
+      for (var i=0; i<links.length; i++) {
+        const link = links[i];
+        if (!isInternal(link.href)) {
+          // undo the damage that might have been done by quarto-nav.js in the case of
+          // links that we want to consider external
+          if (link.dataset.originalHref !== undefined) {
+            link.href = link.dataset.originalHref;
+          }
+        }
+      }
+    function tippyHover(el, contentFn, onTriggerFn, onUntriggerFn) {
+      const config = {
+        allowHTML: true,
+        maxWidth: 500,
+        delay: 100,
+        arrow: false,
+        appendTo: function(el) {
+            return el.parentElement;
+        },
+        interactive: true,
+        interactiveBorder: 10,
+        theme: 'quarto',
+        placement: 'bottom-start',
+      };
+      if (contentFn) {
+        config.content = contentFn;
+      }
+      if (onTriggerFn) {
+        config.onTrigger = onTriggerFn;
+      }
+      if (onUntriggerFn) {
+        config.onUntrigger = onUntriggerFn;
+      }
+      window.tippy(el, config); 
+    }
+    const noterefs = window.document.querySelectorAll('a[role="doc-noteref"]');
+    for (var i=0; i<noterefs.length; i++) {
+      const ref = noterefs[i];
+      tippyHover(ref, function() {
+        // use id or data attribute instead here
+        let href = ref.getAttribute('data-footnote-href') || ref.getAttribute('href');
+        try { href = new URL(href).hash; } catch {}
+        const id = href.replace(/^#\/?/, "");
+        const note = window.document.getElementById(id);
+        if (note) {
+          return note.innerHTML;
+        } else {
+          return "";
+        }
+      });
+    }
+    const xrefs = window.document.querySelectorAll('a.quarto-xref');
+    const processXRef = (id, note) => {
+      // Strip column container classes
+      const stripColumnClz = (el) => {
+        el.classList.remove("page-full", "page-columns");
+        if (el.children) {
+          for (const child of el.children) {
+            stripColumnClz(child);
+          }
+        }
+      }
+      stripColumnClz(note)
+      if (id === null || id.startsWith('sec-')) {
+        // Special case sections, only their first couple elements
+        const container = document.createElement("div");
+        if (note.children && note.children.length > 2) {
+          container.appendChild(note.children[0].cloneNode(true));
+          for (let i = 1; i < note.children.length; i++) {
+            const child = note.children[i];
+            if (child.tagName === "P" && child.innerText === "") {
+              continue;
+            } else {
+              container.appendChild(child.cloneNode(true));
+              break;
+            }
+          }
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(container);
+          }
+          return container.innerHTML
+        } else {
+          if (window.Quarto?.typesetMath) {
+            window.Quarto.typesetMath(note);
+          }
+          return note.innerHTML;
+        }
+      } else {
+        // Remove any anchor links if they are present
+        const anchorLink = note.querySelector('a.anchorjs-link');
+        if (anchorLink) {
+          anchorLink.remove();
+        }
+        if (window.Quarto?.typesetMath) {
+          window.Quarto.typesetMath(note);
+        }
+        if (note.classList.contains("callout")) {
+          return note.outerHTML;
+        } else {
+          return note.innerHTML;
+        }
+      }
+    }
+    for (var i=0; i<xrefs.length; i++) {
+      const xref = xrefs[i];
+      tippyHover(xref, undefined, function(instance) {
+        instance.disable();
+        let url = xref.getAttribute('href');
+        let hash = undefined; 
+        if (url.startsWith('#')) {
+          hash = url;
+        } else {
+          try { hash = new URL(url).hash; } catch {}
+        }
+        if (hash) {
+          const id = hash.replace(/^#\/?/, "");
+          const note = window.document.getElementById(id);
+          if (note !== null) {
+            try {
+              const html = processXRef(id, note.cloneNode(true));
+              instance.setContent(html);
+            } finally {
+              instance.enable();
+              instance.show();
+            }
+          } else {
+            // See if we can fetch this
+            fetch(url.split('#')[0])
+            .then(res => res.text())
+            .then(html => {
+              const parser = new DOMParser();
+              const htmlDoc = parser.parseFromString(html, "text/html");
+              const note = htmlDoc.getElementById(id);
+              if (note !== null) {
+                const html = processXRef(id, note);
+                instance.setContent(html);
+              } 
+            }).finally(() => {
+              instance.enable();
+              instance.show();
+            });
+          }
+        } else {
+          // See if we can fetch a full url (with no hash to target)
+          // This is a special case and we should probably do some content thinning / targeting
+          fetch(url)
+          .then(res => res.text())
+          .then(html => {
+            const parser = new DOMParser();
+            const htmlDoc = parser.parseFromString(html, "text/html");
+            const note = htmlDoc.querySelector('main.content');
+            if (note !== null) {
+              // This should only happen for chapter cross references
+              // (since there is no id in the URL)
+              // remove the first header
+              if (note.children.length > 0 && note.children[0].tagName === "HEADER") {
+                note.children[0].remove();
+              }
+              const html = processXRef(null, note);
+              instance.setContent(html);
+            } 
+          }).finally(() => {
+            instance.enable();
+            instance.show();
+          });
+        }
+      }, function(instance) {
+      });
+    }
+        let selectedAnnoteEl;
+        const selectorForAnnotation = ( cell, annotation) => {
+          let cellAttr = 'data-code-cell="' + cell + '"';
+          let lineAttr = 'data-code-annotation="' +  annotation + '"';
+          const selector = 'span[' + cellAttr + '][' + lineAttr + ']';
+          return selector;
+        }
+        const selectCodeLines = (annoteEl) => {
+          const doc = window.document;
+          const targetCell = annoteEl.getAttribute("data-target-cell");
+          const targetAnnotation = annoteEl.getAttribute("data-target-annotation");
+          const annoteSpan = window.document.querySelector(selectorForAnnotation(targetCell, targetAnnotation));
+          const lines = annoteSpan.getAttribute("data-code-lines").split(",");
+          const lineIds = lines.map((line) => {
+            return targetCell + "-" + line;
+          })
+          let top = null;
+          let height = null;
+          let parent = null;
+          if (lineIds.length > 0) {
+              //compute the position of the single el (top and bottom and make a div)
+              const el = window.document.getElementById(lineIds[0]);
+              top = el.offsetTop;
+              height = el.offsetHeight;
+              parent = el.parentElement.parentElement;
+            if (lineIds.length > 1) {
+              const lastEl = window.document.getElementById(lineIds[lineIds.length - 1]);
+              const bottom = lastEl.offsetTop + lastEl.offsetHeight;
+              height = bottom - top;
+            }
+            if (top !== null && height !== null && parent !== null) {
+              // cook up a div (if necessary) and position it 
+              let div = window.document.getElementById("code-annotation-line-highlight");
+              if (div === null) {
+                div = window.document.createElement("div");
+                div.setAttribute("id", "code-annotation-line-highlight");
+                div.style.position = 'absolute';
+                parent.appendChild(div);
+              }
+              div.style.top = top - 2 + "px";
+              div.style.height = height + 4 + "px";
+              div.style.left = 0;
+              let gutterDiv = window.document.getElementById("code-annotation-line-highlight-gutter");
+              if (gutterDiv === null) {
+                gutterDiv = window.document.createElement("div");
+                gutterDiv.setAttribute("id", "code-annotation-line-highlight-gutter");
+                gutterDiv.style.position = 'absolute';
+                const codeCell = window.document.getElementById(targetCell);
+                const gutter = codeCell.querySelector('.code-annotation-gutter');
+                gutter.appendChild(gutterDiv);
+              }
+              gutterDiv.style.top = top - 2 + "px";
+              gutterDiv.style.height = height + 4 + "px";
+            }
+            selectedAnnoteEl = annoteEl;
+          }
+        };
+        const unselectCodeLines = () => {
+          const elementsIds = ["code-annotation-line-highlight", "code-annotation-line-highlight-gutter"];
+          elementsIds.forEach((elId) => {
+            const div = window.document.getElementById(elId);
+            if (div) {
+              div.remove();
+            }
+          });
+          selectedAnnoteEl = undefined;
+        };
+          // Handle positioning of the toggle
+      window.addEventListener(
+        "resize",
+        throttle(() => {
+          elRect = undefined;
+          if (selectedAnnoteEl) {
+            selectCodeLines(selectedAnnoteEl);
+          }
+        }, 10)
+      );
+      function throttle(fn, ms) {
+      let throttle = false;
+      let timer;
+        return (...args) => {
+          if(!throttle) { // first call gets through
+              fn.apply(this, args);
+              throttle = true;
+          } else { // all the others get throttled
+              if(timer) clearTimeout(timer); // cancel #2
+              timer = setTimeout(() => {
+                fn.apply(this, args);
+                timer = throttle = false;
+              }, ms);
+          }
+        };
+      }
+        // Attach click handler to the DT
+        const annoteDls = window.document.querySelectorAll('dt[data-target-cell]');
+        for (const annoteDlNode of annoteDls) {
+          annoteDlNode.addEventListener('click', (event) => {
+            const clickedEl = event.target;
+            if (clickedEl !== selectedAnnoteEl) {
+              unselectCodeLines();
+              const activeEl = window.document.querySelector('dt[data-target-cell].code-annotation-active');
+              if (activeEl) {
+                activeEl.classList.remove('code-annotation-active');
+              }
+              selectCodeLines(clickedEl);
+              clickedEl.classList.add('code-annotation-active');
+            } else {
+              // Unselect the line
+              unselectCodeLines();
+              clickedEl.classList.remove('code-annotation-active');
+            }
+          });
+        }
+    const findCites = (el) => {
+      const parentEl = el.parentElement;
+      if (parentEl) {
+        const cites = parentEl.dataset.cites;
+        if (cites) {
+          return {
+            el,
+            cites: cites.split(' ')
+          };
+        } else {
+          return findCites(el.parentElement)
+        }
+      } else {
+        return undefined;
+      }
+    };
+    var bibliorefs = window.document.querySelectorAll('a[role="doc-biblioref"]');
+    for (var i=0; i<bibliorefs.length; i++) {
+      const ref = bibliorefs[i];
+      const citeInfo = findCites(ref);
+      if (citeInfo) {
+        tippyHover(citeInfo.el, function() {
+          var popup = window.document.createElement('div');
+          citeInfo.cites.forEach(function(cite) {
+            var citeDiv = window.document.createElement('div');
+            citeDiv.classList.add('hanging-indent');
+            citeDiv.classList.add('csl-entry');
+            var biblioDiv = window.document.getElementById('ref-' + cite);
+            if (biblioDiv) {
+              citeDiv.innerHTML = biblioDiv.innerHTML;
+            }
+            popup.appendChild(citeDiv);
+          });
+          return popup.innerHTML;
+        });
+      }
+    }
+  });
+  </script>
+</div> <!-- /content -->
+
+
+
+
+</body></html>

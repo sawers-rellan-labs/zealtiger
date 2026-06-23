@@ -1,0 +1,224 @@
+---
+title: "Cross-experiment sample correspondence — Skim · MolBreeding · BRB-seq"
+subtitle: "Which sample id in one experiment is the same biological NIL/check in another"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: true
+    df-print: kable
+params:
+  master:   "data/sample_metadata_master.csv"              # skim/MolBreeding registry (sample -> pedigree, with .B)
+  brb_meta: "data/brbseq_metadata_master.csv"              # BRB-seq (sample_id IS the fastq prefix)
+  mb_map:   "data/molbreeding_45k_sample_map.tsv"          # MolBreeding target-seq plate map (16 samples)
+  skim_seq: "results/sim_calibration/real_skim_lambda.csv" # skim samples WITH sequence data (per-sample coverage)
+  brb_seq:  "results/sim_calibration/brbseq_coverage.csv"  # BRB samples WITH sequence data
+  outdir:   "results/sample_correspondence"
+---
+
+## Purpose
+
+Curate, for **every sample that has sequence data**, the correspondence between the
+per-experiment `PN#_SID#` fastq sample id and the **true biological identity** — so we
+compare the right genome tracks across experiments.
+
+### The trap this fixes
+
+All three experiments label fastqs with a `PN#_SID#` prefix
+(`PN{ceil(SID/96)}_SID{SID}`), but the SID numbering is **per-experiment**, so the *same
+prefix is a different biological sample across experiments*. Concretely:
+
+- **Skim** (WGS low-coverage) and **MolBreeding** (target sequencing) **share one id space** —
+  same `PN#_SID#` ⇒ same sample. (Skim-RTI on the SNP50K filter and Skim-BIN on the 27M
+  wideseq filter are the *same* skim reads.)
+- **BRB-seq** (3′ RNA) has its **own** `PN#_SID#` space. Assuming it matched Skim/MolB by
+  prefix is what previously compared incomparable samples.
+
+**Cross-experiment identity key = the pedigree string** (drop the trailing `.B` the
+Skim/MolB registry carries; BRB pedigrees have none). The `PN#_SID#` prefix is *not* a
+cross-experiment key.
+
+### Scope and rules
+
+- **In scope:** teosinte-introgression **NILs** + the **B73** and **Purple** checks.
+- **Sequence-data only:** a sample appears only if it has reads (present in the per-sample
+  coverage tables) — metadata-only rows are excluded.
+- **Label:** NILs → the pedigree string; checks → `B73_<prefix>` / `Purple_<prefix>`
+  (each check is unique because checks cannot yet be matched across experiments — see
+  [Checks](#checks-to-resolve)).
+- Sample class is read from `Genotype`/`sample_group`/`accession`, **never** the `check`
+  column (it is unreliable — e.g. BRB "Purple Check" rows carry `check="no"`).
+
+```{r setup}
+#| message: false
+#| warning: false
+library(readr); library(dplyr); library(stringr); library(tidyr); library(knitr)
+
+chop <- function(x) sub("\\.B$", "", x)   # drop the trailing ".B"
+
+## ---- samples WITH sequence data ----
+skim_seq <- read_csv(params$skim_seq, show_col_types = FALSE)$name   # skim sequenced
+brb_seq  <- read_csv(params$brb_seq,  show_col_types = FALSE)$name   # BRB sequenced
+
+## ---- Skim / MolBreeding id space (shared) ----
+master <- read_csv(params$master, show_col_types = FALSE) %>%
+  mutate(pedigree = ifelse(pedigree %in% c("NA", ""), NA, pedigree),
+         ped      = ifelse(!is.na(pedigree), chop(pedigree), NA),
+         chk_grp  = ifelse(sample_group %in% c("B73", "Purple"), sample_group, NA))
+skim_nil <- master %>% filter(!is.na(ped),     sample %in% skim_seq) %>% transmute(skim_prefix = sample, pedigree = ped)
+skim_chk <- master %>% filter(!is.na(chk_grp), sample %in% skim_seq) %>% transmute(skim_prefix = sample, grp = chk_grp)
+
+## ---- BRB-seq id space (own) ----
+brbm <- read_csv(params$brb_meta, show_col_types = FALSE) %>%
+  mutate(brb_prefix = sample_id,                              # already PN#_SID#
+         is_nil  = str_detect(Genotype, "_P[0-9]"),           # real pedigree -> NIL
+         chk_grp = case_when(Genotype == "B73" | accession == "B73"             ~ "B73",
+                             accession == "Purple" | str_detect(Genotype, "Purple") ~ "Purple",
+                             TRUE ~ NA_character_),
+         ped     = ifelse(is_nil, chop(Genotype), NA))
+brb_nil <- brbm %>% filter(is_nil,          brb_prefix %in% brb_seq) %>% transmute(brb_prefix, pedigree = ped)
+brb_chk <- brbm %>% filter(!is.na(chk_grp), brb_prefix %in% brb_seq) %>% transmute(brb_prefix, grp = chk_grp)
+
+## ---- MolBreeding target-seq (the 16 map rows ARE the sequenced set) ----
+molb <- read_tsv(params$mb_map, show_col_types = FALSE) %>%
+  transmute(prefix = sample_id, molb_geno = genotype, molb_ped = chop(genotype))
+
+agg <- function(df, key, val) df %>% group_by(.data[[key]]) %>%
+  summarise("{val}" := paste(sort(unique(.data[[val]])), collapse = ";"),
+            "n_{val}" := n_distinct(.data[[val]]), .groups = "drop")
+```
+
+## File 1 — Skim ↔ BRB-seq (matched by pedigree)
+
+```{r file1}
+sk <- agg(skim_nil, "pedigree", "skim_prefix")
+br <- agg(brb_nil,  "pedigree", "brb_prefix") %>% rename(brbseq_prefix = brb_prefix, n_brbseq_prefix = n_brb_prefix)
+
+nil1 <- full_join(sk, br, by = "pedigree") %>%
+  transmute(type = "NIL", label = pedigree, pedigree,
+            skim_prefix, brbseq_prefix,
+            in_skim = !is.na(skim_prefix), in_brbseq = !is.na(brbseq_prefix)) %>%
+  arrange(desc(in_skim & in_brbseq), pedigree)
+
+chk1 <- bind_rows(
+  skim_chk %>% transmute(type = grp, label = paste0(grp, "_", skim_prefix), pedigree = NA_character_,
+                         skim_prefix, brbseq_prefix = NA_character_, in_skim = TRUE,  in_brbseq = FALSE),
+  brb_chk  %>% transmute(type = grp, label = paste0(grp, "_", brb_prefix), pedigree = NA_character_,
+                         skim_prefix = NA_character_, brbseq_prefix = brb_prefix, in_skim = FALSE, in_brbseq = TRUE))
+
+file1 <- bind_rows(nil1, chk1)
+dir.create(params$outdir, showWarnings = FALSE, recursive = TRUE)
+write_csv(file1, file.path(params$outdir, "skim_brbseq_correspondence.csv"))
+
+nil1 %>% count(`NIL status` = case_when(in_skim & in_brbseq ~ "comparable (both sequenced)",
+                                        in_skim             ~ "skim-only",
+                                        TRUE                ~ "BRB-only")) %>%
+  kable(caption = "Skim ↔ BRB-seq NILs by availability")
+```
+
+**`r sum(nil1$in_skim & nil1$in_brbseq)` NILs are directly comparable** (sequenced on both
+platforms, matched by pedigree). The full per-NIL table is **not embedded here** — it ships
+as the CSV for Hannah: `results/sample_correspondence/skim_brbseq_correspondence.csv`
+(NILs + checks, with `in_skim`/`in_brbseq` flags).
+
+## File 2 — MolBreeding 3-way (MolB · Skim · BRB-seq)
+
+MolBreeding sequenced only **16 samples**, so rather than a separate Skim↔MolBreeding file we
+give the **full 3-way correspondence for those 16** — their MolB id, the shared Skim id, and
+(where the same NIL was also sequenced in BRB-seq) the BRB-seq id. MolBreeding and Skim share
+one id space (same `PN#_SID#`); the BRB-seq link is by **pedigree** and exists for only a few
+of the lines (MolBreeding and BRB-seq otherwise share no id space and overlap on just those
+NILs — hence the wide Skim↔BRB correspondence stays in File 1).
+
+```{r file2}
+brb_by_ped <- brb_nil %>% group_by(pedigree) %>%
+  summarise(brbseq_prefix = paste(sort(unique(brb_prefix)), collapse = ";"), .groups = "drop")
+
+file2 <- molb %>%
+  left_join(master %>% transmute(prefix = sample, skim_ped = ped, skim_grp = chk_grp), by = "prefix") %>%
+  mutate(grp   = case_when(str_detect(molb_geno, "B73")    ~ "B73",
+                           str_detect(molb_geno, "Purple") ~ "Purple",
+                           !is.na(skim_grp)                ~ skim_grp,
+                           TRUE ~ NA_character_),
+         type  = ifelse(!is.na(grp), grp, "NIL"),
+         label = ifelse(type == "NIL", molb_ped, paste0(grp, "_", prefix)),
+         skim_prefix     = ifelse(prefix %in% skim_seq, prefix, NA_character_),
+         pedigree_agrees = ifelse(type == "NIL", molb_ped == skim_ped, NA)) %>%
+  left_join(brb_by_ped, by = c("molb_ped" = "pedigree")) %>%
+  transmute(type, label, molb_prefix = prefix, skim_prefix, brbseq_prefix,
+            molb_ped, skim_ped, pedigree_agrees,
+            in_skim = !is.na(skim_prefix), in_brbseq = !is.na(brbseq_prefix)) %>%
+  arrange(type, molb_prefix)
+write_csv(file2, file.path(params$outdir, "molbreeding_3way_correspondence.csv"))
+kable(file2, caption = "MolBreeding samples across all three experiments (MolB id · Skim id · BRB-seq id)")
+```
+
+All `r sum(file2$type=="NIL")` MolBreeding NILs share the **same prefix and pedigree** with
+Skim (`pedigree_agrees = TRUE`) — confirming Skim and MolBreeding are one id space. **`r sum(file2$in_brbseq)`
+of them were also sequenced in BRB-seq** (linked by pedigree; see `brbseq_prefix`). The 2
+`B73-bulk` checks have no Skim sequence and no pedigree, so no cross-experiment id.
+
+## Checks to resolve {#checks-to-resolve}
+
+NILs are matched by pedigree; **checks have no pedigree and no shared id across
+experiments**, so they cannot be matched automatically. Here is exactly what exists, and
+what needs a decision.
+
+```{r checks}
+checks <- bind_rows(
+  tibble(experiment = "Skim",        group = skim_chk$grp, prefix = skim_chk$skim_prefix),
+  tibble(experiment = "BRB-seq",     group = brb_chk$grp,  prefix = brb_chk$brb_prefix),
+  tibble(experiment = "MolBreeding", group = "B73",
+         prefix = file2$prefix[file2$type != "NIL"]))
+```
+
+**How many checks each experiment sequenced** (rows are what need a cross-experiment id):
+
+```{r checks-counts}
+checks %>%
+  count(experiment, group, name = "n_sequenced") %>%
+  pivot_wider(names_from = experiment, values_from = n_sequenced, values_fill = 0) %>%
+  kable(caption = "Sequenced check samples per experiment × group")
+```
+
+**Every sequenced check sample, and what it needs** (this is the matching to-do):
+
+```{r checks-table}
+checks %>%
+  mutate(label = paste0(group, "_", prefix),
+         cross_experiment_match = case_when(
+           group == "Purple" ~ "no partner — Purple sequenced only in BRB-seq",
+           group == "B73"    ~ "only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim")) %>%
+  transmute(experiment, group, prefix, label, cross_experiment_match) %>%
+  arrange(group, experiment, prefix) %>%
+  kable(caption = "Checks to resolve — each needs a corresponding id (or a decision that none exists)")
+```
+
+Key points: **skim sequenced no checks** (its run covers `PN3–PN17`, not the check wells),
+so nothing matches *through skim*; **MolBreeding** has only 2 `B73-bulk` (`PN4_SID326`,
+`PN6_SID576`, possibly *pooled*); **BRB-seq Purple** (`PN2_SID146`, `PN4_SID355`,
+`PN4_SID379`) has no partner in any other experiment.
+
+> **For Hannah:** is there a physical-sample key (plant / DNA aliquot / plate provenance)
+> that maps these check wells across the Skim/MolBreeding and BRB-seq experiments? If the
+> B73 checks are interchangeable controls (each should read ≈ pure recurrent, ~0 donor),
+> we may only need to treat them as a **control class per experiment** rather than match
+> them 1:1. Please confirm the intended handling so the labels can be finalized.
+
+## Summary
+
+```{r summary}
+tibble(
+  table = c("Skim ↔ BRB-seq", "MolBreeding 3-way"),
+  key   = c("pedigree (.B-dropped)", "shared PN#_SID# (Skim); pedigree (BRB)"),
+  NILs  = c(sum(nil1$in_skim & nil1$in_brbseq), sum(file2$type=="NIL")),
+  note  = c("comparable on both platforms",
+            sprintf("16 MolB samples; %d also in BRB-seq", sum(file2$in_brbseq))),
+  file = file.path(params$outdir, c("skim_brbseq_correspondence.csv","molbreeding_3way_correspondence.csv"))
+) %>% kable(caption = "Deliverables")
+```
+
+- **Skim ↔ BRB-seq:** `r sum(nil1$in_skim & nil1$in_brbseq)` comparable NILs (by pedigree).
+- **MolBreeding 3-way:** all `r sum(file2$type=="NIL")` MolB NILs map to Skim (shared id);
+  `r sum(file2$in_brbseq)` are also in BRB-seq (by pedigree).
+- **Checks remain unresolved** pending a cross-experiment key (see above).
