@@ -187,33 +187,20 @@ checks %>%
   kable(caption = "Sequenced check samples per experiment × group")
 ```
 
-**Every sequenced check sample, and what it needs** (this is the matching to-do):
+**The sequenced check samples** (none have a pedigree, so none can be matched by the NIL key):
 
 ```{r checks-table}
-molb_b73 <- file2$molb_prefix[file2$type != "NIL"]   # B73-bulk ids (shared with skim)
-checks %>%
-  mutate(label = paste0(group, "_", prefix),
-         status = case_when(
-           group == "B73" & prefix %in% molb_b73 ~ "B73 shared by Skim & MolBreeding (same id)",
-           group == "B73" & experiment == "BRB-seq" ~ "BRB B73: own id, no pedigree → needs key to map to Skim/MolB",
-           group == "B73" ~ "Skim-only B73 (no MolB/BRB counterpart by id)",
-           group == "Purple" & experiment == "BRB-seq" ~ "BRB Purple: own id, no pedigree → needs key to map to Skim",
-           group == "Purple" ~ "Skim Purple: needs key to map to BRB (none in MolB)")) %>%
-  transmute(experiment, group, prefix, label, status) %>%
-  arrange(group, experiment, prefix) %>%
-  kable(caption = "Checks — what is matched vs. what still needs a key")
+checks_tab <- checks %>% transmute(experiment, group, prefix) %>% arrange(group, experiment, prefix)
+write_csv(checks_tab, file.path(params$outdir, "checks_to_resolve.csv"))
+kable(checks_tab, caption = "Sequenced check samples (also written to checks_to_resolve.csv)")
 ```
 
-Key points:
+Matching status:
 
-- **Skim ↔ MolBreeding checks are resolved by shared id.** The 2 MolB `B73-bulk`
+- **Skim ↔ MolBreeding is already resolved** by shared id — the 2 MolBreeding `B73-bulk`
   (`PN4_SID326`, `PN6_SID576`) are the same samples as two of skim's B73 checks.
-- **Skim has `r sum(skim_chk$grp=="B73")` B73 + `r sum(skim_chk$grp=="Purple")` Purple**
-  checks sequenced; **MolBreeding** has the 2 B73-bulk; **BRB-seq** has
-  `r sum(brb_chk$grp=="B73")` B73 + `r sum(brb_chk$grp=="Purple")` Purple.
-- **What still needs a key:** the **BRB-seq checks** have their own id space and no pedigree,
-  so they cannot be auto-matched to the Skim/MolBreeding checks. BRB Purple
-  (`PN2_SID146`, `PN4_SID355`, `PN4_SID379`) can only map to Skim Purple (none in MolB).
+- **BRB-seq checks need a key.** They have their own id space and no pedigree, so they
+  cannot be matched to the skim/MolBreeding checks automatically.
 
 > **For Hannah:** is there a physical-sample key (plant / DNA aliquot / plate provenance)
 > that maps the **BRB-seq** check wells to the Skim/MolBreeding checks? (Skim↔MolBreeding are

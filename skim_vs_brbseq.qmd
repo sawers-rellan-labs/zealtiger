@@ -15,8 +15,9 @@ execute:
 params:
   brb_calls:  "results/sim_calibration/brbseq_calls_r109/calls_common_schema.csv"        # BrB-RTI, KS-optimal r=109
   skim_calls: "data/rtiger_50K/calls_taxa_r5.csv"                                       # Skim-RTI, per-taxon r=5
-  brb_meta:   "data/BRBseq_metadata.csv"                                                # BRB sample_id -> pedigree
-  skim_ped:   "data/skim_sample_pedigree.csv"                                           # skim sample -> pedigree (.B dropped)
+  brb_meta:   "data/BRBseq_metadata.csv"                                                # BRB sample_id -> pedigree (coverage section)
+  skim_ped:   "data/skim_sample_pedigree.csv"                                           # skim sample -> pedigree (.B dropped; coverage section)
+  corr:       "results/sample_correspondence/skim_brbseq_correspondence.csv"            # curated NIL pairs (pedigree-matched, seq-restricted)
   mb_counts:  "results/sim_calibration/gbts_calls/SNP_wsfilt/counts"                    # wideseq grid (9,157)
   brb_cov:    "results/sim_calibration/brbseq_coverage.csv"                             # BRB-seq per-sample mean coverage (all 379)
   skim_cov:   "results/sim_calibration/real_skim_lambda.csv"                            # SNP50K skim per-sample mean coverage (all 1,393)
@@ -39,6 +40,11 @@ we **drop `.B`** before joining.
 - Skim-RTI sample identity: the BZea registry (`sample_metatada.csv` → staged as
   `data/skim_sample_pedigree.csv`, already `.B`-dropped).
 
+The pedigree-matched **pairs are sourced from the curated correspondence**
+(`results/sample_correspondence/skim_brbseq_correspondence.csv`, built by
+`sample_correspondence.qmd`); this doc keeps the pairs whose ancestry calls are available
+here. (The coverage section below still pairs the full dataset directly via the registries.)
+
 MolB-RTI is **not** included: the right NILs aren't in the 16-sample MolBreeding set,
 so it shares no pedigree with the BRB-seq run.
 
@@ -55,15 +61,23 @@ brbmeta <- read_csv(params$brb_meta, show_col_types = FALSE) %>%
   transmute(sid = sample_id, nil = chop(genotype))
 skimped <- read_csv(params$skim_ped, show_col_types = FALSE)   # sample, pedigree (.B-dropped)
 
-# assign each call set its NIL pedigree
-brb  <- brb  %>% mutate(sid = as.integer(sub(".*_SID", "", name)),
-                        nil = brbmeta$nil[match(sid, brbmeta$sid)])
-skim <- skim %>% mutate(nil = skimped$pedigree[match(name, skimped$sample)])
-
-# pair BRB <-> skim on shared pedigree (one skim sample per NIL)
-brb_nil  <- brb  %>% distinct(brb_name = name, nil)
-skim_nil <- skim %>% filter(!is.na(nil)) %>% distinct(skim_name = name, nil)
-pairs <- brb_nil %>% left_join(skim_nil, by = "nil") %>% arrange(nil)
+# pairs sourced from the curated cross-experiment correspondence
+# (results/sample_correspondence/skim_brbseq_correspondence.csv): NILs matched by the
+# .B-dropped pedigree, sequence-data restricted. Prefixes are ";"-joined when a pedigree
+# has replicates, so split before matching. Keep only pairs whose calls exist in THIS
+# doc's call sets (BRB r=109; skim r=5) — a skim partner without calls reads as unmatched.
+corr <- read_csv(params$corr, show_col_types = FALSE) %>% filter(type == "NIL")
+brb_ped  <- corr %>% separate_rows(brbseq_prefix, sep = ";") %>%
+  transmute(brb_name = brbseq_prefix, nil = pedigree)
+skim_ped <- corr %>% separate_rows(skim_prefix, sep = ";") %>%
+  transmute(skim_name = skim_prefix, nil = pedigree) %>%
+  filter(skim_name %in% skim$name)
+pairs <- tibble(brb_name = sort(unique(brb$name))) %>%
+  left_join(brb_ped,  by = "brb_name") %>%
+  left_join(skim_ped, by = "nil", relationship = "many-to-many") %>%
+  group_by(brb_name, nil) %>%
+  summarise(skim_name = dplyr::first(skim_name), .groups = "drop") %>%
+  arrange(nil)
 
 # common wideseq grid + state-on-grid
 cf   <- read_tsv(list.files(params$mb_counts, full.names = TRUE)[1],
