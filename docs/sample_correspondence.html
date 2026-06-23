@@ -133,8 +133,8 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <section id="scope-and-rules" class="level3">
 <h3 class="anchored" data-anchor-id="scope-and-rules">Scope and rules</h3>
 <ul>
-<li><strong>In scope:</strong> teosinte-introgression <strong>NILs</strong> + the <strong>B73</strong> and <strong>Purple</strong> checks.</li>
-<li><strong>Sequence-data only:</strong> a sample appears only if it has reads (present in the per-sample coverage tables) — metadata-only rows are excluded.</li>
+<li><strong>In scope:</strong> the <strong>bzea/ZEAL population</strong> (<code>project == "bzea"</code>) — teosinte-introgression <strong>NILs</strong> + the <strong>B73</strong> and <strong>Purple</strong> checks. The <code>landb</code>/<code>lanteo</code> landrace lines are excluded (only a handful were sequenced anyway).</li>
+<li><strong>Sequence-data only:</strong> a sample appears only if it has reads — <strong>skim</strong> from the WGS BAM list (<code>bam_list_1440</code>, includes the checks), <strong>BRB</strong> from its coverage table. Metadata-only and out-of-scope rows are excluded.</li>
 <li><strong>Label:</strong> NILs → the pedigree string; checks → <code>B73_&lt;prefix&gt;</code> / <code>Purple_&lt;prefix&gt;</code> (each check is unique because checks cannot yet be matched across experiments — see <a href="#checks-to-resolve">Checks</a>).</li>
 <li>Sample class is read from <code>Genotype</code>/<code>sample_group</code>/<code>accession</code>, <strong>never</strong> the <code>check</code> column (it is unreliable — e.g.&nbsp;BRB “Purple Check” rows carry <code>check="no"</code>).</li>
 </ul>
@@ -146,35 +146,36 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb1-3"><a href="#cb1-3" aria-hidden="true" tabindex="-1"></a>chop <span class="ot">&lt;-</span> <span class="cf">function</span>(x) <span class="fu">sub</span>(<span class="st">"</span><span class="sc">\\</span><span class="st">.B$"</span>, <span class="st">""</span>, x)   <span class="co"># drop the trailing ".B"</span></span>
 <span id="cb1-4"><a href="#cb1-4" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-5"><a href="#cb1-5" aria-hidden="true" tabindex="-1"></a><span class="do">## ---- samples WITH sequence data ----</span></span>
-<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>skim_seq <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(params<span class="sc">$</span>skim_seq, <span class="at">show_col_types =</span> <span class="cn">FALSE</span>)<span class="sc">$</span>name   <span class="co"># skim sequenced</span></span>
-<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>brb_seq  <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(params<span class="sc">$</span>brb_seq,  <span class="at">show_col_types =</span> <span class="cn">FALSE</span>)<span class="sc">$</span>name   <span class="co"># BRB sequenced</span></span>
+<span id="cb1-6"><a href="#cb1-6" aria-hidden="true" tabindex="-1"></a>skim_seq <span class="ot">&lt;-</span> <span class="fu">readLines</span>(params<span class="sc">$</span>skim_seq)                              <span class="co"># skim WGS BAMs (PN#_SID#)</span></span>
+<span id="cb1-7"><a href="#cb1-7" aria-hidden="true" tabindex="-1"></a>brb_seq  <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(params<span class="sc">$</span>brb_seq, <span class="at">show_col_types =</span> <span class="cn">FALSE</span>)<span class="sc">$</span>name   <span class="co"># BRB sequenced</span></span>
 <span id="cb1-8"><a href="#cb1-8" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-9"><a href="#cb1-9" aria-hidden="true" tabindex="-1"></a><span class="do">## ---- Skim / MolBreeding id space (shared) ----</span></span>
 <span id="cb1-10"><a href="#cb1-10" aria-hidden="true" tabindex="-1"></a>master <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(params<span class="sc">$</span>master, <span class="at">show_col_types =</span> <span class="cn">FALSE</span>) <span class="sc">%&gt;%</span></span>
 <span id="cb1-11"><a href="#cb1-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">pedigree =</span> <span class="fu">ifelse</span>(pedigree <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"NA"</span>, <span class="st">""</span>), <span class="cn">NA</span>, pedigree),</span>
 <span id="cb1-12"><a href="#cb1-12" aria-hidden="true" tabindex="-1"></a>         <span class="at">ped      =</span> <span class="fu">ifelse</span>(<span class="sc">!</span><span class="fu">is.na</span>(pedigree), <span class="fu">chop</span>(pedigree), <span class="cn">NA</span>),</span>
 <span id="cb1-13"><a href="#cb1-13" aria-hidden="true" tabindex="-1"></a>         <span class="at">chk_grp  =</span> <span class="fu">ifelse</span>(sample_group <span class="sc">%in%</span> <span class="fu">c</span>(<span class="st">"B73"</span>, <span class="st">"Purple"</span>), sample_group, <span class="cn">NA</span>))</span>
-<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a>skim_nil <span class="ot">&lt;-</span> master <span class="sc">%&gt;%</span> <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(ped),     sample <span class="sc">%in%</span> skim_seq) <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(<span class="at">skim_prefix =</span> sample, <span class="at">pedigree =</span> ped)</span>
-<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>skim_chk <span class="ot">&lt;-</span> master <span class="sc">%&gt;%</span> <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(chk_grp), sample <span class="sc">%in%</span> skim_seq) <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(<span class="at">skim_prefix =</span> sample, <span class="at">grp =</span> chk_grp)</span>
-<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a><span class="do">## ---- BRB-seq id space (own) ----</span></span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>brbm <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(params<span class="sc">$</span>brb_meta, <span class="at">show_col_types =</span> <span class="cn">FALSE</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">brb_prefix =</span> sample_id,                              <span class="co"># already PN#_SID#</span></span>
-<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>         <span class="at">is_nil  =</span> <span class="fu">str_detect</span>(Genotype, <span class="st">"_P[0-9]"</span>),           <span class="co"># real pedigree -&gt; NIL</span></span>
-<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>         <span class="at">chk_grp =</span> <span class="fu">case_when</span>(Genotype <span class="sc">==</span> <span class="st">"B73"</span> <span class="sc">|</span> accession <span class="sc">==</span> <span class="st">"B73"</span>             <span class="sc">~</span> <span class="st">"B73"</span>,</span>
-<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>                             accession <span class="sc">==</span> <span class="st">"Purple"</span> <span class="sc">|</span> <span class="fu">str_detect</span>(Genotype, <span class="st">"Purple"</span>) <span class="sc">~</span> <span class="st">"Purple"</span>,</span>
-<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>                             <span class="cn">TRUE</span> <span class="sc">~</span> <span class="cn">NA_character_</span>),</span>
-<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>         <span class="at">ped     =</span> <span class="fu">ifelse</span>(is_nil, <span class="fu">chop</span>(Genotype), <span class="cn">NA</span>))</span>
-<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>brb_nil <span class="ot">&lt;-</span> brbm <span class="sc">%&gt;%</span> <span class="fu">filter</span>(is_nil,          brb_prefix <span class="sc">%in%</span> brb_seq) <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(brb_prefix, <span class="at">pedigree =</span> ped)</span>
-<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>brb_chk <span class="ot">&lt;-</span> brbm <span class="sc">%&gt;%</span> <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(chk_grp), brb_prefix <span class="sc">%in%</span> brb_seq) <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(brb_prefix, <span class="at">grp =</span> chk_grp)</span>
-<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a><span class="do">## ---- MolBreeding target-seq (the 16 map rows ARE the sequenced set) ----</span></span>
-<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a>molb <span class="ot">&lt;-</span> <span class="fu">read_tsv</span>(params<span class="sc">$</span>mb_map, <span class="at">show_col_types =</span> <span class="cn">FALSE</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(<span class="at">prefix =</span> sample_id, <span class="at">molb_geno =</span> genotype, <span class="at">molb_ped =</span> <span class="fu">chop</span>(genotype))</span>
-<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a></span>
-<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a>agg <span class="ot">&lt;-</span> <span class="cf">function</span>(df, key, val) df <span class="sc">%&gt;%</span> <span class="fu">group_by</span>(.data[[key]]) <span class="sc">%&gt;%</span></span>
-<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="st">"{val}"</span> <span class="sc">:</span><span class="er">=</span> <span class="fu">paste</span>(<span class="fu">sort</span>(<span class="fu">unique</span>(.data[[val]])), <span class="at">collapse =</span> <span class="st">";"</span>),</span>
-<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>            <span class="st">"n_{val}"</span> <span class="sc">:</span><span class="er">=</span> <span class="fu">n_distinct</span>(.data[[val]]), <span class="at">.groups =</span> <span class="st">"drop"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="do">## scope = the bzea/ZEAL population (project == "bzea"); landb/lanteo landrace lines are excluded.</span></span>
+<span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>skim_nil <span class="ot">&lt;-</span> master <span class="sc">%&gt;%</span> <span class="fu">filter</span>(project <span class="sc">==</span> <span class="st">"bzea"</span>, <span class="sc">!</span><span class="fu">is.na</span>(ped),     sample <span class="sc">%in%</span> skim_seq) <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(<span class="at">skim_prefix =</span> sample, <span class="at">pedigree =</span> ped)</span>
+<span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>skim_chk <span class="ot">&lt;-</span> master <span class="sc">%&gt;%</span> <span class="fu">filter</span>(project <span class="sc">==</span> <span class="st">"bzea"</span>, <span class="sc">!</span><span class="fu">is.na</span>(chk_grp), sample <span class="sc">%in%</span> skim_seq) <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(<span class="at">skim_prefix =</span> sample, <span class="at">grp =</span> chk_grp)</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a><span class="do">## ---- BRB-seq id space (own) ----</span></span>
+<span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a>brbm <span class="ot">&lt;-</span> <span class="fu">read_csv</span>(params<span class="sc">$</span>brb_meta, <span class="at">show_col_types =</span> <span class="cn">FALSE</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">brb_prefix =</span> sample_id,                              <span class="co"># already PN#_SID#</span></span>
+<span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a>         <span class="at">is_nil  =</span> <span class="fu">str_detect</span>(Genotype, <span class="st">"_P[0-9]"</span>),           <span class="co"># real pedigree -&gt; NIL</span></span>
+<span id="cb1-22"><a href="#cb1-22" aria-hidden="true" tabindex="-1"></a>         <span class="at">chk_grp =</span> <span class="fu">case_when</span>(Genotype <span class="sc">==</span> <span class="st">"B73"</span> <span class="sc">|</span> accession <span class="sc">==</span> <span class="st">"B73"</span>             <span class="sc">~</span> <span class="st">"B73"</span>,</span>
+<span id="cb1-23"><a href="#cb1-23" aria-hidden="true" tabindex="-1"></a>                             accession <span class="sc">==</span> <span class="st">"Purple"</span> <span class="sc">|</span> <span class="fu">str_detect</span>(Genotype, <span class="st">"Purple"</span>) <span class="sc">~</span> <span class="st">"Purple"</span>,</span>
+<span id="cb1-24"><a href="#cb1-24" aria-hidden="true" tabindex="-1"></a>                             <span class="cn">TRUE</span> <span class="sc">~</span> <span class="cn">NA_character_</span>),</span>
+<span id="cb1-25"><a href="#cb1-25" aria-hidden="true" tabindex="-1"></a>         <span class="at">ped     =</span> <span class="fu">ifelse</span>(is_nil, <span class="fu">chop</span>(Genotype), <span class="cn">NA</span>))</span>
+<span id="cb1-26"><a href="#cb1-26" aria-hidden="true" tabindex="-1"></a>brb_nil <span class="ot">&lt;-</span> brbm <span class="sc">%&gt;%</span> <span class="fu">filter</span>(is_nil,          brb_prefix <span class="sc">%in%</span> brb_seq) <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(brb_prefix, <span class="at">pedigree =</span> ped)</span>
+<span id="cb1-27"><a href="#cb1-27" aria-hidden="true" tabindex="-1"></a>brb_chk <span class="ot">&lt;-</span> brbm <span class="sc">%&gt;%</span> <span class="fu">filter</span>(<span class="sc">!</span><span class="fu">is.na</span>(chk_grp), brb_prefix <span class="sc">%in%</span> brb_seq) <span class="sc">%&gt;%</span> <span class="fu">transmute</span>(brb_prefix, <span class="at">grp =</span> chk_grp)</span>
+<span id="cb1-28"><a href="#cb1-28" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-29"><a href="#cb1-29" aria-hidden="true" tabindex="-1"></a><span class="do">## ---- MolBreeding target-seq (the 16 map rows ARE the sequenced set) ----</span></span>
+<span id="cb1-30"><a href="#cb1-30" aria-hidden="true" tabindex="-1"></a>molb <span class="ot">&lt;-</span> <span class="fu">read_tsv</span>(params<span class="sc">$</span>mb_map, <span class="at">show_col_types =</span> <span class="cn">FALSE</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb1-31"><a href="#cb1-31" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(<span class="at">prefix =</span> sample_id, <span class="at">molb_geno =</span> genotype, <span class="at">molb_ped =</span> <span class="fu">chop</span>(genotype))</span>
+<span id="cb1-32"><a href="#cb1-32" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb1-33"><a href="#cb1-33" aria-hidden="true" tabindex="-1"></a>agg <span class="ot">&lt;-</span> <span class="cf">function</span>(df, key, val) df <span class="sc">%&gt;%</span> <span class="fu">group_by</span>(.data[[key]]) <span class="sc">%&gt;%</span></span>
+<span id="cb1-34"><a href="#cb1-34" aria-hidden="true" tabindex="-1"></a>  <span class="fu">summarise</span>(<span class="st">"{val}"</span> <span class="sc">:</span><span class="er">=</span> <span class="fu">paste</span>(<span class="fu">sort</span>(<span class="fu">unique</span>(.data[[val]])), <span class="at">collapse =</span> <span class="st">";"</span>),</span>
+<span id="cb1-35"><a href="#cb1-35" aria-hidden="true" tabindex="-1"></a>            <span class="st">"n_{val}"</span> <span class="sc">:</span><span class="er">=</span> <span class="fu">n_distinct</span>(.data[[val]]), <span class="at">.groups =</span> <span class="st">"drop"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 </div>
 </section>
@@ -220,11 +221,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <tbody>
 <tr class="odd">
 <td style="text-align: left;">BRB-only</td>
-<td style="text-align: right;">5</td>
+<td style="text-align: right;">4</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">comparable (both sequenced)</td>
-<td style="text-align: right;">334</td>
+<td style="text-align: right;">335</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">skim-only</td>
@@ -234,7 +235,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </table>
 </div>
 </div>
-<p><strong>334 NILs are directly comparable</strong> (sequenced on both platforms, matched by pedigree). The full per-NIL table is <strong>not embedded here</strong> — it ships as the CSV for Hannah: <code>results/sample_correspondence/skim_brbseq_correspondence.csv</code> (NILs + checks, with <code>in_skim</code>/<code>in_brbseq</code> flags).</p>
+<p><strong>335 NILs are directly comparable</strong> (sequenced on both platforms, matched by pedigree). The full per-NIL table is <strong>not embedded here</strong> — it ships as the CSV for Hannah: <code>results/sample_correspondence/skim_brbseq_correspondence.csv</code> (NILs + checks, with <code>in_skim</code>/<code>in_brbseq</code> flags).</p>
 </section>
 <section id="file-2-molbreeding-3-way-molb-skim-brb-seq" class="level2">
 <h2 class="anchored" data-anchor-id="file-2-molbreeding-3-way-molb-skim-brb-seq">File 2 — MolBreeding 3-way (MolB · Skim · BRB-seq)</h2>
@@ -297,24 +298,24 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">B73_PN4_SID326</td>
 <td style="text-align: left;">PN4_SID326</td>
-<td style="text-align: left;">NA</td>
+<td style="text-align: left;">PN4_SID326</td>
 <td style="text-align: left;">NA</td>
 <td style="text-align: left;">B73-bulk</td>
 <td style="text-align: left;">NA</td>
 <td style="text-align: left;">NA</td>
-<td style="text-align: left;">FALSE</td>
+<td style="text-align: left;">TRUE</td>
 <td style="text-align: left;">FALSE</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">B73_PN6_SID576</td>
 <td style="text-align: left;">PN6_SID576</td>
-<td style="text-align: left;">NA</td>
+<td style="text-align: left;">PN6_SID576</td>
 <td style="text-align: left;">NA</td>
 <td style="text-align: left;">B73-bulk</td>
 <td style="text-align: left;">NA</td>
 <td style="text-align: left;">NA</td>
-<td style="text-align: left;">FALSE</td>
+<td style="text-align: left;">TRUE</td>
 <td style="text-align: left;">FALSE</td>
 </tr>
 <tr class="odd">
@@ -489,11 +490,11 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </table>
 </div>
 </div>
-<p>All 14 MolBreeding NILs share the <strong>same prefix and pedigree</strong> with Skim (<code>pedigree_agrees = TRUE</code>) — confirming Skim and MolBreeding are one id space. <strong>4 of them were also sequenced in BRB-seq</strong> (linked by pedigree; see <code>brbseq_prefix</code>). The 2 <code>B73-bulk</code> checks have no Skim sequence and no pedigree, so no cross-experiment id.</p>
+<p>All 14 MolBreeding NILs share the <strong>same prefix and pedigree</strong> with Skim (<code>pedigree_agrees = TRUE</code>) — confirming Skim and MolBreeding are one id space. <strong>4 of them were also sequenced in BRB-seq</strong> (linked by pedigree; see <code>brbseq_prefix</code>). The 2 <code>B73-bulk</code> checks (<code>PN4_SID326</code>, <code>PN6_SID576</code>) <strong>also carry a Skim id by shared prefix</strong> (<code>in_skim = TRUE</code> — they are among skim’s B73 checks); having no pedigree, they have no BRB-seq link.</p>
 </section>
 <section id="checks-to-resolve" class="level2">
 <h2 class="anchored" data-anchor-id="checks-to-resolve">Checks to resolve</h2>
-<p>NILs are matched by pedigree; <strong>checks have no pedigree and no shared id across experiments</strong>, so they cannot be matched automatically. Here is exactly what exists, and what needs a decision.</p>
+<p>NILs are matched by pedigree; <strong>checks have no pedigree</strong>, so only <strong>Skim ↔︎ MolBreeding</strong> (one shared id space) can match them automatically — <strong>BRB-seq cannot</strong>. Here is exactly what exists, and what still needs a key.</p>
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
@@ -501,20 +502,17 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <span id="cb4-2"><a href="#cb4-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">experiment =</span> <span class="st">"Skim"</span>,        <span class="at">group =</span> skim_chk<span class="sc">$</span>grp, <span class="at">prefix =</span> skim_chk<span class="sc">$</span>skim_prefix),</span>
 <span id="cb4-3"><a href="#cb4-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">experiment =</span> <span class="st">"BRB-seq"</span>,     <span class="at">group =</span> brb_chk<span class="sc">$</span>grp,  <span class="at">prefix =</span> brb_chk<span class="sc">$</span>brb_prefix),</span>
 <span id="cb4-4"><a href="#cb4-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="at">experiment =</span> <span class="st">"MolBreeding"</span>, <span class="at">group =</span> <span class="st">"B73"</span>,</span>
-<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>         <span class="at">prefix =</span> file2<span class="sc">$</span>prefix[file2<span class="sc">$</span>type <span class="sc">!=</span> <span class="st">"NIL"</span>]))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<span id="cb4-5"><a href="#cb4-5" aria-hidden="true" tabindex="-1"></a>         <span class="at">prefix =</span> file2<span class="sc">$</span>molb_prefix[file2<span class="sc">$</span>type <span class="sc">!=</span> <span class="st">"NIL"</span>]))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
-<div class="cell-output cell-output-stderr">
-<pre><code>Warning: Unknown or uninitialised column: `prefix`.</code></pre>
-</div>
 </div>
 <p><strong>How many checks each experiment sequenced</strong> (rows are what need a cross-experiment id):</p>
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>checks <span class="sc">%&gt;%</span></span>
-<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(experiment, group, <span class="at">name =</span> <span class="st">"n_sequenced"</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> experiment, <span class="at">values_from =</span> n_sequenced, <span class="at">values_fill =</span> <span class="dv">0</span>) <span class="sc">%&gt;%</span></span>
-<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">kable</span>(<span class="at">caption =</span> <span class="st">"Sequenced check samples per experiment × group"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb5"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb5-1"><a href="#cb5-1" aria-hidden="true" tabindex="-1"></a>checks <span class="sc">%&gt;%</span></span>
+<span id="cb5-2"><a href="#cb5-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">count</span>(experiment, group, <span class="at">name =</span> <span class="st">"n_sequenced"</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb5-3"><a href="#cb5-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">pivot_wider</span>(<span class="at">names_from =</span> experiment, <span class="at">values_from =</span> n_sequenced, <span class="at">values_fill =</span> <span class="dv">0</span>) <span class="sc">%&gt;%</span></span>
+<span id="cb5-4"><a href="#cb5-4" aria-hidden="true" tabindex="-1"></a>  <span class="fu">kable</span>(<span class="at">caption =</span> <span class="st">"Sequenced check samples per experiment × group"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
@@ -524,18 +522,21 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <th style="text-align: left;">group</th>
 <th style="text-align: right;">BRB-seq</th>
 <th style="text-align: right;">MolBreeding</th>
+<th style="text-align: right;">Skim</th>
 </tr>
 </thead>
 <tbody>
 <tr class="odd">
 <td style="text-align: left;">B73</td>
 <td style="text-align: right;">35</td>
-<td style="text-align: right;">1</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">12</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">Purple</td>
 <td style="text-align: right;">3</td>
 <td style="text-align: right;">0</td>
+<td style="text-align: right;">17</td>
 </tr>
 </tbody>
 </table>
@@ -545,24 +546,28 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>checks <span class="sc">%&gt;%</span></span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">label =</span> <span class="fu">paste0</span>(group, <span class="st">"_"</span>, prefix),</span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>         <span class="at">cross_experiment_match =</span> <span class="fu">case_when</span>(</span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>           group <span class="sc">==</span> <span class="st">"Purple"</span> <span class="sc">~</span> <span class="st">"no partner — Purple sequenced only in BRB-seq"</span>,</span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>           group <span class="sc">==</span> <span class="st">"B73"</span>    <span class="sc">~</span> <span class="st">"only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim"</span>)) <span class="sc">%&gt;%</span></span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(experiment, group, prefix, label, cross_experiment_match) <span class="sc">%&gt;%</span></span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(group, experiment, prefix) <span class="sc">%&gt;%</span></span>
-<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>  <span class="fu">kable</span>(<span class="at">caption =</span> <span class="st">"Checks to resolve — each needs a corresponding id (or a decision that none exists)"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb6"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb6-1"><a href="#cb6-1" aria-hidden="true" tabindex="-1"></a>molb_b73 <span class="ot">&lt;-</span> file2<span class="sc">$</span>molb_prefix[file2<span class="sc">$</span>type <span class="sc">!=</span> <span class="st">"NIL"</span>]   <span class="co"># B73-bulk ids (shared with skim)</span></span>
+<span id="cb6-2"><a href="#cb6-2" aria-hidden="true" tabindex="-1"></a>checks <span class="sc">%&gt;%</span></span>
+<span id="cb6-3"><a href="#cb6-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mutate</span>(<span class="at">label =</span> <span class="fu">paste0</span>(group, <span class="st">"_"</span>, prefix),</span>
+<span id="cb6-4"><a href="#cb6-4" aria-hidden="true" tabindex="-1"></a>         <span class="at">status =</span> <span class="fu">case_when</span>(</span>
+<span id="cb6-5"><a href="#cb6-5" aria-hidden="true" tabindex="-1"></a>           group <span class="sc">==</span> <span class="st">"B73"</span> <span class="sc">&amp;</span> prefix <span class="sc">%in%</span> molb_b73 <span class="sc">~</span> <span class="st">"B73 shared by Skim &amp; MolBreeding (same id)"</span>,</span>
+<span id="cb6-6"><a href="#cb6-6" aria-hidden="true" tabindex="-1"></a>           group <span class="sc">==</span> <span class="st">"B73"</span> <span class="sc">&amp;</span> experiment <span class="sc">==</span> <span class="st">"BRB-seq"</span> <span class="sc">~</span> <span class="st">"BRB B73: own id, no pedigree → needs key to map to Skim/MolB"</span>,</span>
+<span id="cb6-7"><a href="#cb6-7" aria-hidden="true" tabindex="-1"></a>           group <span class="sc">==</span> <span class="st">"B73"</span> <span class="sc">~</span> <span class="st">"Skim-only B73 (no MolB/BRB counterpart by id)"</span>,</span>
+<span id="cb6-8"><a href="#cb6-8" aria-hidden="true" tabindex="-1"></a>           group <span class="sc">==</span> <span class="st">"Purple"</span> <span class="sc">&amp;</span> experiment <span class="sc">==</span> <span class="st">"BRB-seq"</span> <span class="sc">~</span> <span class="st">"BRB Purple: own id, no pedigree → needs key to map to Skim"</span>,</span>
+<span id="cb6-9"><a href="#cb6-9" aria-hidden="true" tabindex="-1"></a>           group <span class="sc">==</span> <span class="st">"Purple"</span> <span class="sc">~</span> <span class="st">"Skim Purple: needs key to map to BRB (none in MolB)"</span>)) <span class="sc">%&gt;%</span></span>
+<span id="cb6-10"><a href="#cb6-10" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(experiment, group, prefix, label, status) <span class="sc">%&gt;%</span></span>
+<span id="cb6-11"><a href="#cb6-11" aria-hidden="true" tabindex="-1"></a>  <span class="fu">arrange</span>(group, experiment, prefix) <span class="sc">%&gt;%</span></span>
+<span id="cb6-12"><a href="#cb6-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">kable</span>(<span class="at">caption =</span> <span class="st">"Checks — what is matched vs. what still needs a key"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
-<caption>Checks to resolve — each needs a corresponding id (or a decision that none exists)</caption>
+<caption>Checks — what is matched vs.&nbsp;what still needs a key</caption>
 <colgroup>
 <col style="width: 10%">
-<col style="width: 5%">
-<col style="width: 9%">
-<col style="width: 15%">
-<col style="width: 60%">
+<col style="width: 6%">
+<col style="width: 11%">
+<col style="width: 17%">
+<col style="width: 53%">
 </colgroup>
 <thead>
 <tr class="header">
@@ -570,7 +575,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <th style="text-align: left;">group</th>
 <th style="text-align: left;">prefix</th>
 <th style="text-align: left;">label</th>
-<th style="text-align: left;">cross_experiment_match</th>
+<th style="text-align: left;">status</th>
 </tr>
 </thead>
 <tbody>
@@ -579,281 +584,496 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN1_SID15</td>
 <td style="text-align: left;">B73_PN1_SID15</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN1_SID23</td>
 <td style="text-align: left;">B73_PN1_SID23</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN1_SID40</td>
 <td style="text-align: left;">B73_PN1_SID40</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN1_SID52</td>
 <td style="text-align: left;">B73_PN1_SID52</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN1_SID54</td>
 <td style="text-align: left;">B73_PN1_SID54</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN1_SID64</td>
 <td style="text-align: left;">B73_PN1_SID64</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN1_SID77</td>
 <td style="text-align: left;">B73_PN1_SID77</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN1_SID91</td>
 <td style="text-align: left;">B73_PN1_SID91</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN1_SID95</td>
 <td style="text-align: left;">B73_PN1_SID95</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN2_SID103</td>
 <td style="text-align: left;">B73_PN2_SID103</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN2_SID108</td>
 <td style="text-align: left;">B73_PN2_SID108</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN2_SID118</td>
 <td style="text-align: left;">B73_PN2_SID118</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN2_SID119</td>
 <td style="text-align: left;">B73_PN2_SID119</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN2_SID144</td>
 <td style="text-align: left;">B73_PN2_SID144</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN2_SID147</td>
 <td style="text-align: left;">B73_PN2_SID147</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN2_SID153</td>
 <td style="text-align: left;">B73_PN2_SID153</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN2_SID171</td>
 <td style="text-align: left;">B73_PN2_SID171</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN2_SID184</td>
 <td style="text-align: left;">B73_PN2_SID184</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN2_SID191</td>
 <td style="text-align: left;">B73_PN2_SID191</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN3_SID207</td>
 <td style="text-align: left;">B73_PN3_SID207</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN3_SID209</td>
 <td style="text-align: left;">B73_PN3_SID209</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN3_SID213</td>
 <td style="text-align: left;">B73_PN3_SID213</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN3_SID225</td>
 <td style="text-align: left;">B73_PN3_SID225</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN3_SID231</td>
 <td style="text-align: left;">B73_PN3_SID231</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN3_SID232</td>
 <td style="text-align: left;">B73_PN3_SID232</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN3_SID240</td>
 <td style="text-align: left;">B73_PN3_SID240</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN3_SID256</td>
 <td style="text-align: left;">B73_PN3_SID256</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN3_SID277</td>
 <td style="text-align: left;">B73_PN3_SID277</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN4_SID302</td>
 <td style="text-align: left;">B73_PN4_SID302</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN4_SID310</td>
 <td style="text-align: left;">B73_PN4_SID310</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN4_SID315</td>
 <td style="text-align: left;">B73_PN4_SID315</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN4_SID317</td>
 <td style="text-align: left;">B73_PN4_SID317</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN4_SID356</td>
 <td style="text-align: left;">B73_PN4_SID356</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN4_SID367</td>
 <td style="text-align: left;">B73_PN4_SID367</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">B73</td>
 <td style="text-align: left;">PN4_SID382</td>
 <td style="text-align: left;">B73_PN4_SID382</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">BRB B73: own id, no pedigree → needs key to map to Skim/MolB</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">MolBreeding</td>
 <td style="text-align: left;">B73</td>
-<td style="text-align: left;">NA</td>
-<td style="text-align: left;">B73_NA</td>
-<td style="text-align: left;">only candidate partners are the 2 MolB B73-bulk (not 1:1); none in skim</td>
+<td style="text-align: left;">PN4_SID326</td>
+<td style="text-align: left;">B73_PN4_SID326</td>
+<td style="text-align: left;">B73 shared by Skim &amp; MolBreeding (same id)</td>
 </tr>
 <tr class="odd">
-<td style="text-align: left;">BRB-seq</td>
-<td style="text-align: left;">Purple</td>
-<td style="text-align: left;">PN2_SID146</td>
-<td style="text-align: left;">Purple_PN2_SID146</td>
-<td style="text-align: left;">no partner — Purple sequenced only in BRB-seq</td>
+<td style="text-align: left;">MolBreeding</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN6_SID576</td>
+<td style="text-align: left;">B73_PN6_SID576</td>
+<td style="text-align: left;">B73 shared by Skim &amp; MolBreeding (same id)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN10_SID893</td>
+<td style="text-align: left;">B73_PN10_SID893</td>
+<td style="text-align: left;">Skim-only B73 (no MolB/BRB counterpart by id)</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN3_SID203</td>
+<td style="text-align: left;">B73_PN3_SID203</td>
+<td style="text-align: left;">Skim-only B73 (no MolB/BRB counterpart by id)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN3_SID236</td>
+<td style="text-align: left;">B73_PN3_SID236</td>
+<td style="text-align: left;">Skim-only B73 (no MolB/BRB counterpart by id)</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN3_SID255</td>
+<td style="text-align: left;">B73_PN3_SID255</td>
+<td style="text-align: left;">Skim-only B73 (no MolB/BRB counterpart by id)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN4_SID326</td>
+<td style="text-align: left;">B73_PN4_SID326</td>
+<td style="text-align: left;">B73 shared by Skim &amp; MolBreeding (same id)</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN5_SID429</td>
+<td style="text-align: left;">B73_PN5_SID429</td>
+<td style="text-align: left;">Skim-only B73 (no MolB/BRB counterpart by id)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN5_SID442</td>
+<td style="text-align: left;">B73_PN5_SID442</td>
+<td style="text-align: left;">Skim-only B73 (no MolB/BRB counterpart by id)</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN5_SID468</td>
+<td style="text-align: left;">B73_PN5_SID468</td>
+<td style="text-align: left;">Skim-only B73 (no MolB/BRB counterpart by id)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN6_SID576</td>
+<td style="text-align: left;">B73_PN6_SID576</td>
+<td style="text-align: left;">B73 shared by Skim &amp; MolBreeding (same id)</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN8_SID693</td>
+<td style="text-align: left;">B73_PN8_SID693</td>
+<td style="text-align: left;">Skim-only B73 (no MolB/BRB counterpart by id)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN8_SID751</td>
+<td style="text-align: left;">B73_PN8_SID751</td>
+<td style="text-align: left;">Skim-only B73 (no MolB/BRB counterpart by id)</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">B73</td>
+<td style="text-align: left;">PN9_SID838</td>
+<td style="text-align: left;">B73_PN9_SID838</td>
+<td style="text-align: left;">Skim-only B73 (no MolB/BRB counterpart by id)</td>
 </tr>
 <tr class="even">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">Purple</td>
-<td style="text-align: left;">PN4_SID355</td>
-<td style="text-align: left;">Purple_PN4_SID355</td>
-<td style="text-align: left;">no partner — Purple sequenced only in BRB-seq</td>
+<td style="text-align: left;">PN2_SID146</td>
+<td style="text-align: left;">Purple_PN2_SID146</td>
+<td style="text-align: left;">BRB Purple: own id, no pedigree → needs key to map to Skim</td>
 </tr>
 <tr class="odd">
 <td style="text-align: left;">BRB-seq</td>
 <td style="text-align: left;">Purple</td>
+<td style="text-align: left;">PN4_SID355</td>
+<td style="text-align: left;">Purple_PN4_SID355</td>
+<td style="text-align: left;">BRB Purple: own id, no pedigree → needs key to map to Skim</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">BRB-seq</td>
+<td style="text-align: left;">Purple</td>
 <td style="text-align: left;">PN4_SID379</td>
 <td style="text-align: left;">Purple_PN4_SID379</td>
-<td style="text-align: left;">no partner — Purple sequenced only in BRB-seq</td>
+<td style="text-align: left;">BRB Purple: own id, no pedigree → needs key to map to Skim</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">Purple</td>
+<td style="text-align: left;">PN13_SID1162</td>
+<td style="text-align: left;">Purple_PN13_SID1162</td>
+<td style="text-align: left;">Skim Purple: needs key to map to BRB (none in MolB)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">Purple</td>
+<td style="text-align: left;">PN13_SID1225</td>
+<td style="text-align: left;">Purple_PN13_SID1225</td>
+<td style="text-align: left;">Skim Purple: needs key to map to BRB (none in MolB)</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">Purple</td>
+<td style="text-align: left;">PN14_SID1335</td>
+<td style="text-align: left;">Purple_PN14_SID1335</td>
+<td style="text-align: left;">Skim Purple: needs key to map to BRB (none in MolB)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">Purple</td>
+<td style="text-align: left;">PN15_SID1353</td>
+<td style="text-align: left;">Purple_PN15_SID1353</td>
+<td style="text-align: left;">Skim Purple: needs key to map to BRB (none in MolB)</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">Purple</td>
+<td style="text-align: left;">PN16_SID1486</td>
+<td style="text-align: left;">Purple_PN16_SID1486</td>
+<td style="text-align: left;">Skim Purple: needs key to map to BRB (none in MolB)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">Purple</td>
+<td style="text-align: left;">PN3_SID217</td>
+<td style="text-align: left;">Purple_PN3_SID217</td>
+<td style="text-align: left;">Skim Purple: needs key to map to BRB (none in MolB)</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">Purple</td>
+<td style="text-align: left;">PN4_SID373</td>
+<td style="text-align: left;">Purple_PN4_SID373</td>
+<td style="text-align: left;">Skim Purple: needs key to map to BRB (none in MolB)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">Purple</td>
+<td style="text-align: left;">PN5_SID445</td>
+<td style="text-align: left;">Purple_PN5_SID445</td>
+<td style="text-align: left;">Skim Purple: needs key to map to BRB (none in MolB)</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">Purple</td>
+<td style="text-align: left;">PN5_SID478</td>
+<td style="text-align: left;">Purple_PN5_SID478</td>
+<td style="text-align: left;">Skim Purple: needs key to map to BRB (none in MolB)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">Purple</td>
+<td style="text-align: left;">PN6_SID530</td>
+<td style="text-align: left;">Purple_PN6_SID530</td>
+<td style="text-align: left;">Skim Purple: needs key to map to BRB (none in MolB)</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">Purple</td>
+<td style="text-align: left;">PN7_SID583</td>
+<td style="text-align: left;">Purple_PN7_SID583</td>
+<td style="text-align: left;">Skim Purple: needs key to map to BRB (none in MolB)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">Purple</td>
+<td style="text-align: left;">PN7_SID597</td>
+<td style="text-align: left;">Purple_PN7_SID597</td>
+<td style="text-align: left;">Skim Purple: needs key to map to BRB (none in MolB)</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">Purple</td>
+<td style="text-align: left;">PN7_SID600</td>
+<td style="text-align: left;">Purple_PN7_SID600</td>
+<td style="text-align: left;">Skim Purple: needs key to map to BRB (none in MolB)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">Purple</td>
+<td style="text-align: left;">PN7_SID638</td>
+<td style="text-align: left;">Purple_PN7_SID638</td>
+<td style="text-align: left;">Skim Purple: needs key to map to BRB (none in MolB)</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">Purple</td>
+<td style="text-align: left;">PN8_SID732</td>
+<td style="text-align: left;">Purple_PN8_SID732</td>
+<td style="text-align: left;">Skim Purple: needs key to map to BRB (none in MolB)</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">Purple</td>
+<td style="text-align: left;">PN8_SID739</td>
+<td style="text-align: left;">Purple_PN8_SID739</td>
+<td style="text-align: left;">Skim Purple: needs key to map to BRB (none in MolB)</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">Skim</td>
+<td style="text-align: left;">Purple</td>
+<td style="text-align: left;">PN9_SID825</td>
+<td style="text-align: left;">Purple_PN9_SID825</td>
+<td style="text-align: left;">Skim Purple: needs key to map to BRB (none in MolB)</td>
 </tr>
 </tbody>
 </table>
 </div>
 </div>
-<p>Key points: <strong>skim sequenced no checks</strong> (its run covers <code>PN3–PN17</code>, not the check wells), so nothing matches <em>through skim</em>; <strong>MolBreeding</strong> has only 2 <code>B73-bulk</code> (<code>PN4_SID326</code>, <code>PN6_SID576</code>, possibly <em>pooled</em>); <strong>BRB-seq Purple</strong> (<code>PN2_SID146</code>, <code>PN4_SID355</code>, <code>PN4_SID379</code>) has no partner in any other experiment.</p>
+<p>Key points:</p>
+<ul>
+<li><strong>Skim ↔︎ MolBreeding checks are resolved by shared id.</strong> The 2 MolB <code>B73-bulk</code> (<code>PN4_SID326</code>, <code>PN6_SID576</code>) are the same samples as two of skim’s B73 checks.</li>
+<li><strong>Skim has 12 B73 + 17 Purple</strong> checks sequenced; <strong>MolBreeding</strong> has the 2 B73-bulk; <strong>BRB-seq</strong> has 35 B73 + 3 Purple.</li>
+<li><strong>What still needs a key:</strong> the <strong>BRB-seq checks</strong> have their own id space and no pedigree, so they cannot be auto-matched to the Skim/MolBreeding checks. BRB Purple (<code>PN2_SID146</code>, <code>PN4_SID355</code>, <code>PN4_SID379</code>) can only map to Skim Purple (none in MolB).</li>
+</ul>
 <blockquote class="blockquote">
-<p><strong>For Hannah:</strong> is there a physical-sample key (plant / DNA aliquot / plate provenance) that maps these check wells across the Skim/MolBreeding and BRB-seq experiments? If the B73 checks are interchangeable controls (each should read ≈ pure recurrent, ~0 donor), we may only need to treat them as a <strong>control class per experiment</strong> rather than match them 1:1. Please confirm the intended handling so the labels can be finalized.</p>
+<p><strong>For Hannah:</strong> is there a physical-sample key (plant / DNA aliquot / plate provenance) that maps the <strong>BRB-seq</strong> check wells to the Skim/MolBreeding checks? (Skim↔︎MolBreeding are already linked by shared id.) If B73 checks are interchangeable controls (each should read ≈ pure recurrent, ~0 donor), we may only need to treat them as a <strong>control class per experiment</strong> rather than match them 1:1. Please confirm the intended handling.</p>
 </blockquote>
 </section>
 <section id="summary" class="level2">
@@ -861,14 +1081,14 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tibble</span>(</span>
-<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">table =</span> <span class="fu">c</span>(<span class="st">"Skim ↔ BRB-seq"</span>, <span class="st">"MolBreeding 3-way"</span>),</span>
-<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">key   =</span> <span class="fu">c</span>(<span class="st">"pedigree (.B-dropped)"</span>, <span class="st">"shared PN#_SID# (Skim); pedigree (BRB)"</span>),</span>
-<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">NILs  =</span> <span class="fu">c</span>(<span class="fu">sum</span>(nil1<span class="sc">$</span>in_skim <span class="sc">&amp;</span> nil1<span class="sc">$</span>in_brbseq), <span class="fu">sum</span>(file2<span class="sc">$</span>type<span class="sc">==</span><span class="st">"NIL"</span>)),</span>
-<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">note  =</span> <span class="fu">c</span>(<span class="st">"comparable on both platforms"</span>,</span>
-<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>            <span class="fu">sprintf</span>(<span class="st">"16 MolB samples; %d also in BRB-seq"</span>, <span class="fu">sum</span>(file2<span class="sc">$</span>in_brbseq))),</span>
-<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">file =</span> <span class="fu">file.path</span>(params<span class="sc">$</span>outdir, <span class="fu">c</span>(<span class="st">"skim_brbseq_correspondence.csv"</span>,<span class="st">"molbreeding_3way_correspondence.csv"</span>))</span>
-<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span> <span class="fu">kable</span>(<span class="at">caption =</span> <span class="st">"Deliverables"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tibble</span>(</span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">table =</span> <span class="fu">c</span>(<span class="st">"Skim ↔ BRB-seq"</span>, <span class="st">"MolBreeding 3-way"</span>),</span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">key   =</span> <span class="fu">c</span>(<span class="st">"pedigree (.B-dropped)"</span>, <span class="st">"shared PN#_SID# (Skim); pedigree (BRB)"</span>),</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">NILs  =</span> <span class="fu">c</span>(<span class="fu">sum</span>(nil1<span class="sc">$</span>in_skim <span class="sc">&amp;</span> nil1<span class="sc">$</span>in_brbseq), <span class="fu">sum</span>(file2<span class="sc">$</span>type<span class="sc">==</span><span class="st">"NIL"</span>)),</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">note  =</span> <span class="fu">c</span>(<span class="st">"comparable on both platforms"</span>,</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>            <span class="fu">sprintf</span>(<span class="st">"16 MolB samples; %d also in BRB-seq"</span>, <span class="fu">sum</span>(file2<span class="sc">$</span>in_brbseq))),</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">file =</span> <span class="fu">file.path</span>(params<span class="sc">$</span>outdir, <span class="fu">c</span>(<span class="st">"skim_brbseq_correspondence.csv"</span>,<span class="st">"molbreeding_3way_correspondence.csv"</span>))</span>
+<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span> <span class="fu">kable</span>(<span class="at">caption =</span> <span class="st">"Deliverables"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">
@@ -893,7 +1113,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <tr class="odd">
 <td style="text-align: left;">Skim ↔︎ BRB-seq</td>
 <td style="text-align: left;">pedigree (.B-dropped)</td>
-<td style="text-align: right;">334</td>
+<td style="text-align: right;">335</td>
 <td style="text-align: left;">comparable on both platforms</td>
 <td style="text-align: left;">results/sample_correspondence/skim_brbseq_correspondence.csv</td>
 </tr>
@@ -909,9 +1129,9 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 </div>
 </div>
 <ul>
-<li><strong>Skim ↔︎ BRB-seq:</strong> 334 comparable NILs (by pedigree).</li>
+<li><strong>Skim ↔︎ BRB-seq:</strong> 335 comparable NILs (by pedigree).</li>
 <li><strong>MolBreeding 3-way:</strong> all 14 MolB NILs map to Skim (shared id); 4 are also in BRB-seq (by pedigree).</li>
-<li><strong>Checks remain unresolved</strong> pending a cross-experiment key (see above).</li>
+<li><strong>Checks:</strong> Skim↔︎MolBreeding matched by shared id; <strong>BRB-seq checks</strong> still need a key (see above).</li>
 </ul>
 </section>
 
