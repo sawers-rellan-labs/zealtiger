@@ -118,19 +118,19 @@ cat(sprintf("%d pedigree-matched NILs | mean coverage: SNP50K skim %.3f× | BRB-
             nrow(cov), ms, mb))
 ```
 
-### Coverage-matched series — grid the varying platform across its central 90%
+### Coverage-matched series — grid the varying platform across its central 95%
 
 To sweep one platform's coverage while controlling the other, we **grid the varying
-platform across its central 90% (P5–P95)** on 10 evenly-spaced steps; at each step we
+platform across its central 95% (P2.5–P97.5)** on 10 evenly-spaced steps; at each step we
 take the NIL whose varying coverage falls in that step, **preferring the one whose
 held coverage is closest to its mean**. The result is ~10 NILs spread evenly along
 the varying axis with the held axis pinned ≈ its mean (feasible because the two
 coverages are uncorrelated).
 
 ```{r grid-sample}
-# grid `vary` across its P5–P95 (n steps); at each step pick the NIL nearest the grid
+# grid `vary` across its P2.5–P97.5 (n steps); at each step pick the NIL nearest the grid
 # point, breaking toward the one whose `hold` coverage is closest to `hold_mean`.
-grid_series <- function(df, vary, hold, hold_mean, n = 10, q = c(0.05, 0.95)) {
+grid_series <- function(df, vary, hold, hold_mean, n = 10, q = c(0.025, 0.975)) {
   v <- df[[vary]]; h <- df[[hold]]
   gr   <- seq(quantile(v, q[1]), quantile(v, q[2]), length.out = n)
   step <- (gr[n] - gr[1]) / (n - 1)
@@ -145,9 +145,9 @@ grid_series <- function(df, vary, hold, hold_mean, n = 10, q = c(0.05, 0.95)) {
 }
 vary_brb  <- grid_series(cov, "brb_cov",  "skim_cov", ms)   # sweep BRB-seq, hold skim ≈ mean
 vary_skim <- grid_series(cov, "skim_cov", "brb_cov", mb)    # sweep skim,    hold BRB  ≈ mean
-cat(sprintf("BRB-seq central 90%%: [%.2f, %.2f]× | skim central 90%%: [%.3f, %.3f]×\n",
-            quantile(cov$brb_cov,.05), quantile(cov$brb_cov,.95),
-            quantile(cov$skim_cov,.05), quantile(cov$skim_cov,.95)))
+cat(sprintf("BRB-seq central 95%%: [%.2f, %.2f]× | skim central 95%%: [%.3f, %.3f]×\n",
+            quantile(cov$brb_cov,.025), quantile(cov$brb_cov,.975),
+            quantile(cov$skim_cov,.025), quantile(cov$skim_cov,.975)))
 ```
 
 ### Scatter — mean lines + the two gridded series
@@ -168,34 +168,34 @@ ggplot(cov2, aes(skim_cov, brb_cov)) +
                       name = NULL) +
   labs(x = "SNP50K skim mean coverage (×)", y = "BRB-seq mean coverage (×)",
        title = "Per-NIL coverage — SNP50K skim vs BRB-seq",
-       subtitle = sprintf("dotted = platform mean (skim %.2f×, BRB %.2f×) | 10-point grid across each varying platform's central 90%%",
+       subtitle = sprintf("dotted = platform mean (skim %.2f×, BRB %.2f×) | 10-point grid across each varying platform's central 95%%",
                           ms, mb)) +
   theme_bw()
 ```
 
 ### The two coverage-matched series
 
-**Vary BRB-seq** across its central 90%, **skim held ≈ mean** — sorted by BRB-seq λ:
+**Vary BRB-seq** across its central 95%, **skim held ≈ mean** — sorted by BRB-seq λ:
 
 ```{r series-brb}
 vary_brb %>% arrange(brb_cov) %>%
   transmute(NIL = nil, brb_cov = round(brb_cov,3), skim_cov = round(skim_cov,3),
             grid_target = round(grid_target,2), brb_sample = brb_name, skim_sample = skim_name) %>%
-  knitr::kable(caption = "Skim held ≈ mean; BRB-seq λ stepped across its central 90% (P5–P95).")
+  knitr::kable(caption = "Skim held ≈ mean; BRB-seq λ stepped across its central 95% (P2.5–P97.5).")
 ```
 
-**Vary skim** across its central 90%, **BRB-seq held ≈ mean** — sorted by skim λ:
+**Vary skim** across its central 95%, **BRB-seq held ≈ mean** — sorted by skim λ:
 
 ```{r series-skim}
 vary_skim %>% arrange(skim_cov) %>%
   transmute(NIL = nil, skim_cov = round(skim_cov,3), brb_cov = round(brb_cov,3),
             grid_target = round(grid_target,3), skim_sample = skim_name, brb_sample = brb_name) %>%
-  knitr::kable(caption = "BRB-seq held ≈ mean; skim λ stepped across its central 90% (P5–P95).")
+  knitr::kable(caption = "BRB-seq held ≈ mean; skim λ stepped across its central 95% (P2.5–P97.5).")
 ```
 
 **Read:** BRB-seq (3′ RNA-seq) mean depth (~2.8×) sits well above the ~0.4× SNP50K
 skim, and the two platforms' coverages are uncorrelated across NILs (library-driven).
-Each series steps one platform evenly across its central-90% coverage while holding
+Each series steps one platform evenly across its central-95% coverage while holding
 the other ≈ its mean — a coverage-controlled sweep for asking how the ancestry calls
 move with the varying platform's depth, with the other platform's coverage held out
 as a confounder.
