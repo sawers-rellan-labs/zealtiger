@@ -84,10 +84,14 @@ are clean throughout.
 exps  <- c("BrB-RTI (r=7, wideseq)", "Skim-RTI (r=5)", "MolB-RTI (r=2)")
 short <- function(e) case_when(grepl("BrB", e) ~ "BrB-seq", grepl("Skim", e) ~ "Skim", TRUE ~ "MolB")
 # 5 worst + 5 cleanest within each experiment (MolB has only 2 reps -> both); order by donor dosage
+# non-REF content = fraction of genome called HET or ALT (state > 0); the sort key
+nonref <- calls %>% mutate(l = end_bp - start_bp + 1) %>% group_by(exp, name) %>%
+  summarise(nonref = sum(l[state > 0]) / sum(l), .groups = "drop")
 sel <- qc %>% filter(exp %in% exps) %>% group_by(exp) %>%
   filter(row_number(desc(dosage)) <= 5 | row_number(dosage) <= 5) %>% ungroup() %>%
-  mutate(eo = match(exp, exps)) %>% arrange(eo, dosage) %>%
-  mutate(yidx = row_number(), ylab = sprintf("%s · %.3f", name, dosage),
+  left_join(nonref, by = c("exp", "name")) %>%
+  mutate(eo = match(exp, exps)) %>% arrange(eo, nonref) %>%   # within experiment, increasing non-REF
+  mutate(yidx = row_number(), ylab = sprintf("%s · %.3f", name, nonref),
          exp_lab = factor(short(exp), c("BrB-seq", "Skim", "MolB")))
 paint <- calls %>% inner_join(sel %>% select(exp, name, yidx, exp_lab), by = c("exp", "name")) %>%
   mutate(state = factor(state, 0:2, c("REF", "HET", "ALT")),
@@ -100,12 +104,12 @@ ggplot(paint, aes(xmin = start_bp/1e6, xmax = end_bp/1e6, ymin = yidx - 0.45, ym
   scale_x_continuous(labels = scales::unit_format(unit = "", scale = 1)) +
   scale_y_continuous(breaks = sel$yidx, labels = sel$ylab, expand = expansion(mult = 0.01)) +
   labs(title = "B73 reps — 5 worst + 5 cleanest within each experiment (ordered by donor content)",
-       subtitle = "samples ordered by donor dosage, ascending | gold REF, green HET, purple ALT — a clean B73 is all gold",
+       subtitle = "samples ordered by non-REF content (HET+ALT fraction), ascending | gold REF, green HET, purple ALT — a clean B73 is all gold",
        x = "Position (Mb)", fill = "Genotype") +
   ggpubr::theme_classic2(base_size = 9) +
   theme(legend.position = "bottom", strip.background = element_blank(),
         strip.text.x = element_text(face = "bold"),
-        strip.text.y.right = element_text(angle = 90, face = "bold", size = 12),   # experiment label on the RIGHT, 90° CCW
+        strip.text.y.right = element_text(angle = 90, face = "bold", size = 15),   # experiment label on the RIGHT, 90° CCW
         panel.spacing.x = unit(0.05, "lines"), panel.spacing.y = unit(0.4, "lines"),
         axis.text.y = element_text(size = 7), axis.ticks.y = element_blank(),
         axis.title.y = element_blank(),
