@@ -210,7 +210,8 @@ Ancestry calls for the two 10-NIL coverage sweeps, painted as the coverage of th
 *varying* platform climbs (rows ordered low→high; the row label prefixes the varying
 λ). Two tracks per NIL — **top = Skim-RTI (r=5), bottom = BrB-RTI (r=109)** — and a
 **B73 control** row pinned at top (forced, not pedigree-matched: skim `PN10_SID893`,
-BRB `PN1_SID15`). skim B73 is fit from the 50K counts.
+BRB `PN1_SID15`). Each B73 control comes from its platform's **B73 check group**, fit
+separately from the teosinte donors (skim from the 50K counts, BRB from the per-species fit).
 
 **BrB-RTI rigidity = r=109 (KS-calibrated).** RTIGER's rigidity is in *marker* units,
 but BRB-seq SNPs cluster within genes (non-iid spacing), so the even-grid FP+FN
@@ -219,11 +220,16 @@ distance** `D = sup_x|F_called − F_sim|` between the BrB-RTI donor-block size
 distribution (pooled, all 379 BRB samples) and the n=1500 BC2S3 simulation's — a log₂
 grid (2→256) then golden-section refine gave a clean valley at **r=109** (`D=0.112`;
 called median block 11.9 Mb ≈ the sim's 10.74 Mb). Curve in
-`results/sim_calibration/brbseq_ks/brbseq_ks_refined.csv`. At r=109 the **B73 control
-reads 0.00 donor on skim and ~0.09 on BrB-RTI** (down from ~0.32 at r=5) — the higher
-rigidity collapses the spurious short RNA donor-calls, lowering the false-donor floor.
+`results/sim_calibration/brbseq_ks/brbseq_ks_refined.csv`. **BrB-RTI is then fit per
+teosinte species** (taxon — *Z. mays* ssp. *parviglumis* `Zv`, ssp. *mexicana* `Zx`, ssp.
+*huehuetenangensis* `Zh`, *Z. diploperennis* `Zd`, *Z. luxurians* `Zl`), with **B73 and
+Purple as separate check groups**, mirroring the SNP50K per-taxon scheme; the sweep and
+pair calls subset from these fits. (A single joint EM pooled across species mis-specifies
+the emission regime — divergence from B73 differs by species — and inflates the B73
+false-donor floor.) At r=109 the **B73 check reads 0.00 donor on skim and ~0.13 on
+BrB-RTI** (74.6% REF, the remainder mostly HET) — the residual short-RNA false-donor floor.
 
-```{r sweep-paint-setup, eval=FALSE}
+```{r sweep-paint-setup}
 brb_sw  <- read_csv(params$brb_sweep,  show_col_types = FALSE)
 skim_sw <- read_csv(params$skim_sweep, show_col_types = FALSE)
 mem     <- read_csv(params$members,    show_col_types = FALSE)
@@ -272,15 +278,15 @@ paint_plot <- function(df, title, sub) {
 
 ### Vary BRB-seq (skim ≈ mean)
 
-```{r sweep-vary-brb, fig.width=12, fig.height=12, eval=FALSE}
-paint_plot(sweep_paint("vary_BRB"),
+```{r sweep-vary-brb, fig.width=12, fig.height=12}
+paint_plot(sweep_paint("vary_brb"),
            "Coverage sweep — vary BRB-seq depth, skim held ≈ mean",
            "rows: B73 control then 10 NILs by increasing BRB-seq λ | top Skim-RTI / bottom BrB-RTI | gold REF, green HET, purple ALT")
 ```
 
 ### Vary skim (BRB-seq ≈ mean)
 
-```{r sweep-vary-skim, fig.width=12, fig.height=12, eval=FALSE}
+```{r sweep-vary-skim, fig.width=12, fig.height=12}
 paint_plot(sweep_paint("vary_skim"),
            "Coverage sweep — vary skim depth, BRB-seq held ≈ mean",
            "rows: B73 control then 10 NILs by increasing skim λ | top Skim-RTI / bottom BrB-RTI")
@@ -346,7 +352,7 @@ Two tracks per NIL (**top = Skim-RTI r=5, bottom = BrB-RTI r=109**), grouped and
 by the `.B`-dropped **pedigree** (wrapped at the left); the method label is at the right.
 NILs ordered by donor Jaccard (best agreement first).
 
-```{r painting, fig.width=12, fig.height=11, eval=FALSE}
+```{r painting, fig.width=12, fig.height=11}
 nil_ord <- pair_tab$NIL
 lane <- function(seg, nm, method, s_nil) {
   d <- seg[seg$name == nm, ]
