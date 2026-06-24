@@ -24,7 +24,7 @@ setupJulia(JULIA_HOME = JULIA_HOME); sourceJulia()
 argv <- commandArgs(trailingOnly = TRUE)
 go <- function(f, d) { h <- grepl(paste0("^", f, "="), argv); if (any(h)) sub(paste0("^", f, "="), "", argv[h][1]) else d }
 r       <- as.integer(go("--r", "109"))
-cnt     <- "results/sim_calibration/brbseq_ks/counts"
+cnt     <- go("--cnt", "results/sim_calibration/brbseq_ks/counts")   # --cnt=.../brbseq_ks_wideseq/counts for wideseq-thinned
 outdir  <- go("--outdir", "results/sim_calibration/brbseq_taxa_r109")
 sl   <- read_csv("data/rtiger_50K/seqlengths.csv", show_col_types = FALSE); seqv <- setNames(sl$len, sl$chr_label)
 

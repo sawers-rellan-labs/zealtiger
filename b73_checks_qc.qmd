@@ -1,0 +1,119 @@
+---
+title: "B73 check QC — cross-experiment donor content"
+author: "Fausto Rodríguez-Zapata"
+date: "`r Sys.Date()`"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    df-print: paged
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+params:
+  brb_calls:   "results/sim_calibration/brbseq_taxa_r7_wideseq/calls_common_schema.csv"  # BrB-RTI, per-species, wideseq-thinned r=7
+  brb_map:     "agent/brb_species_map.csv"                                               # BRB name -> accession (B73 flag)
+  skim_checks: "data/rtiger_50K/calls_checks_common_schema.csv"                          # Skim-RTI checks (B73, Purple)
+  molb_calls:  "results/sim_calibration/gbts_calls/SNP_wsfilt/calls_common_schema.csv"   # MolB-RTI (B73-bulk)
+---
+
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
+A **B73 control** must be a *pure recurrent-parent* rep — **no introgression** (≈ 0 donor
+genome-wide). This doc tracks **every B73 rep across the three experiments** (BrB-seq,
+SNP50K skim, MolBreeding GBTS), scores each rep's donor content from its own caller, and
+flags reps that are **not actually clean B73** (localized donor on a chromosome →
+mislabel / contamination / real introgression). It exists because the BrB-seq B73 control
+`PN1_SID15` turned out to be an impostor (a chromosome arm reads ~50% donor).
+
+- **donor dosage** = genome-wide donor-allele fraction (`Σ len·state/2 / Σ len`, state REF=0/HET=1/ALT=2); 0 = pure B73.
+- **maxchr** = the worst single-chromosome donor fraction — localizes an introgressed arm.
+- **flag**: `clean` (dosage < 0.02), `borderline` (0.02–0.10), **`impostor`** (> 0.10).
+
+```{r setup}
+library(tidyverse); library(ggpubr)
+pal <- c(REF = "gold", HET = "springgreen4", ALT = "purple4")
+
+brbmap <- read_csv(params$brb_map, show_col_types = FALSE)
+brb_b73 <- brbmap$name[grepl("^B73", brbmap$accession)]
+calls <- bind_rows(
+  read_csv(params$brb_calls,  show_col_types = FALSE) %>% filter(name %in% brb_b73) %>%
+    mutate(exp = "BrB-RTI (r=7, wideseq)"),
+  read_csv(params$skim_checks, show_col_types = FALSE) %>% filter(donor == "B73") %>%
+    mutate(exp = "Skim-RTI (r=5)"),
+  read_csv(params$molb_calls,  show_col_types = FALSE) %>% filter(donor == "B73-bulk") %>%
+    mutate(exp = "MolB-RTI (r=2)")
+) %>% select(exp, name, chr, start_bp, end_bp, state)
+
+qc <- calls %>% mutate(l = end_bp - start_bp + 1) %>%
+  group_by(exp, name) %>%
+  summarise(dosage = sum(l * state / 2) / sum(l),
+            maxchr = max(tapply(l * state / 2, chr, sum) / tapply(l, chr, sum)),
+            worst_chr = paste0("chr", names(which.max(tapply(l * state / 2, chr, sum) / tapply(l, chr, sum)))),
+            .groups = "drop") %>%
+  mutate(flag = case_when(dosage > 0.10 ~ "impostor", dosage > 0.02 ~ "borderline", TRUE ~ "clean")) %>%
+  arrange(desc(dosage))
+cat(sprintf("B73 reps: %d (BrB %d, Skim %d, MolB %d) | clean %d | borderline %d | impostor %d\n",
+            nrow(qc), sum(qc$exp == "BrB-RTI (r=7, wideseq)"), sum(qc$exp == "Skim-RTI (r=5)"),
+            sum(qc$exp == "MolB-RTI (r=2)"),
+            sum(qc$flag == "clean"), sum(qc$flag == "borderline"), sum(qc$flag == "impostor")))
+```
+
+## Per-rep donor content (all experiments, worst → best)
+
+```{r table}
+qc %>% transmute(experiment = exp, sample = name, dosage = round(dosage, 3),
+                 maxchr = round(maxchr, 3), worst_chr, flag) %>%
+  knitr::kable(caption = "Every B73 rep, by donor dosage. `impostor` = not pure B73 (a chromosome carries donor).")
+```
+
+**Read:** the `impostor` reps carry **localized** donor (high `maxchr` on one chromosome) —
+the signature of a real introgressed segment, not diffuse noise — so they are mislabeled /
+contaminated samples, not B73. The BrB-seq impostors cluster on plate PN1.
+
+## Chromosome painting — 5 cleanest vs 5 worst B73 reps
+
+```{r painting, fig.width=12, fig.height=7}
+ord <- qc %>% arrange(desc(dosage))
+sel <- bind_rows(head(ord, 5) %>% mutate(grp = "5 WORST (impostor)"),
+                 tail(ord, 5) %>% mutate(grp = "5 BEST (clean)"))
+lab <- function(e, n, d) sprintf("%s<br>%s<br>%.3f", sub(" .*", "", e), n, d)
+paint <- calls %>% inner_join(sel %>% select(exp, name, dosage, grp), by = c("exp", "name")) %>%
+  mutate(row = lab(exp, name, dosage),
+         state = factor(state, 0:2, c("REF", "HET", "ALT")),
+         chr = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)),
+         grp = factor(grp, c("5 WORST (impostor)", "5 BEST (clean)")))
+row_ord <- sel %>% mutate(row = lab(exp, name, dosage)) %>% arrange(grp, desc(dosage)) %>% pull(row)
+paint$row <- factor(paint$row, levels = rev(row_ord))
+
+ggplot(paint, aes(xmin = start_bp/1e6, xmax = end_bp/1e6, ymin = 0, ymax = 1, fill = state)) +
+  geom_rect() +
+  facet_grid(row ~ chr, scales = "free_x", space = "free_x", switch = "y") +
+  scale_fill_manual(values = pal, drop = FALSE) +
+  scale_x_continuous(labels = scales::unit_format(unit = "", scale = 1)) +
+  labs(title = "B73 reps — 5 worst (impostors) vs 5 cleanest",
+       subtitle = "row = experiment / sample / donor dosage | gold REF, green HET, purple ALT — a clean B73 is all gold",
+       x = "Position (Mb)", fill = "Genotype") +
+  ggpubr::theme_classic2(base_size = 9) +
+  theme(legend.position = "bottom", strip.background = element_blank(),
+        strip.text.x = element_text(face = "bold"),
+        strip.text.y.left = ggtext::element_markdown(angle = 0, hjust = 1, size = 8, lineheight = 0.85),
+        panel.spacing.x = unit(0.05, "lines"), panel.spacing.y = unit(0.15, "lines"),
+        axis.text.y = element_blank(), axis.ticks.y = element_blank(),
+        axis.title.y = element_blank(), axis.line.y = element_blank(),
+        axis.text.x = element_text(size = 6))
+```
+
+## Recommended clean controls
+
+```{r controls}
+qc %>% filter(flag == "clean") %>% group_by(exp) %>% slice_min(dosage, n = 3, with_ties = FALSE) %>%
+  transmute(experiment = exp, sample = name, dosage = round(dosage, 4), maxchr = round(maxchr, 4)) %>%
+  knitr::kable(caption = "Cleanest 3 B73 reps per experiment — use one of these as the control (NOT PN1_SID15).")
+```
+
+**Use:** for the BrB-RTI comparison docs, replace the `PN1_SID15` control with the cleanest
+BrB-seq rep above. The `impostor` reps should be excluded from any B73-check pooling and
+flagged for the BRB-seq relabeling follow-up (`docs/brbseq-sample-mislabeling.md`).
