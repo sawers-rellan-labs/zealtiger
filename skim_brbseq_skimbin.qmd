@@ -218,8 +218,8 @@ as a confounder.
 
 Ancestry calls for the two 10-NIL coverage sweeps, painted as the coverage of the
 *varying* platform climbs (rows ordered low→high; the row label prefixes the varying
-λ). Three tracks per NIL — **top = Skim-RTI (r=5), middle = BrB-RTI (r=109), bottom =
-Skim-BIN (1 Mb-bin)** — and a
+λ). Three tracks per NIL — **top = Skim-BIN (1 Mb-bin), middle = Skim-RTI (r=5), bottom =
+BrB-RTI (r=109)** — and a
 **B73 control** row pinned at top (forced, not pedigree-matched: skim `PN10_SID893`,
 BRB `PN1_SID15`). Each B73 control comes from its platform's **B73 check group**, fit
 separately from the teosinte donors (skim from the 50K counts, BRB from the per-species fit).
@@ -265,9 +265,9 @@ sweep_paint <- function(which) {
   bind_rows(b73, nil_rows) %>%
     mutate(chr = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)),
            row = factor(row, levels = c("**B73 control**", rev(m$rowlab))),
-           method = factor(method, c("Skim-RTI","BrB-RTI","Skim-BIN")),
-           ylo = case_when(method == "Skim-RTI" ~ 0.68, method == "BrB-RTI" ~ 0.34, TRUE ~ 0.00),
-           yhi = case_when(method == "Skim-RTI" ~ 1.00, method == "BrB-RTI" ~ 0.66, TRUE ~ 0.32))
+           method = factor(method, c("Skim-BIN","Skim-RTI","BrB-RTI")),
+           ylo = case_when(method == "Skim-BIN" ~ 0.68, method == "Skim-RTI" ~ 0.34, TRUE ~ 0.00),
+           yhi = case_when(method == "Skim-BIN" ~ 1.00, method == "Skim-RTI" ~ 0.66, TRUE ~ 0.32))
 }
 paint_plot <- function(df, title, sub) {
   ggplot(df, aes(xmin = start_bp/1e6, xmax = end_bp/1e6, ymin = ylo, ymax = yhi, fill = state)) +
@@ -275,7 +275,7 @@ paint_plot <- function(df, title, sub) {
     facet_grid(row ~ chr, scales = "free_x", space = "free_x", switch = "y") +
     scale_fill_manual(values = pal, drop = FALSE) +
     scale_x_continuous(labels = scales::unit_format(unit = "", scale = 1)) +
-    scale_y_continuous(breaks = c(0.16, 0.50, 0.84), labels = c("Skim-BIN","BrB-RTI","Skim-RTI"),
+    scale_y_continuous(breaks = c(0.16, 0.50, 0.84), labels = c("BrB-RTI","Skim-RTI","Skim-BIN"),
                        expand = expansion(mult = 0.02), position = "right") +
     labs(title = title, subtitle = sub, x = "Position (Mb)", fill = "Genotype") +
     ggpubr::theme_classic2(base_size = 9) +
@@ -294,7 +294,7 @@ paint_plot <- function(df, title, sub) {
 ```{r sweep-vary-brb, fig.width=12, fig.height=12}
 paint_plot(sweep_paint("vary_brb"),
            "Coverage sweep — vary BRB-seq depth, skim held ≈ mean",
-           "rows: B73 control then 10 NILs by increasing BRB-seq λ | Skim-RTI / BrB-RTI / Skim-BIN | gold REF, green HET, purple ALT")
+           "rows: B73 control then 10 NILs by increasing BRB-seq λ | Skim-BIN / Skim-RTI / BrB-RTI | gold REF, green HET, purple ALT")
 ```
 
 ### Vary skim (BRB-seq ≈ mean)
@@ -302,7 +302,7 @@ paint_plot(sweep_paint("vary_brb"),
 ```{r sweep-vary-skim, fig.width=12, fig.height=12}
 paint_plot(sweep_paint("vary_skim"),
            "Coverage sweep — vary skim depth, BRB-seq held ≈ mean",
-           "rows: B73 control then 10 NILs by increasing skim λ | Skim-RTI / BrB-RTI / Skim-BIN")
+           "rows: B73 control then 10 NILs by increasing skim λ | Skim-BIN / Skim-RTI / BrB-RTI")
 ```
 
 **Read:** the **B73 control** anchors both panels — Skim-RTI paints it ~all-REF
@@ -435,8 +435,8 @@ ggplot(bind_rows(skim_b, brb_b, bin_b), aes(x = size_mb, fill = src)) +
 
 ## Chromosome painting — Skim-RTI / BrB-RTI / Skim-BIN per NIL
 
-Three tracks per NIL (**top = Skim-RTI r=5, middle = BrB-RTI r=109, bottom = Skim-BIN
-1 Mb**), grouped and labelled by the `.B`-dropped **pedigree** (wrapped at the left); the
+Three tracks per NIL (**top = Skim-BIN 1 Mb, middle = Skim-RTI r=5, bottom = BrB-RTI
+r=109**), grouped and labelled by the `.B`-dropped **pedigree** (wrapped at the left); the
 method label is at the right. NILs ordered by Skim-RTI vs BrB-RTI donor Jaccard (best first).
 
 ```{r painting, fig.width=12, fig.height=11}
@@ -454,19 +454,19 @@ paint <- map_dfr(matched$nil, function(s_nil) {
 }) %>%
   mutate(chr  = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)),
          nil  = factor(gsub("_", "<br>", nil), levels = gsub("_", "<br>", nil_ord)),
-         method = factor(method, c("Skim-RTI","BrB-RTI","Skim-BIN")),
-         ylo = case_when(method == "Skim-RTI" ~ 0.68, method == "BrB-RTI" ~ 0.34, TRUE ~ 0.00),
-         yhi = case_when(method == "Skim-RTI" ~ 1.00, method == "BrB-RTI" ~ 0.66, TRUE ~ 0.32))
+         method = factor(method, c("Skim-BIN","Skim-RTI","BrB-RTI")),
+         ylo = case_when(method == "Skim-BIN" ~ 0.68, method == "Skim-RTI" ~ 0.34, TRUE ~ 0.00),
+         yhi = case_when(method == "Skim-BIN" ~ 1.00, method == "Skim-RTI" ~ 0.66, TRUE ~ 0.32))
 
 ggplot(paint, aes(xmin = start_bp/1e6, xmax = end_bp/1e6, ymin = ylo, ymax = yhi, fill = state)) +
   geom_rect() +
   facet_grid(nil ~ chr, scales = "free_x", space = "free_x", switch = "y") +
   scale_fill_manual(values = pal, drop = FALSE) +
   scale_x_continuous(labels = scales::unit_format(unit = "", scale = 1)) +
-  scale_y_continuous(breaks = c(0.16, 0.50, 0.84), labels = c("Skim-BIN","BrB-RTI","Skim-RTI"),
+  scale_y_continuous(breaks = c(0.16, 0.50, 0.84), labels = c("BrB-RTI","Skim-RTI","Skim-BIN"),
                      expand = expansion(mult = 0.02), position = "right") +
   labs(title = "Skim-RTI / BrB-RTI / Skim-BIN — pedigree-matched NILs",
-       subtitle = "per NIL: top Skim-RTI (r=5) / middle BrB-RTI (r=109) / bottom Skim-BIN (1 Mb) | gold REF, green HET, purple ALT",
+       subtitle = "per NIL: top Skim-BIN (1 Mb) / middle Skim-RTI (r=5) / bottom BrB-RTI (r=109) | gold REF, green HET, purple ALT",
        x = "Position (Mb)", fill = "Genotype") +
   ggpubr::theme_classic2(base_size = 9) +
   theme(legend.position = "bottom", strip.background = element_blank(),
