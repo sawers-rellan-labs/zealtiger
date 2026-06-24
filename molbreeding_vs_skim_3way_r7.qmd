@@ -71,6 +71,11 @@ ground truth; the neutral breeding-scheme single-locus expectation is **p0**.
   `sample_correspondence.qmd`, "Checks to resolve".)
 - the remaining **10 NILs have no BRB counterpart** → **blank** BrB lane.
 
+> **Clean-control note.** Don't trust the plate-labeled BrB-seq "B73" wells: 6 of the 35
+> are **introgressed impostors** (incl. `PN1_SID15`, all on plate PN1). The clean BrB-seq
+> B73 rep is **`PN3_SID213`**; skim/MolB B73 are genuinely clean. Per-experiment
+> recommended controls: [**B73 check QC**](b73_checks_qc.html).
+
 Quantitative BrB-RTI concordance below uses the **4 real pedigree matches**. Row labels
 carry the per-sample **SNP50K skim coverage λ** (×), as in `skim_vs_brbseq`.
 

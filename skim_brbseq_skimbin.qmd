@@ -221,6 +221,12 @@ BRB `PN3_SID213` — clean reps; the old `PN1_SID15` is an introgressed impostor
 `docs/b73_checks_qc.html`). Each B73 control comes from its platform's **B73 check group**,
 fit separately from the teosinte donors.
 
+> **Clean-control note.** The BrB-seq B73 control is **`PN3_SID213`** (≈ 0 donor genome-wide).
+> The plate-labeled `PN1_SID15` used previously is an **introgressed impostor** — 6 of the 35
+> BrB-seq "B73" reps carry real localized donor (all on plate PN1), a BRB-seq labeling
+> artifact; skim/MolB B73 are clean. Per-experiment recommended clean controls:
+> [**B73 check QC**](b73_checks_qc.html).
+
 **BrB-RTI = wideseq-filtered, per-species, r=7.** BRB-seq 3′ markers are dense and noisy,
 so on the full joint-called SNP set RTIGER needed an extreme rigidity (r=109). Restricting
 the BRB allele counts to the **wideseq teosinte-informative positions** (21,665 of 66,983
