@@ -432,6 +432,57 @@ ggplot(bind_rows(skim_b, brb_b, bin_b), aes(x = size_mb, fill = src)) +
   theme_bw()
 ```
 
+## Genotype-frequency distribution vs the one-locus expectation
+
+Per-NIL genome fraction called **HET** and **homozygous ALT (donor)** by each caller, across
+the full both-platforms set, versus the **BC2S3 single-locus expectation** `p0`
+(`R/07_single_locus.R`: iterate the backcross/selfing transition matrices — map- and
+interference-independent). For BC2S3 the donor allele frequency is fixed at 0.125 but
+selfing has driven most of it to **homozygous** donor, so the expectation is **ALT ≫ HET**.
+A caller that over-calls HET (RNA allelic noise) or under-resolves donor blocks will deviate.
+
+```{r genotype-freq, fig.width=9, fig.height=5}
+source("R/07_single_locus.R")
+p0 <- single_locus_p0(n_bc = 2L, n_self = 3L)   # BC2S3 one-locus expectation c(REF, Het, ALT)
+
+# per-sample HET & ALT genome fraction (length-weighted) for a call set
+state_freq <- function(seg, nms, method) {
+  seg %>% filter(name %in% nms) %>% mutate(l = end_bp - start_bp + 1) %>% group_by(name) %>%
+    summarise(Het = sum(l[state == 1]) / sum(l), ALT = sum(l[state == 2]) / sum(l),
+              .groups = "drop") %>% mutate(method = method)
+}
+sk_names  <- unique(skim_in$name[skim_in$nil %in% both_nils])   # skim samples (Skim-RTI & Skim-BIN)
+brb_names <- unique(brb_in$name[brb_in$nil  %in% both_nils])    # BrB samples
+freq <- bind_rows(
+  state_freq(skim,    sk_names,  "Skim-RTI (r=5)"),
+  state_freq(brb,     brb_names, "BrB-RTI (r=7, ws)"),
+  state_freq(skimbin, sk_names,  "Skim-BIN (1 Mb)")) %>%
+  pivot_longer(c(Het, ALT), names_to = "state", values_to = "freq") %>%
+  mutate(method = factor(method, c("Skim-RTI (r=5)", "BrB-RTI (r=7, ws)", "Skim-BIN (1 Mb)")),
+         state  = factor(state, c("Het", "ALT"), c("HET", "homozygous ALT (donor)")))
+expd <- tibble(state = factor(c("HET", "homozygous ALT (donor)"),
+                              c("HET", "homozygous ALT (donor)")),
+               expected = c(p0[["Het"]], p0[["ALT"]]))
+
+ggplot(freq, aes(method, freq, fill = method)) +
+  geom_violin(alpha = 0.45, scale = "width", colour = NA) +
+  geom_boxplot(width = 0.16, outlier.size = 0.4, alpha = 0.8) +
+  geom_hline(data = expd, aes(yintercept = expected), linetype = "dashed", colour = "grey20") +
+  facet_wrap(~ state, scales = "free_y") +
+  scale_fill_manual(values = c("Skim-RTI (r=5)" = "purple4", "BrB-RTI (r=7, ws)" = "orange3",
+                               "Skim-BIN (1 Mb)" = "seagreen4"), guide = "none") +
+  labs(x = NULL, y = "per-NIL genome fraction",
+       title = "HET and homozygous-ALT genome fraction by caller vs the one-locus expectation",
+       subtitle = sprintf("dashed = BC2S3 single-locus p0 (HET %.3f, ALT %.3f) | %d NILs called on both platforms",
+                          p0[["Het"]], p0[["ALT"]], length(both_nils))) +
+  theme_bw() + theme(axis.text.x = element_text(angle = 12, hjust = 1))
+```
+
+**Read:** the expectation is **HET ≈ `r round(single_locus_p0()[["Het"]],3)`**, **ALT ≈
+`r round(single_locus_p0()[["ALT"]],3)`** (donor allele fixed at 0.125, mostly homozygous
+after S3). A caller sitting above the dashed HET line / below the ALT line is over-calling
+heterozygosity — the RNA-noise failure mode BrB-RTI is most prone to.
+
 ## Chromosome painting — Skim-RTI / BrB-RTI / Skim-BIN per NIL
 
 Three tracks per NIL (**top = Skim-BIN 1 Mb, middle = Skim-RTI r=5, bottom = BrB-RTI
