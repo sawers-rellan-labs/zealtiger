@@ -5,10 +5,12 @@
 # same value). Replaces the stale, externally-precomputed
 # results/sim_calibration/{coverage_sweep_members.csv, skim_sweep_calls/, brbseq_sweep_calls_r109/}.
 #
-# Skim sweep calls are free (subset calls_taxa_r5 + the B73 control from the check fit).
-# BRB sweep calls must be fit at r=109 from allelicCounts — this script writes the BRB
-# partner list to /tmp/brb_sweep_fit.txt; fit it with fit_rtiger_brbseq.R, then the
-# painting reads the regenerated brbseq_sweep_calls_r109.
+# Both platforms' calls are SUBSET from per-(teosinte-)species fits — never an ad-hoc cohort:
+#   skim -> calls_taxa_r5 + the B73 control from the check fit.
+#   BrB  -> brbseq_taxa_r109 (per species, B73/Purple as checks; produced once by
+#           fit_rtiger_brbseq_by_taxa.R over the cached brbseq_ks counts). This script
+#           subsets the sweep members AND the 8-sample MolB-overlap pair set from it.
+# The sweep BRB sample list is recorded in agent/brb_sweep_fit.txt (survives reboots, /tmp doesn't).
 suppressMessages({library(readr); library(dplyr)})
 chop <- function(x) sub("\\.B$", "", x)
 SKIM_B73 <- "PN10_SID893"; BRB_B73 <- "PN1_SID15"
@@ -63,12 +65,29 @@ skim_sweep <- bind_rows(
 dir.create("results/sim_calibration/skim_sweep_calls", showWarnings = FALSE, recursive = TRUE)
 write_csv(skim_sweep, "results/sim_calibration/skim_sweep_calls/calls_common_schema.csv")
 
-# ---- BRB partner list to fit at r=109 (members + B73 control) ----
-brb_ids <- unique(c(members$brb_name, BRB_B73))
-writeLines(brb_ids, "/tmp/brb_sweep_fit.txt")
+# ---- BRB sweep calls: subset the per-species fit for members + B73 control ----
+TAXA_CALLS <- "results/sim_calibration/brbseq_taxa_r109/calls_common_schema.csv"
+if (!file.exists(TAXA_CALLS))
+  stop("missing ", TAXA_CALLS, " — run fit_rtiger_brbseq_by_taxa.R first.")
+brb_taxa  <- read_csv(TAXA_CALLS, show_col_types = FALSE)
+brb_ids   <- unique(c(members$brb_name, BRB_B73))
+brb_sweep <- brb_taxa %>% filter(name %in% brb_ids)
+miss_sw <- setdiff(brb_ids, unique(brb_sweep$name))
+if (length(miss_sw)) warning("sweep BRB names absent from per-species fit: ", paste(miss_sw, collapse = ", "))
+dir.create("results/sim_calibration/brbseq_sweep_calls_r109", showWarnings = FALSE, recursive = TRUE)
+write_csv(brb_sweep, "results/sim_calibration/brbseq_sweep_calls_r109/calls_common_schema.csv")
+writeLines(brb_ids, "agent/brb_sweep_fit.txt")   # record of the sweep BRB samples (was /tmp)
+
+# ---- BRB pair calls: re-source the doc's 8-sample MolB-overlap pairs from the same fit ----
+PAIR_SAMPLES <- c("PN4_SID290", "PN4_SID291", "PN4_SID293", "PN4_SID309",
+                  "PN4_SID320", "PN4_SID326", "PN4_SID330", "PN4_SID359")
+brb_pairs <- brb_taxa %>% filter(name %in% PAIR_SAMPLES)
+write_csv(brb_pairs, "results/sim_calibration/brbseq_calls_r109/calls_common_schema.csv")
 
 cat(sprintf("matched NILs with skim calls: %d | skim mean %.3f× | brb mean %.2f×\n", nrow(cov), ms, mb))
 cat("vary_skim picks (skim_cov):\n"); print(round(sort(vary_skim$skim_cov), 3))
 cat("vary_brb picks (brb_cov):\n");   print(round(sort(vary_brb$brb_cov), 2))
 cat(sprintf("skim_sweep_calls samples: %d (incl B73 %s)\n", n_distinct(skim_sweep$name), SKIM_B73))
-cat(sprintf("BRB to fit at r=109: %d samples -> /tmp/brb_sweep_fit.txt\n", length(brb_ids)))
+cat(sprintf("brbseq_sweep_calls_r109 samples: %d (incl B73 %s); list -> agent/brb_sweep_fit.txt\n",
+            n_distinct(brb_sweep$name), BRB_B73))
+cat(sprintf("brbseq_calls_r109 (pairs) re-sourced: %d samples\n", n_distinct(brb_pairs$name)))
