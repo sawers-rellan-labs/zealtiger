@@ -27,6 +27,7 @@ params:
   brb_taxa:   "results/sim_calibration/brbseq_taxa_r7_wideseq/calls_common_schema.csv"   # BrB-RTI r=7, wideseq-filtered, per teosinte species (full 379)
   nil_seg:    "results/nil_segments.csv"                                                # n=1500 BC2S3 simulation introgression segments (NULL reference)
   skimbin:    "results/sim_calibration/skimbin_calls/calls_common_schema.csv"           # Skim-BIN: BzeaSeq 1 Mb-bin GMM-HMM, SAME skim reads as Skim-RTI (keyed on skim name)
+  broman_frac: "results/single_locus_check/fractions.csv"                               # per-NIL REF/Het/ALT fractions, Broman/simcross BC2S3 sim (n=1500)
 ---
 
 **Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
@@ -435,11 +436,13 @@ ggplot(bind_rows(skim_b, brb_b, bin_b), aes(x = size_mb, fill = src)) +
 ## Genotype-frequency distribution vs the one-locus expectation
 
 Per-NIL genome fraction called **HET** and **homozygous ALT (donor)** by each caller, across
-the full both-platforms set, versus the **BC2S3 single-locus expectation** `p0`
-(`R/07_single_locus.R`: iterate the backcross/selfing transition matrices — map- and
-interference-independent). For BC2S3 the donor allele frequency is fixed at 0.125 but
+the full both-platforms set, versus two references: the **n=1500 Broman/simcross BC2S3
+simulation** (grey — the expected *distribution* of per-NIL fractions) and its **single-locus
+mean** `p0` (dashed; `R/07_single_locus.R`, the breeding-scheme transition-matrix expectation,
+map- and interference-independent). For BC2S3 the donor allele frequency is fixed at 0.125 but
 selfing has driven most of it to **homozygous** donor, so the expectation is **ALT ≫ HET**.
-A caller that over-calls HET (RNA allelic noise) or under-resolves donor blocks will deviate.
+A caller that over-calls HET (RNA allelic noise) or under-resolves donor blocks will deviate
+from both the simulated spread and `p0`.
 
 ```{r genotype-freq, fig.width=9, fig.height=5}
 source("R/07_single_locus.R")
@@ -456,9 +459,11 @@ brb_names <- unique(brb_in$name[brb_in$nil  %in% both_nils])    # BrB samples
 freq <- bind_rows(
   state_freq(skim,    sk_names,  "Skim-RTI (r=5)"),
   state_freq(brb,     brb_names, "BrB-RTI (r=7, ws)"),
-  state_freq(skimbin, sk_names,  "Skim-BIN (1 Mb)")) %>%
+  state_freq(skimbin, sk_names,  "Skim-BIN (1 Mb)"),
+  read_csv(params$broman_frac, show_col_types = FALSE) %>%       # n=1500 simcross BC2S3 simulation
+    transmute(name = as.character(nil_id), Het, ALT, method = "Broman sim (n=1500)")) %>%
   pivot_longer(c(Het, ALT), names_to = "state", values_to = "freq") %>%
-  mutate(method = factor(method, c("Skim-RTI (r=5)", "BrB-RTI (r=7, ws)", "Skim-BIN (1 Mb)")),
+  mutate(method = factor(method, c("Skim-RTI (r=5)", "BrB-RTI (r=7, ws)", "Skim-BIN (1 Mb)", "Broman sim (n=1500)")),
          state  = factor(state, c("Het", "ALT"), c("HET", "homozygous ALT (donor)")))
 expd <- tibble(state = factor(c("HET", "homozygous ALT (donor)"),
                               c("HET", "homozygous ALT (donor)")),
@@ -470,10 +475,10 @@ ggplot(freq, aes(method, freq, fill = method)) +
   geom_hline(data = expd, aes(yintercept = expected), linetype = "dashed", colour = "grey20") +
   facet_wrap(~ state, scales = "free_y") +
   scale_fill_manual(values = c("Skim-RTI (r=5)" = "purple4", "BrB-RTI (r=7, ws)" = "orange3",
-                               "Skim-BIN (1 Mb)" = "seagreen4"), guide = "none") +
+                               "Skim-BIN (1 Mb)" = "seagreen4", "Broman sim (n=1500)" = "grey60"), guide = "none") +
   labs(x = NULL, y = "per-NIL genome fraction",
-       title = "HET and homozygous-ALT genome fraction by caller vs the one-locus expectation",
-       subtitle = sprintf("dashed = BC2S3 single-locus p0 (HET %.3f, ALT %.3f) | %d NILs called on both platforms",
+       title = "HET and homozygous-ALT genome fraction: callers vs the BC2S3 simulation & one-locus p0",
+       subtitle = sprintf("grey = Broman/simcross sim (n=1500) | dashed = single-locus p0 (HET %.3f, ALT %.3f) = the sim's mean | %d NILs on both platforms",
                           p0[["Het"]], p0[["ALT"]], length(both_nils))) +
   theme_bw() + theme(axis.text.x = element_text(angle = 12, hjust = 1))
 ```
