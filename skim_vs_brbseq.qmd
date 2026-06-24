@@ -21,10 +21,10 @@ params:
   mb_counts:  "results/sim_calibration/gbts_calls/SNP_wsfilt/counts"                    # wideseq grid (9,157)
   brb_cov:    "results/sim_calibration/brbseq_coverage.csv"                             # BRB-seq per-sample mean coverage (all 379)
   skim_cov:   "results/sim_calibration/real_skim_lambda.csv"                            # SNP50K skim per-sample mean coverage (all 1,393)
-  brb_sweep:  "results/sim_calibration/brbseq_sweep_calls_r109/calls_common_schema.csv"  # BrB-RTI r=109 calls for the sweep samples + B73
+  brb_sweep:  "results/sim_calibration/brbseq_taxa_r7_wideseq/calls_common_schema.csv"   # BrB-RTI r=7 wideseq-filtered, per-species (sweep samples + B73 subset by name)
   skim_sweep: "results/sim_calibration/skim_sweep_calls/calls_common_schema.csv"        # Skim-RTI r=5 calls for the sweep samples + B73
   members:    "results/sim_calibration/coverage_sweep_members.csv"                      # the two 10-NIL coverage sweeps
-  brb_taxa:   "results/sim_calibration/brbseq_taxa_r109/calls_common_schema.csv"        # BrB-RTI r=109, per teosinte species (full 379) — for the intro-size distribution
+  brb_taxa:   "results/sim_calibration/brbseq_taxa_r7_wideseq/calls_common_schema.csv"   # BrB-RTI r=7, wideseq-filtered, per teosinte species (full 379)
   nil_seg:    "results/nil_segments.csv"                                                # n=1500 BC2S3 simulation introgression segments (NULL reference)
 ---
 
@@ -205,32 +205,30 @@ as a confounder.
 
 Ancestry calls for the two 10-NIL coverage sweeps, painted as the coverage of the
 *varying* platform climbs (rows ordered low→high; the row label prefixes the varying
-λ). Two tracks per NIL — **top = Skim-RTI (r=5), bottom = BrB-RTI (r=109)** — and a
+λ). Two tracks per NIL — **top = Skim-RTI (r=5), bottom = BrB-RTI (r=7, ws)** — and a
 **B73 control** row pinned at top (forced, not pedigree-matched: skim `PN10_SID893`,
-BRB `PN1_SID15`). Each B73 control comes from its platform's **B73 check group**, fit
-separately from the teosinte donors (skim from the 50K counts, BRB from the per-species fit).
+BRB `PN3_SID213` — clean reps; the old `PN1_SID15` is an introgressed impostor,
+`docs/b73_checks_qc.html`). Each B73 control comes from its platform's **B73 check group**,
+fit separately from the teosinte donors.
 
-**BrB-RTI rigidity = r=109 (KS-calibrated).** RTIGER's rigidity is in *marker* units,
-but BRB-seq SNPs cluster within genes (non-iid spacing), so the even-grid FP+FN
-benchmark badly under-estimates it (r=5). Instead we chose r by **minimizing the KS
-distance** `D = sup_x|F_called − F_sim|` between the BrB-RTI donor-block size
-distribution (pooled, all 379 BRB samples) and the n=1500 BC2S3 simulation's — a log₂
-grid (2→256) then golden-section refine gave a clean valley at **r=109** (`D=0.112`;
-called median block 11.9 Mb ≈ the sim's 10.74 Mb). Curve in
-`results/sim_calibration/brbseq_ks/brbseq_ks_refined.csv`. **BrB-RTI is then fit per
-teosinte species** (taxon — *Z. mays* ssp. *parviglumis* `Zv`, ssp. *mexicana* `Zx`, ssp.
-*huehuetenangensis* `Zh`, *Z. diploperennis* `Zd`, *Z. luxurians* `Zl`), with **B73 and
-Purple as separate check groups**, mirroring the SNP50K per-taxon scheme; the sweep and
-pair calls subset from these fits. (A single joint EM pooled across species mis-specifies
-the emission regime — divergence from B73 differs by species — and inflates the B73
-false-donor floor.) At r=109 the **B73 check reads 0.00 donor on skim and ~0.13 on
-BrB-RTI** (74.6% REF, the remainder mostly HET) — the residual short-RNA false-donor floor.
+**BrB-RTI = wideseq-filtered, per-species, r=7.** BRB-seq 3′ markers are dense and noisy,
+so on the full joint-called SNP set RTIGER needed an extreme rigidity (r=109). Restricting
+the BRB allele counts to the **wideseq teosinte-informative positions** (21,665 of 66,983
+SNPs; `data/brbseq_wideseq/brb_wideseq.vcf.gz`, GATK SelectVariants on the Chen2022 panel)
+strips the off-target noise and drops the **KS-calibrated rigidity to r=7** — chosen by
+minimizing `D = sup_x|F_called − F_sim|` of the donor-block size distribution vs the n=1500
+BC2S3 simulation (`D=0.103`, vs 0.112 at the old r=109; median donor block 11.3 Mb ≈ the
+sim's 10.74). Curve in `results/sim_calibration/brbseq_ks_wideseq/brbseq_ks_refined.csv`.
+BrB-RTI is fit **per teosinte species** (*Z. mays* ssp. *parviglumis* `Zv`, ssp. *mexicana*
+`Zx`, ssp. *huehuetenangensis* `Zh`, *Z. diploperennis* `Zd`, *Z. luxurians* `Zl`), B73 and
+Purple as separate checks (`brbseq_taxa_r7_wideseq`). The B73 check-group floor stays low
+(median ~0, mean ~0.05); the control `PN3_SID213` reads ≈ 0 donor.
 
 ```{r sweep-paint-setup}
 brb_sw  <- read_csv(params$brb_sweep,  show_col_types = FALSE)
 skim_sw <- read_csv(params$skim_sweep, show_col_types = FALSE)
 mem     <- read_csv(params$members,    show_col_types = FALSE)
-BRB_B73 <- "PN1_SID15"; SKIM_B73 <- "PN10_SID893"
+BRB_B73 <- "PN3_SID213"; SKIM_B73 <- "PN10_SID893"   # clean B73 reps (PN1_SID15 is an introgressed impostor; see docs/b73_checks_qc.html)
 
 lane2 <- function(seg, nm, method, rowlab) {
   d <- seg %>% filter(name == nm)
@@ -368,7 +366,7 @@ donor_blocks <- function(seg) seg %>% arrange(name, chr, start_bp) %>% group_by(
 skim_b <- donor_blocks(skim     %>% filter(name %in% skim_in$name[skim_in$nil %in% both_nils])) %>%
   mutate(src = "Skim-RTI (r=5)")
 brb_b  <- donor_blocks(brb_taxa %>% filter(name %in% brb_in$name[brb_in$nil  %in% both_nils])) %>%
-  mutate(src = "BrB-RTI (r=109)")
+  mutate(src = "BrB-RTI (r=7, ws)")
 null_b <- nil_seg %>% transmute(size_mb = mb)
 cat(sprintf("NILs called on both platforms: %d | Skim samples %d (%d blocks) | BrB samples %d (%d blocks)\n",
             length(both_nils), n_distinct(skim_in$name[skim_in$nil %in% both_nils]), nrow(skim_b),
@@ -378,7 +376,7 @@ ggplot(bind_rows(skim_b, brb_b), aes(x = size_mb, fill = src)) +
   geom_histogram(aes(y = after_stat(density)), position = "identity", alpha = 0.5, bins = 30) +
   geom_freqpoly(data = null_b, aes(x = size_mb, y = after_stat(density)),
                 bins = 30, colour = "grey20", linewidth = 0.9, inherit.aes = FALSE) +
-  scale_fill_manual(values = c("Skim-RTI (r=5)" = "purple4", "BrB-RTI (r=109)" = "orange3")) +
+  scale_fill_manual(values = c("Skim-RTI (r=5)" = "purple4", "BrB-RTI (r=7, ws)" = "orange3")) +
   scale_x_log10() +
   labs(x = "introgression size (Mb, log scale)", y = "density", fill = NULL,
        title = "Introgression-size distribution — Skim-RTI vs BrB-RTI",
@@ -389,7 +387,7 @@ ggplot(bind_rows(skim_b, brb_b), aes(x = size_mb, fill = src)) +
 
 ## Chromosome painting — Skim-RTI vs BrB-RTI per NIL
 
-Two tracks per NIL (**top = Skim-RTI r=5, bottom = BrB-RTI r=109**), grouped and labelled
+Two tracks per NIL (**top = Skim-RTI r=5, bottom = BrB-RTI r=7 wideseq**), grouped and labelled
 by the `.B`-dropped **pedigree** (wrapped at the left); the method label is at the right.
 NILs ordered by donor Jaccard (best agreement first).
 
@@ -419,7 +417,7 @@ ggplot(paint, aes(xmin = start_bp/1e6, xmax = end_bp/1e6, ymin = ylo, ymax = yhi
   scale_y_continuous(breaks = c(0.24, 0.76), labels = c("BrB-RTI","Skim-RTI"),
                      expand = expansion(mult = 0.02), position = "right") +
   labs(title = "Skim-RTI vs BrB-RTI — pedigree-matched NILs",
-       subtitle = "per NIL: top = Skim-RTI (r=5), bottom = BrB-RTI (r=109) | gold REF, green HET, purple ALT",
+       subtitle = "per NIL: top = Skim-RTI (r=5), bottom = BrB-RTI (r=7, ws) | gold REF, green HET, purple ALT",
        x = "Position (Mb)", fill = "Genotype") +
   ggpubr::theme_classic2(base_size = 9) +
   theme(legend.position = "bottom", strip.background = element_blank(),
