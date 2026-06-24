@@ -13,7 +13,7 @@ execute:
   warning: false
   message: false
 params:
-  brb_calls:  "results/sim_calibration/brbseq_calls_r109/calls_common_schema.csv"        # BrB-RTI, KS-optimal r=109
+  molb_3way:  "results/sample_correspondence/molbreeding_3way_correspondence.csv"        # MolB·Skim·BRB pedigree map; painting/confusion/Jaccard scope = NILs with in_brbseq==TRUE
   skim_calls: "data/rtiger_50K/calls_taxa_r5.csv"                                       # Skim-RTI, per-taxon r=5
   brb_meta:   "data/BRBseq_metadata.csv"                                                # BRB sample_id -> pedigree (coverage section)
   skim_ped:   "data/skim_sample_pedigree.csv"                                           # skim sample -> pedigree (.B dropped; coverage section)
@@ -54,8 +54,12 @@ The pedigree-matched **pairs are sourced from the curated correspondence**
 `sample_correspondence.qmd`); this doc keeps the pairs whose ancestry calls are available
 here. (The coverage section below still pairs the full dataset directly via the registries.)
 
-MolB-RTI is **not** included: the right NILs aren't in the 16-sample MolBreeding set,
-so it shares no pedigree with the BRB-seq run.
+MolB-RTI is not shown as a fourth track here, but the **4 NILs that have both
+MolBreeding-GBTS and BRB-seq** (pedigree-matched: `Zv.0080`, `Zx.0340`, `Zx.0540`,
+`Zd.0030`) define the per-NIL painting / confusion / Jaccard scope below — the lines with
+the most cross-platform support. The coverage and introgression-size sections use the
+full skim∩BRB set. (The earlier 8 `PN4_SID#` samples were a cross-id-space mislabeling
+artifact, not genuine MolBreeding∩BRB NILs — see `docs/brbseq-sample-mislabeling.md`.)
 
 ## Setup
 
@@ -64,30 +68,23 @@ library(tidyverse); library(data.table); library(GenomicRanges); library(ggpubr)
 pal <- c(REF = "gold", HET = "springgreen4", ALT = "purple4")
 chop <- function(x) sub("\\.B$", "", x)
 
-brb     <- read_csv(params$brb_calls,  show_col_types = FALSE)
+brb     <- read_csv(params$brb_taxa,   show_col_types = FALSE)   # BrB-RTI, per-species fit (carries the real BRB sample names)
 skim    <- read_csv(params$skim_calls, show_col_types = FALSE)
 skimbin <- read_csv(params$skimbin,    show_col_types = FALSE)   # Skim-BIN, keyed on skim sample name
 brbmeta <- read_csv(params$brb_meta, show_col_types = FALSE) %>%
   transmute(sid = sample_id, nil = chop(genotype))
 skimped <- read_csv(params$skim_ped, show_col_types = FALSE)   # sample, pedigree (.B-dropped)
 
-# pairs sourced from the curated cross-experiment correspondence
-# (results/sample_correspondence/skim_brbseq_correspondence.csv): NILs matched by the
-# .B-dropped pedigree, sequence-data restricted. Prefixes are ";"-joined when a pedigree
-# has replicates, so split before matching. Keep only pairs whose calls exist in THIS
-# doc's call sets (BRB r=109; skim r=5) — a skim partner without calls reads as unmatched.
-corr <- read_csv(params$corr, show_col_types = FALSE) %>% filter(type == "NIL")
-brb_ped  <- corr %>% separate_rows(brbseq_prefix, sep = ";") %>%
-  transmute(brb_name = brbseq_prefix, nil = pedigree)
-skim_ped <- corr %>% separate_rows(skim_prefix, sep = ";") %>%
-  transmute(skim_name = skim_prefix, nil = pedigree) %>%
-  filter(skim_name %in% skim$name)
-pairs <- tibble(brb_name = sort(unique(brb$name))) %>%
-  left_join(brb_ped,  by = "brb_name") %>%
-  left_join(skim_ped, by = "nil", relationship = "many-to-many") %>%
-  group_by(brb_name, nil) %>%
-  summarise(skim_name = dplyr::first(skim_name), .groups = "drop") %>%
-  arrange(nil)
+corr <- read_csv(params$corr, show_col_types = FALSE) %>% filter(type == "NIL")  # full skim<->BRB map (intro-size section)
+
+# Per-NIL painting / confusion / Jaccard scope = the MolBreeding-GBTS NILs that ALSO have
+# BRB-seq, matched BY PEDIGREE (molbreeding_3way_correspondence.csv, in_brbseq == TRUE).
+# Their real BRB libraries are PN3_SID265 / PN2_SID137 / PN1_SID10 / PN2_SID169 — NOT the
+# PN4 plate names, which are a cross-id-space mislabeling artifact
+# (docs/brbseq-sample-mislabeling.md). BrB-RTI calls come from the per-species fit (`brb`).
+matched <- read_csv(params$molb_3way, show_col_types = FALSE) %>%
+  filter(type == "NIL", in_brbseq) %>%
+  transmute(nil = molb_ped, skim_name = skim_prefix, brb_name = brbseq_prefix)
 
 # common wideseq grid + state-on-grid
 cf   <- read_tsv(list.files(params$mb_counts, full.names = TRUE)[1],
@@ -99,9 +96,8 @@ state_on_grid <- function(seg, nm) {
   d$state[findOverlaps(gg, GRanges(d$chr, IRanges(d$start_bp, d$end_bp)), select = "first")]
 }
 
-cat(sprintf("BrB-RTI samples: %d | with a pedigree-matched skim sample: %d | unmatched: %s\n",
-            n_distinct(brb$name), sum(!is.na(pairs$skim_name)),
-            paste(pairs$brb_name[is.na(pairs$skim_name)], collapse = ", ")))
+cat(sprintf("3-caller per-NIL scope — MolBreeding NILs that also have BRB-seq (pedigree-matched): %d\n  %s\n",
+            nrow(matched), paste(matched$nil, collapse = ", ")))
 ```
 
 ## Coverage by platform — full dataset
@@ -315,7 +311,6 @@ resolve sub-Mb structure, so its blocks read blockier than the per-marker Skim-R
 ## Pedigree-matched pairs
 
 ```{r pairs-table}
-matched <- pairs %>% filter(!is.na(skim_name))
 # pairwise donor Jaccard between two grid-projected state vectors (donor = state>0)
 jac <- function(x, y) { ok <- !is.na(x) & !is.na(y); xd <- x[ok] > 0; yd <- y[ok] > 0
   u <- sum(xd | yd); if (u == 0) NA_real_ else sum(xd & yd) / u }
@@ -480,9 +475,10 @@ ggplot(paint, aes(xmin = start_bp/1e6, xmax = end_bp/1e6, ymin = ylo, ymax = yhi
 
 ## Findings
 
-- Matched **by pedigree** (dropping `.B`), `r sum(!is.na(pairs$skim_name))`/`r n_distinct(brb$name)`
-  BRB-seq samples have a Skim-RTI partner; `r sum(is.na(pairs$skim_name))` has none in the
-  skim call set.
+- The per-NIL painting, confusion, and Jaccard cover the **4 MolBreeding-GBTS NILs that
+  also have BRB-seq** (`Zv.0080`, `Zx.0340`, `Zx.0540`, `Zd.0030`; matched by pedigree) —
+  the lines with the most cross-platform support. Coverage and introgression-size use the
+  full skim∩BRB set.
 - Where the pedigrees genuinely correspond, Skim-RTI and BrB-RTI agree on the donor
   landscape (high donor Jaccard); BrB-RTI is the sparser, noisier track (low coverage RNA).
 - **Skim-BIN** (same skim reads, 1 Mb-bin GMM-HMM) tracks Skim-RTI's donor footprint —
