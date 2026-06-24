@@ -73,27 +73,33 @@ qc %>% transmute(experiment = exp, sample = name, dosage = round(dosage, 3),
 the signature of a real introgressed segment, not diffuse noise — so they are mislabeled /
 contaminated samples, not B73. The BrB-seq impostors cluster on plate PN1.
 
-## Chromosome painting — 5 cleanest vs 5 worst B73 reps
+## Chromosome painting — worst vs clean B73 *within* each experiment
 
-```{r painting, fig.width=12, fig.height=7}
-ord <- qc %>% arrange(desc(dosage))
-sel <- bind_rows(head(ord, 5) %>% mutate(grp = "5 WORST (impostor)"),
-                 tail(ord, 5) %>% mutate(grp = "5 BEST (clean)"))
-lab <- function(e, n, d) sprintf("%s<br>%s<br>%.3f", sub(" .*", "", e), n, d)
+A global 5-worst/5-best split is uninformative: **every impostor is BrB-seq and every
+cleanest is Skim/MolB**. So this paints the **5 worst and 5 cleanest B73 reps within each of
+BrB-seq and Skim** — showing that BrB-seq *does* have clean reps (usable controls) and what
+Skim's *dirtiest* reps look like (still essentially all-REF). (MolB has only 2 reps, both clean.)
+
+```{r painting, fig.width=12, fig.height=12}
+exps  <- c("BrB-RTI (r=7, wideseq)", "Skim-RTI (r=5)")
+short <- function(e) ifelse(grepl("BrB", e), "BrB-seq", "Skim")
+sel <- qc %>% filter(exp %in% exps) %>% group_by(exp) %>%
+  mutate(rw = row_number(desc(dosage)), rc = row_number(dosage)) %>%
+  filter(rw <= 5 | rc <= 5) %>% mutate(grp = if_else(rw <= 5, "WORST", "clean")) %>% ungroup()
+lab <- function(e, g, n, d) sprintf("%s %s<br>%s<br>%.3f", short(e), g, n, d)
+ttb <- sel %>% mutate(eo = match(exp, exps), go = match(grp, c("WORST", "clean"))) %>%
+  arrange(eo, go, desc(dosage)) %>% transmute(row = lab(exp, grp, name, dosage)) %>% pull(row)
 paint <- calls %>% inner_join(sel %>% select(exp, name, dosage, grp), by = c("exp", "name")) %>%
-  mutate(row = lab(exp, name, dosage),
+  mutate(row = factor(lab(exp, grp, name, dosage), levels = rev(ttb)),
          state = factor(state, 0:2, c("REF", "HET", "ALT")),
-         chr = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)),
-         grp = factor(grp, c("5 WORST (impostor)", "5 BEST (clean)")))
-row_ord <- sel %>% mutate(row = lab(exp, name, dosage)) %>% arrange(grp, desc(dosage)) %>% pull(row)
-paint$row <- factor(paint$row, levels = rev(row_ord))
+         chr = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)))
 
 ggplot(paint, aes(xmin = start_bp/1e6, xmax = end_bp/1e6, ymin = 0, ymax = 1, fill = state)) +
   geom_rect() +
   facet_grid(row ~ chr, scales = "free_x", space = "free_x", switch = "y") +
   scale_fill_manual(values = pal, drop = FALSE) +
   scale_x_continuous(labels = scales::unit_format(unit = "", scale = 1)) +
-  labs(title = "B73 reps — 5 worst (impostors) vs 5 cleanest",
+  labs(title = "B73 reps — 5 worst vs 5 cleanest within BrB-seq and within Skim",
        subtitle = "row = experiment / sample / donor dosage | gold REF, green HET, purple ALT — a clean B73 is all gold",
        x = "Position (Mb)", fill = "Genotype") +
   ggpubr::theme_classic2(base_size = 9) +
