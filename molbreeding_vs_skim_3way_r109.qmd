@@ -1,0 +1,402 @@
+---
+title: "MolB-RTI vs Skim-RTI vs BrB-RTI — 3-way ancestry comparison (pedigree-matched, calibrated r)"
+author: "Fausto Rodríguez-Zapata"
+date: "`r Sys.Date()`"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    df-print: paged
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+params:
+  mb_calls:    "results/sim_calibration/gbts_calls/SNP_wsfilt/calls_common_schema.csv"  # MolB-RTI, wsfilt, r=2
+  mb_counts:   "results/sim_calibration/gbts_calls/SNP_wsfilt/counts"                   # wsfilt marker grid (9,157)
+  skim_calls:  "data/rtiger_50K/calls_taxa_r5.csv"                                      # Skim-RTI, per-taxon r=5 (NILs)
+  skim_checks: "data/rtiger_50K/calls_checks_common_schema.csv"                         # Skim-RTI r=5 on the B73/Purple checks (NIL run excludes them)
+  skim_cov:    "results/sim_calibration/real_skim_lambda.csv"                            # SNP50K skim per-sample mean coverage λ (NIL set)
+  skim_chkcnt: "data/rtiger_50K/counts_checks/B73"                                       # 50K count files for the B73 checks (to compute their λ)
+  brb_calls:   "data/brbseq_nil_partners/calls_common_schema.csv"                       # BrB-RTI r=109 on the 4 pedigree-matched NIL BRB partners
+  brb_b73fill: "data/brbseq_checks/B73/calls_common_schema.csv"                         # BrB-RTI r=109 on the BRB B73 checks (putative fill)
+  corr3:       "results/sample_correspondence/molbreeding_3way_correspondence.csv"      # real MolB<->BRB pedigree matches
+  b73_fill:    "results/sample_correspondence/putative_b73_brb_fill_triple.csv"         # putative best-hit BRB B73 for the 2 MolB B73 checks
+  gmm_calls:   "data/bzeaseq_ancestry/gmm_hmm_segments_16lines.tsv"                     # Skim-BIN (1 Mb-bin GMM-HMM) — Jaccard reference
+  sample_map:  "data/molbreeding_45k_sample_map.tsv"
+  nil_seg:     "results/nil_segments.csv"     # n=1500 simulation introgression segments (NULL)
+  nil_co:      "results/nil_crossovers.csv"   # n=1500 simulation crossover counts (NULL)
+  seqlengths:  "data/rtiger_50K/seqlengths.csv"
+  seed:        1
+---
+
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
+Three ancestry sources on the BZea NILs, each called at **its own truth-derived
+rigidity**: **MolB-RTI** (MolBreeding target-capture, ~110×, r=2), **Skim-RTI**
+(SNP50K skim, ~0.4×, r=5), and **BrB-RTI** (BRB-seq 3′ bulk RNA-seq, KS-calibrated
+**r=109**). Calls are RTIGER segments on B73 NAM v5 (`name, chr, start_bp, end_bp,
+state`; 0 = recurrent/B73, 1 = het, 2 = homozygous donor). The **Null** is the
+n=1500 BC2S3 simulation (consensus map, no selection) — a modeled expectation, not
+ground truth; the neutral breeding-scheme single-locus expectation is **p0**.
+
+**Why this notebook supersedes `molbreeding_vs_skim_calibrated`.** Two corrections:
+
+1. **BrB-RTI rigidity is r=109, not r=5.** BRB-seq 3′ markers are dense and noisy;
+   a benchmark in its measured coverage regime under-estimates the needed rigidity.
+   Choosing r by **KS-minimisation** against the skim donor-size distribution gives a
+   clean valley at **r=109** (commit `e147fca`, also used in `skim_vs_brbseq`). At
+   r=109 the spurious short RNA donor-calls collapse — the B73 control false-donor
+   floor drops from ~0.32 (r=5) toward ~0.
+
+2. **BRB↔MolB is matched by pedigree, not by `PN#_SID#` prefix.** The prefix is
+   **per-experiment**: Skim and MolBreeding share one id space, but **BRB-seq has its
+   own**. The frozen notebook's `intersect(brb$name, mb$name)` therefore compared
+   *incomparable* samples (8 unrelated PN4 BRB libraries). The true cross-experiment
+   key is the **pedigree** (`.B`-dropped); curated in `sample_correspondence.qmd`.
+   Only **4 of the 14 MolB NILs** were also sequenced in BRB-seq.
+
+**The BrB lane in the painting.** MolB-RTI and Skim-RTI cover all 16 MolB samples
+(14 NILs + 2 B73-bulk checks). BrB-RTI covers:
+
+- the **4 pedigree-matched NILs** (real BRB partner, relabelled to the MolB id);
+- the **2 B73 checks** → **blank** BrB lane. (B73 is monomorphic recurrent and the
+  BRB checks have no pedigree, so a cross-experiment B73 id cannot be confirmed. A
+  putative best-hit B73 fill is held back pending a physical-sample key from Hannah —
+  `sample_correspondence.qmd`, "Checks to resolve".)
+- the remaining **10 NILs have no BRB counterpart** → **blank** BrB lane.
+
+Quantitative BrB-RTI concordance below uses the **4 real pedigree matches**. Row labels
+carry the per-sample **SNP50K skim coverage λ** (×), as in `skim_vs_brbseq`.
+
+## Setup
+
+```{r setup}
+library(tidyverse); library(GenomicRanges); library(S4Vectors)
+source("R/06_score_rtiger.R")
+source("R/07_single_locus.R")
+set.seed(params$seed)
+
+b73_checks <- c("PN4_SID326", "PN6_SID576")                   # the 2 MolB B73-bulk checks
+mb   <- read_csv(params$mb_calls,   show_col_types = FALSE)   # MolB-RTI r=2 (wsfilt)
+skim <- read_csv(params$skim_calls, show_col_types = FALSE)   # Skim-RTI r=5 (NILs)
+# the NIL production run excludes the checks; add the B73 checks' Skim-RTI r=5 calls so
+# their Skim lane is populated in the painting (same shared MolB/Skim id; reads ~0 donor).
+skim <- bind_rows(skim,
+  read_csv(params$skim_checks, show_col_types = FALSE) %>%
+    select(any_of(names(skim))) %>% filter(name %in% b73_checks))
+gmm  <- read_tsv(params$gmm_calls,  show_col_types = FALSE) %>%   # Skim-BIN (1 Mb-bin GMM-HMM)
+  transmute(name = sample, chr = as.integer(sub("chr", "", chrom)),
+            start_bp = start, end_bp = end,
+            state = c(REF = 0L, HET = 1L, ALT = 2L)[genotype])
+smap    <- read_tsv(params$sample_map, show_col_types = FALSE)
+sl      <- read_csv(params$seqlengths, show_col_types = FALSE)
+nil_seg <- read_csv(params$nil_seg,    show_col_types = FALSE)
+nil_co  <- read_csv(params$nil_co,     show_col_types = FALSE)
+p0      <- single_locus_p0(n_bc = 2L, n_self = 3L)
+
+# ---- BRB-seq calls (r=109), relabelled to the MolB id they correspond to --------
+# ONLY the 4 real pedigree-matched NILs. The putative best-hit B73 BrB fills are
+# DISABLED pending a physical-sample key from Hannah (checks have no pedigree, so a
+# cross-experiment B73 id can't be confirmed). To restore: uncomment `fill` and add it
+# to `brb_pool`/`brb_map` (params$brb_b73fill, params$b73_fill).
+brb_pool <- read_csv(params$brb_calls, show_col_types = FALSE)   # BrB-RTI r=109, 4 NIL partners
+
+corr <- read_csv(params$corr3, show_col_types = FALSE) %>%
+  filter(type == "NIL", in_brbseq) %>%
+  # brbseq_prefix may be ";"-joined replicates — take the first
+  transmute(molb = molb_prefix, brb = sub(";.*$", "", brbseq_prefix), kind = "real")
+# fill <- read_csv(params$b73_fill, show_col_types = FALSE) %>%   # putative B73 fill (Hannah)
+#   transmute(molb = molb_prefix, brb = brb_prefix, kind = "putative")
+brb_map <- corr   # molb id -> BRB prefix (real matches only)
+
+# relabel BRB calls onto the MolB id; keep only mapped partners
+brb <- brb_pool %>% inner_join(brb_map, by = c("name" = "brb")) %>%
+  transmute(name = molb, chr, start_bp, end_bp, state, kind)
+brb_nils <- brb %>% filter(kind == "real")    # the 4 real matches — all quantitative work
+
+# ---- Skim per-sample coverage λ (for the painting row labels) -------------------
+skim_lambda <- read_csv(params$skim_cov, show_col_types = FALSE)   # name, lambda (NIL set)
+# the B73 checks are absent from the NIL λ table — compute λ from their 50K count files
+chk_lambda <- map_dfr(b73_checks, function(s) {
+  f <- file.path(params$skim_chkcnt, paste0(s, ".tsv"))
+  if (!file.exists(f)) return(tibble(name = s, lambda = NA_real_))
+  d <- read_tsv(f, col_names = c("c","p","rb","rc","ab","ac"), show_col_types = FALSE)
+  tibble(name = s, lambda = mean(d$rc + d$ac))
+})
+skim_lambda <- bind_rows(skim_lambda, chk_lambda)
+
+# common wideseq marker grid (from the filtered RTIGER count files)
+cf <- read_tsv(list.files(params$mb_counts, full.names = TRUE)[1],
+               col_names = c("chr_label","bp","rb","rc","ab","ac"), show_col_types = FALSE)
+grid    <- tibble(chr = as.integer(sub("chr","",cf$chr_label)), bp = cf$bp)
+spacing <- sum(sl$len) / nrow(grid)
+
+# MolB∩Skim NILs for the quantitative comparison (exclude the B73 checks — all-REF,
+# would only inflate REF-REF concordance; they still appear in the painting/dosage).
+samples     <- setdiff(intersect(unique(mb$name), unique(skim$name)), b73_checks)
+brb_samples <- sort(unique(brb_nils$name))                     # 4 real pedigree-matched NILs
+
+cat(sprintf("MolB samples: %d | shared with Skim: %d\n", n_distinct(mb$name), length(samples)))
+cat(sprintf("BrB-RTI real pedigree matches (NILs): %d  [%s]\n",
+            length(brb_samples), paste(brb_samples, collapse = ", ")))
+cat("BrB-RTI putative B73 fills: DISABLED (blank BrB lane for the 2 checks, pending Hannah's key)\n")
+cat(sprintf("wideseq markers: %d (~%.0f kb spacing)\n", nrow(grid), spacing/1e3))
+cat(sprintf("resolution floor — MolB-RTI r=2 ≈ %.1f Mb | Skim-RTI r=5 ≈ %.1f Mb | BrB-RTI r=109 ≈ %.0f Mb\n",
+            2*spacing/1e6, 5*spacing/1e6, 109*spacing/1e6))
+
+donor_blocks <- function(seg) seg %>% arrange(name, chr, start_bp) %>% group_by(name, chr) %>%
+  mutate(run = cumsum(c(TRUE, diff(state > 0) != 0)), donor = state > 0) %>% filter(donor) %>%
+  group_by(name, chr, run) %>% summarise(size_mb = (max(end_bp)-min(start_bp))/1e6, .groups = "drop")
+co_count <- function(seg) seg %>% arrange(name, chr, start_bp) %>% group_by(name, chr) %>%
+  summarise(tr = sum(abs(diff(as.integer(state > 0)))), .groups = "drop") %>%
+  group_by(name) %>% summarise(COs = sum(tr), .groups = "drop")
+state_at <- function(df, s) {
+  d <- df[df$name == s, ]
+  d$state[findOverlaps(GRanges(grid$chr, IRanges(grid$bp, width = 1)),
+                       GRanges(d$chr, IRanges(d$start_bp, d$end_bp)), select = "first")]
+}
+```
+
+## Donor dosage & the B73-bulk control
+
+Per-sample donor dosage (bp-weighted `state/2`). Neutral BC2S3 expectation ≈ 0.125; a
+flipped REF/ALT polarity would read ≈ 0.875. The two B73-bulk checks (`PN4_SID326`,
+`PN6_SID576`) should read ≈ 0 — a built-in validity test. BrB-RTI dosage here is on the
+4 pedigree-matched NILs.
+
+```{r dosage}
+dosage <- function(seg) seg %>% mutate(len = end_bp - start_bp + 1) %>%
+  group_by(name) %>% summarise(dosage = sum(len * state/2) / sum(len), .groups = "drop")
+checks <- c("PN4_SID326", "PN6_SID576")
+dose <- dosage(mb) %>% dplyr::rename(molb_r2 = dosage) %>%
+  left_join(dosage(skim)     %>% dplyr::rename(skim_r5   = dosage), by = "name") %>%
+  left_join(dosage(brb_nils) %>% dplyr::rename(brb_r109  = dosage), by = "name") %>%
+  mutate(is_B73_check = name %in% checks) %>% arrange(molb_r2)
+dose
+cat(sprintf("mean donor dosage — MolB-RTI (r=2) %.3f | Skim-RTI (r=5) %.3f | BrB-RTI (r=109, 4 NILs) %.3f | neutral p0 %.3f\n",
+            mean(dose$molb_r2[!dose$is_B73_check]),
+            mean(dose$skim_r5[!is.na(dose$skim_r5)]),
+            mean(dose$brb_r109[!is.na(dose$brb_r109)]), p0["ALT"] + 0.5*p0["Het"]))
+cat(sprintf("B73-bulk checks dosage (MolB-RTI): %s — expect ≈ 0\n",
+            paste(sprintf("%s=%.3f", checks, dose$molb_r2[match(checks, dose$name)]), collapse = ", ")))
+```
+
+## State on the common grid (MolB-RTI vs Skim-RTI)
+
+```{r state-grid}
+paired <- map_dfr(samples, function(s) {
+  a <- state_at(mb, s); k <- state_at(skim, s); ok <- !is.na(a) & !is.na(k)
+  tibble(name = s, gbts = a[ok], skim = k[ok])
+})
+```
+
+## Confusion matrix — MolB-RTI vs Skim-RTI
+
+Rows = MolB-RTI state (wsfilt, r=2), cols = Skim-RTI (per-taxon r=5); cell = count (row %).
+
+```{r confusion}
+cm <- table(gbts = factor(paired$gbts, 0:2), skim = factor(paired$skim, 0:2))
+overall <- sum(diag(cm)) / sum(cm)
+prop <- sweep(cm, 1, rowSums(cm), "/")
+disp <- matrix(sprintf("%d (%.1f%%)", cm, 100*prop), nrow = 3,
+               dimnames = list(`MolB-RTI \\ Skim-RTI` = c("0 recurrent","1 het","2 donor"),
+                               c("0 recurrent","1 het","2 donor")))
+knitr::kable(disp, align = "r",
+             caption = sprintf("MolB-RTI (r=2, rows) vs Skim-RTI (r=5, cols): count (row %%). Overall concordance %.3f.", overall))
+dp <- paired$gbts %in% c(1, 2)
+cat(sprintf("MolB-RTI donor-present markers: %d | Skim-RTI also donor-present: %.1f%%\n",
+            sum(dp), 100*mean(paired$skim[dp] %in% c(1,2))))
+```
+
+**Read:** marker-level concordance is high; disagreements concentrate where MolB-RTI
+calls **het** and Skim-RTI calls **recurrent** — the ~0.4× skim's het under-call.
+
+## BrB-RTI cross-check (3′ RNA-seq, r=109, 4 pedigree-matched NILs)
+
+BrB-RTI on the `r length(brb_samples)` NILs sequenced on both BRB-seq and the others
+(matched by pedigree). Even at its KS-calibrated r=109, 3′ RNA-seq covers only
+expressed regions, so treat BrB-RTI as a qualitative read of donor presence.
+
+```{r brb-grid}
+paired_b <- map_dfr(brb_samples, function(s) {
+  g <- state_at(mb, s); rr <- state_at(brb_nils, s); k <- state_at(skim, s)
+  ok <- !is.na(g) & !is.na(rr)
+  tibble(name = s, gbts = g[ok], brbseq = rr[ok], skim = k[ok])
+})
+```
+
+```{r brb-vs-gbts}
+cm_bg <- table(brbseq = factor(paired_b$brbseq, 0:2), gbts = factor(paired_b$gbts, 0:2))
+prop  <- sweep(cm_bg, 1, rowSums(cm_bg), "/")
+disp  <- matrix(sprintf("%d (%.1f%%)", cm_bg, 100*prop), nrow = 3,
+                dimnames = list(`BrB-RTI \\ MolB-RTI` = c("0 recurrent","1 het","2 donor"),
+                                c("0 recurrent","1 het","2 donor")))
+knitr::kable(disp, align = "r",
+             caption = sprintf("BrB-RTI (r=109, rows) vs MolB-RTI (r=2, cols): count (row %%). Overall concordance %.3f. n=%d NILs.",
+                               sum(diag(cm_bg))/sum(cm_bg), length(brb_samples)))
+dp <- paired_b$gbts %in% c(1, 2)
+cat(sprintf("MolB-RTI donor-present markers: %d | BrB-RTI also donor-present: %.1f%%\n",
+            sum(dp), 100*mean(paired_b$brbseq[dp] %in% c(1,2))))
+```
+
+**Read:** with only 4 pedigree-matched NILs the BrB-RTI confusion is thin, and the
+headline concordance is carried by recurrent-state agreement; BrB-RTI recovers only
+part of the MolB-RTI donor footprint — RNA-seq sparsity, not resolved at any rigidity.
+
+## Segment scale & crossover count — MolB-RTI vs Skim-RTI vs Null
+
+```{r seg-scale}
+metrics_calls <- function(seg, lab, nsamp) {
+  db <- donor_blocks(seg)
+  tibble(source = lab,
+         donor_blocks_per_sample = round(nrow(db)/nsamp, 1),
+         median_donor_block_Mb   = round(median(db$size_mb), 2),
+         median_COs              = median(co_count(seg)$COs))
+}
+mb_s   <- mb       %>% filter(name %in% samples)
+skim_s <- skim     %>% filter(name %in% samples)
+brb_s  <- brb_nils %>% filter(name %in% brb_samples)
+null_row <- tibble(source = "Null (n=1500 simulation)",
+                   donor_blocks_per_sample = round(nrow(nil_seg)/n_distinct(nil_seg$nil_id), 1),
+                   median_donor_block_Mb   = round(median(nil_seg$mb), 2),
+                   median_COs              = median(nil_co$n_co))
+bind_rows(
+  metrics_calls(mb_s,   "MolB-RTI (r=2)",            length(samples)),
+  metrics_calls(skim_s, "Skim-RTI (r=5)",            length(samples)),
+  metrics_calls(brb_s,  "BrB-RTI (r=109, 4 NILs)",   length(brb_samples)),
+  null_row) %>%
+  knitr::kable()
+```
+
+## Introgression-size distribution
+
+```{r intro-sizes}
+gbts_b <- donor_blocks(mb_s)   %>% mutate(src = "MolB-RTI (r=2)")
+skim_b <- donor_blocks(skim_s) %>% mutate(src = "Skim-RTI (r=5)")
+brb_b  <- donor_blocks(brb_s)  %>% mutate(src = "BrB-RTI (r=109)")
+null_b <- nil_seg %>% transmute(size_mb = mb)
+ggplot(bind_rows(gbts_b, skim_b, brb_b), aes(x = size_mb, fill = src)) +
+  geom_histogram(aes(y = after_stat(density)), position = "identity", alpha = 0.5, bins = 30) +
+  geom_freqpoly(data = null_b, aes(x = size_mb, y = after_stat(density)),
+                bins = 30, colour = "grey20", linewidth = 0.9, inherit.aes = FALSE) +
+  scale_fill_manual(values = c("MolB-RTI (r=2)" = "forestgreen", "Skim-RTI (r=5)" = "purple4",
+                               "BrB-RTI (r=109)" = "orange3")) +
+  scale_x_log10() +
+  labs(x = "introgression size (Mb, log scale)", y = "density", fill = NULL,
+       title = "Introgression-size distribution (calibrated r)",
+       subtitle = "MolB-RTI/Skim-RTI = 14 NILs; BrB-RTI = 4 pedigree-matched NILs; grey = Null (n=1500 sim)") +
+  theme_bw()
+```
+
+## Chromosome painting — 16 MolB lines × 3 source-method tracks
+
+Per NIL: three stacked tracks — **MolB-RTI (r=2)** top, **Skim-RTI (r=5)** middle,
+**BrB-RTI (r=109)** bottom (method labels at the right). Each row is labelled at the
+left by its **SNP50K skim coverage λ (×)** over the wrapped **pedigree** (`B73` for the
+two checks). Palette `REF` gold / `HET` springgreen4 / `ALT` purple4. The BrB-RTI lane
+is **real** (pedigree-matched, relabelled to the MolB id) for the 4 NILs; **blank** for
+the 2 B73 checks (putative fill held pending Hannah) and the 10 NILs with no BRB
+counterpart. Labels in **bold** are `LowQuality` (sample-map QC).
+
+```{r chr-painting, fig.width=12, fig.height=16}
+pal <- c(REF = "gold", HET = "springgreen4", ALT = "purple4")
+ord <- c(checks, dose %>% filter(!name %in% checks) %>% arrange(molb_r2) %>% pull(name))
+lowq <- smap$sample_id[smap$quality == "LowQuality" & !is.na(smap$quality)]
+
+# row label = the .B-dropped PEDIGREE string (NILs) / "B73_<id>" (the 2 checks, kept
+# distinct so facets don't collide), wrapped at "_" into multiple lines (ggtext <br>),
+# bold for LowQuality — matching the skim_vs_brbseq painting label treatment.
+lab_tab <- read_csv(params$corr3, show_col_types = FALSE) %>%
+  transmute(name = molb_prefix,
+            base = ifelse(type == "NIL", molb_ped, paste0("B73_", molb_prefix)))
+name_lab <- function(x) {
+  base <- lab_tab$base[match(x, lab_tab$name)]; base[is.na(base)] <- x[is.na(base)]
+  ped  <- gsub("_", "<br>", base)
+  lam  <- skim_lambda$lambda[match(x, skim_lambda$name)]                 # skim coverage λ
+  out  <- ifelse(is.na(lam), ped, sprintf("%.2f×<br>%s", lam, ped))      # λ× on top, pedigree below
+  if_else(x %in% lowq, paste0("**", out, "**"), out)
+}
+
+paint <- bind_rows(
+  mb   %>% transmute(name, chr, start_bp, end_bp, state, method = "MolB-RTI (r=2)"),
+  skim %>% filter(name %in% unique(mb$name)) %>%
+           transmute(name, chr, start_bp, end_bp, state, method = "Skim-RTI (r=5)"),
+  brb  %>% transmute(name, chr, start_bp, end_bp, state, method = "BrB-RTI (r=109)")) %>%
+  mutate(state  = factor(state, 0:2, c("REF", "HET", "ALT")),
+         chr    = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)),
+         name   = factor(name_lab(name), levels = name_lab(ord)),
+         method = factor(method, c("MolB-RTI (r=2)","Skim-RTI (r=5)","BrB-RTI (r=109)")),
+         ylo = case_when(method == "MolB-RTI (r=2)" ~ 0.69, method == "Skim-RTI (r=5)" ~ 0.35, TRUE ~ 0.00),
+         yhi = case_when(method == "MolB-RTI (r=2)" ~ 1.00, method == "Skim-RTI (r=5)" ~ 0.66, TRUE ~ 0.32))
+
+lane_mid <- c(0.16, 0.505, 0.845); lane_lab <- c("BrB-RTI", "Skim-RTI", "MolB-RTI")
+ggplot(paint, aes(xmin = start_bp/1e6, xmax = end_bp/1e6, ymin = ylo, ymax = yhi, fill = state)) +
+  geom_rect() +
+  facet_grid(name ~ chr, scales = "free_x", space = "free_x", switch = "y") +
+  scale_fill_manual(values = pal, drop = FALSE) +
+  scale_x_continuous(labels = scales::unit_format(unit = "", scale = 1)) +
+  scale_y_continuous(breaks = lane_mid, labels = lane_lab,
+                     expand = expansion(mult = 0.02), position = "right") +
+  labs(title = "Ancestry calls — 16 MolB lines × 3 tracks (MolB-RTI / Skim-RTI / BrB-RTI)",
+       subtitle = "row label = skim λ× / pedigree | BrB lane: real pedigree match (4 NILs), blank otherwise (B73 fill pending Hannah) | gold REF, green HET, purple ALT",
+       x = "Position (Mb)", fill = "Genotype") +
+  ggpubr::theme_classic2(base_size = 9) +
+  theme(legend.position = "bottom",
+        strip.background = element_blank(),
+        strip.text.x = element_text(face = "bold"),
+        strip.text.y.left = ggtext::element_markdown(angle = 0, hjust = 1, size = 9, lineheight = 0.85),
+        panel.spacing.x = unit(0.05, "lines"), panel.spacing.y = unit(0.05, "lines"),
+        axis.text.y.right = element_text(size = 9), axis.ticks.y = element_blank(),
+        axis.title.y = element_blank(), axis.line.y = element_blank(),
+        axis.text.x = element_text(size = 6))
+```
+
+**Read:** where the MolB-RTI and Skim-RTI lanes disagree it is almost always MolB-RTI
+calling het/donor where Skim-RTI calls recurrent — the coverage-limited skim collapses
+small heterozygous tracts. The B73 checks are near-all-gold on MolB-RTI/Skim-RTI (their
+BrB lane is blank pending Hannah's check key). The 4 real BrB NIL lanes are sparse and
+speckled, picking up some of the largest donor regions but missing most.
+
+## Jaccard agreement vs Skim-BIN calls
+
+Per-sample Jaccard of donor-present markers (state ∈ {het, donor}) on the common grid,
+each method vs **Skim-BIN** (1 Mb-bin GMM-HMM on the same skim reads). Restricted to the
+samples scored by all three RTIGER methods (the real pedigree-matched NILs).
+
+```{r jaccard-gmm}
+donor_set <- function(df, s) { st <- state_at(df, s); which(!is.na(st) & st > 0) }
+jaccard_vs_gmm <- function(df, s) {
+  if (!s %in% df$name || !s %in% gmm$name) return(NA_real_)
+  a <- donor_set(df, s); b <- donor_set(gmm, s)
+  u <- length(union(a, b)); if (u == 0) return(NA_real_)
+  length(intersect(a, b)) / u
+}
+jac <- tibble(sample = brb_samples) %>%
+  mutate(`MolB-RTI` = map_dbl(sample, ~ jaccard_vs_gmm(mb,       .x)),
+         `Skim-RTI` = map_dbl(sample, ~ jaccard_vs_gmm(skim,     .x)),
+         `BrB-RTI`  = map_dbl(sample, ~ jaccard_vs_gmm(brb_nils, .x))) %>%
+  filter(if_all(c(`MolB-RTI`, `Skim-RTI`, `BrB-RTI`), ~ !is.na(.x)))
+jac %>% knitr::kable(digits = 3,
+  caption = "Jaccard agreement of donor-present markers vs Skim-BIN (per NIL × method).")
+```
+
+## Findings
+
+- **Per-platform calibrated rigidity.** MolB-RTI r=2, Skim-RTI r=5, **BrB-RTI r=109**
+  (KS-calibrated). BrB-seq's dense, noisy 3′ markers need a far more rigid fit than the
+  benchmark FP+FN argmin (r=5) suggests; r=109 collapses the spurious RNA donor floor.
+- **BRB↔MolB is a pedigree join, not a prefix join.** BRB-seq has its own `PN#_SID#`
+  id space, so only **4 of 14** MolB NILs have a real BRB counterpart. The old
+  prefix-join compared unrelated samples — corrected here.
+- **MolB-RTI resolves more het / finer structure** than the ~0.4× skim, the expected
+  direction; disagreements concentrate at MolB-het / Skim-recurrent sites.
+- **B73 checks read ≈ 0 donor** on MolB-RTI/Skim-RTI — polarity and the recurrent
+  control pass. Their BrB lane is left **blank**: B73 is monomorphic and the BRB checks
+  have no pedigree, so a cross-experiment B73 id can't be confirmed without a
+  physical-sample key (pending Hannah).
+- **BrB-RTI stays a coarse qualitative layer** even at r=109 — on the 4 real NILs it
+  recovers only part of the MolB-RTI donor footprint; useful as a sanity layer, not a
+  fine-scale ancestry map.
+```
