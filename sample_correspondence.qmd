@@ -208,6 +208,29 @@ Matching status:
 > ≈ pure recurrent, ~0 donor), we may only need to treat them as a **control class per
 > experiment** rather than match them 1:1. Please confirm the intended handling.
 
+## Unclassifiable sequenced samples {#metadata-gap}
+
+A sequenced bzea sample enters File 1 only if it is a **NIL** (has a pedigree) or a
+**check** (`sample_group` ∈ {B73, Purple}). Any sequenced sample that is *neither* — no
+pedigree **and** no check group — has reads but **no identity to match on**, so it is
+otherwise silently absent from the correspondence. They are listed here so the gap is not
+invisible. The only handle is the **`field_row`** (field-plot id); the upstream
+planting/field sheet (not on `/Volumes/BZea`) maps that plot to a genotype, and is where
+the gap must be resolved.
+
+```{r metadata-gap}
+gap <- master %>%
+  filter(project == "bzea", sample %in% skim_seq, is.na(ped), is.na(chk_grp)) %>%
+  transmute(field_row, sample, is_check, sample_group, pedigree)
+write_csv(gap, file.path(params$outdir, "unclassifiable_sequenced.csv"))
+kable(gap, caption = sprintf(
+  "Sequenced bzea skim samples with no pedigree and no check group (n=%d) — reads but no identity. Resolve via the field-plot id.",
+  nrow(gap)))
+```
+
+**`r nrow(gap)` such sample(s).** (BRB-seq and the 16 MolBreeding map rows have none —
+every sequenced sample there classifies as a NIL or a check.)
+
 ## Summary
 
 ```{r summary}

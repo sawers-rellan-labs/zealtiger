@@ -92,6 +92,7 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
   <li><a href="#file-1-skim-brb-seq-matched-by-pedigree" id="toc-file-1-skim-brb-seq-matched-by-pedigree" class="nav-link" data-scroll-target="#file-1-skim-brb-seq-matched-by-pedigree">File 1 — Skim ↔︎ BRB-seq (matched by pedigree)</a></li>
   <li><a href="#file-2-molbreeding-3-way-molb-skim-brb-seq" id="toc-file-2-molbreeding-3-way-molb-skim-brb-seq" class="nav-link" data-scroll-target="#file-2-molbreeding-3-way-molb-skim-brb-seq">File 2 — MolBreeding 3-way (MolB · Skim · BRB-seq)</a></li>
   <li><a href="#checks-to-resolve" id="toc-checks-to-resolve" class="nav-link" data-scroll-target="#checks-to-resolve">Checks to resolve</a></li>
+  <li><a href="#metadata-gap" id="toc-metadata-gap" class="nav-link" data-scroll-target="#metadata-gap">Unclassifiable sequenced samples</a></li>
   <li><a href="#summary" id="toc-summary" class="nav-link" data-scroll-target="#summary">Summary</a></li>
   </ul>
 </nav>
@@ -919,19 +920,59 @@ pre > code.sourceCode > span > a:first-child::before { text-decoration: underlin
 <p><strong>For Hannah:</strong> is there a physical-sample key (plant / DNA aliquot / plate provenance) that maps the <strong>BRB-seq</strong> check wells to the Skim/MolBreeding checks? (Skim↔︎MolBreeding are already linked by shared id.) If B73 checks are interchangeable controls (each should read ≈ pure recurrent, ~0 donor), we may only need to treat them as a <strong>control class per experiment</strong> rather than match them 1:1. Please confirm the intended handling.</p>
 </blockquote>
 </section>
+<section id="metadata-gap" class="level2">
+<h2 class="anchored" data-anchor-id="metadata-gap">Unclassifiable sequenced samples</h2>
+<p>A sequenced bzea sample enters File 1 only if it is a <strong>NIL</strong> (has a pedigree) or a <strong>check</strong> (<code>sample_group</code> ∈ {B73, Purple}). Any sequenced sample that is <em>neither</em> — no pedigree <strong>and</strong> no check group — has reads but <strong>no identity to match on</strong>, so it is otherwise silently absent from the correspondence. They are listed here so the gap is not invisible. The only handle is the <strong><code>field_row</code></strong> (field-plot id); the upstream planting/field sheet (not on <code>/Volumes/BZea</code>) maps that plot to a genotype, and is where the gap must be resolved.</p>
+<div class="cell">
+<details class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a>gap <span class="ot">&lt;-</span> master <span class="sc">%&gt;%</span></span>
+<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="fu">filter</span>(project <span class="sc">==</span> <span class="st">"bzea"</span>, sample <span class="sc">%in%</span> skim_seq, <span class="fu">is.na</span>(ped), <span class="fu">is.na</span>(chk_grp)) <span class="sc">%&gt;%</span></span>
+<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="fu">transmute</span>(field_row, sample, is_check, sample_group, pedigree)</span>
+<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a><span class="fu">write_csv</span>(gap, <span class="fu">file.path</span>(params<span class="sc">$</span>outdir, <span class="st">"unclassifiable_sequenced.csv"</span>))</span>
+<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a><span class="fu">kable</span>(gap, <span class="at">caption =</span> <span class="fu">sprintf</span>(</span>
+<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>  <span class="st">"Sequenced bzea skim samples with no pedigree and no check group (n=%d) — reads but no identity. Resolve via the field-plot id."</span>,</span>
+<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  <span class="fu">nrow</span>(gap)))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>Sequenced bzea skim samples with no pedigree and no check group (n=1) — reads but no identity. Resolve via the field-plot id.</caption>
+<thead>
+<tr class="header">
+<th style="text-align: left;">field_row</th>
+<th style="text-align: left;">sample</th>
+<th style="text-align: left;">is_check</th>
+<th style="text-align: left;">sample_group</th>
+<th style="text-align: left;">pedigree</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">PV23-8397</td>
+<td style="text-align: left;">PN13_SID1226</td>
+<td style="text-align: left;">FALSE</td>
+<td style="text-align: left;">NA</td>
+<td style="text-align: left;">NA</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p><strong>1 such sample(s).</strong> (BRB-seq and the 16 MolBreeding map rows have none — every sequenced sample there classifies as a NIL or a check.)</p>
+</section>
 <section id="summary" class="level2">
 <h2 class="anchored" data-anchor-id="summary">Summary</h2>
 <div class="cell">
 <details class="code-fold">
 <summary>Code</summary>
-<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb7"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb7-1"><a href="#cb7-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tibble</span>(</span>
-<span id="cb7-2"><a href="#cb7-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">table =</span> <span class="fu">c</span>(<span class="st">"Skim ↔ BRB-seq"</span>, <span class="st">"MolBreeding 3-way"</span>),</span>
-<span id="cb7-3"><a href="#cb7-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">key   =</span> <span class="fu">c</span>(<span class="st">"pedigree (.B-dropped)"</span>, <span class="st">"shared PN#_SID# (Skim); pedigree (BRB)"</span>),</span>
-<span id="cb7-4"><a href="#cb7-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">NILs  =</span> <span class="fu">c</span>(<span class="fu">sum</span>(nil1<span class="sc">$</span>in_skim <span class="sc">&amp;</span> nil1<span class="sc">$</span>in_brbseq), <span class="fu">sum</span>(file2<span class="sc">$</span>type<span class="sc">==</span><span class="st">"NIL"</span>)),</span>
-<span id="cb7-5"><a href="#cb7-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">note  =</span> <span class="fu">c</span>(<span class="st">"comparable on both platforms"</span>,</span>
-<span id="cb7-6"><a href="#cb7-6" aria-hidden="true" tabindex="-1"></a>            <span class="fu">sprintf</span>(<span class="st">"16 MolB samples; %d also in BRB-seq"</span>, <span class="fu">sum</span>(file2<span class="sc">$</span>in_brbseq))),</span>
-<span id="cb7-7"><a href="#cb7-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">file =</span> <span class="fu">file.path</span>(params<span class="sc">$</span>outdir, <span class="fu">c</span>(<span class="st">"skim_brbseq_correspondence.csv"</span>,<span class="st">"molbreeding_3way_correspondence.csv"</span>))</span>
-<span id="cb7-8"><a href="#cb7-8" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span> <span class="fu">kable</span>(<span class="at">caption =</span> <span class="st">"Deliverables"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb8"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb8-1"><a href="#cb8-1" aria-hidden="true" tabindex="-1"></a><span class="fu">tibble</span>(</span>
+<span id="cb8-2"><a href="#cb8-2" aria-hidden="true" tabindex="-1"></a>  <span class="at">table =</span> <span class="fu">c</span>(<span class="st">"Skim ↔ BRB-seq"</span>, <span class="st">"MolBreeding 3-way"</span>),</span>
+<span id="cb8-3"><a href="#cb8-3" aria-hidden="true" tabindex="-1"></a>  <span class="at">key   =</span> <span class="fu">c</span>(<span class="st">"pedigree (.B-dropped)"</span>, <span class="st">"shared PN#_SID# (Skim); pedigree (BRB)"</span>),</span>
+<span id="cb8-4"><a href="#cb8-4" aria-hidden="true" tabindex="-1"></a>  <span class="at">NILs  =</span> <span class="fu">c</span>(<span class="fu">sum</span>(nil1<span class="sc">$</span>in_skim <span class="sc">&amp;</span> nil1<span class="sc">$</span>in_brbseq), <span class="fu">sum</span>(file2<span class="sc">$</span>type<span class="sc">==</span><span class="st">"NIL"</span>)),</span>
+<span id="cb8-5"><a href="#cb8-5" aria-hidden="true" tabindex="-1"></a>  <span class="at">note  =</span> <span class="fu">c</span>(<span class="st">"comparable on both platforms"</span>,</span>
+<span id="cb8-6"><a href="#cb8-6" aria-hidden="true" tabindex="-1"></a>            <span class="fu">sprintf</span>(<span class="st">"16 MolB samples; %d also in BRB-seq"</span>, <span class="fu">sum</span>(file2<span class="sc">$</span>in_brbseq))),</span>
+<span id="cb8-7"><a href="#cb8-7" aria-hidden="true" tabindex="-1"></a>  <span class="at">file =</span> <span class="fu">file.path</span>(params<span class="sc">$</span>outdir, <span class="fu">c</span>(<span class="st">"skim_brbseq_correspondence.csv"</span>,<span class="st">"molbreeding_3way_correspondence.csv"</span>))</span>
+<span id="cb8-8"><a href="#cb8-8" aria-hidden="true" tabindex="-1"></a>) <span class="sc">%&gt;%</span> <span class="fu">kable</span>(<span class="at">caption =</span> <span class="st">"Deliverables"</span>)</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
 </details>
 <div class="cell-output-display">
 <table class="caption-top table table-sm table-striped small">

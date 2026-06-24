@@ -237,10 +237,10 @@ sweep_paint <- function(which) {
     bind_rows(lane2(skim_sw, sk, "Skim-RTI", rl), lane2(brb_sw, br, "BrB-RTI", rl)))
   b73 <- bind_rows(lane2(skim_sw, SKIM_B73, "Skim-RTI", "**B73 control**"),
                    lane2(brb_sw,  BRB_B73,  "BrB-RTI",  "**B73 control**"))
-  lvls <- c("**B73 control**", m$rowlab)            # B73 on top, then low→high coverage
+  # B73 control pinned at the TOP; coverage rows keep their current descending order below
   bind_rows(b73, nil_rows) %>%
     mutate(chr = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)),
-           row = factor(row, levels = rev(lvls)),
+           row = factor(row, levels = c("**B73 control**", rev(m$rowlab))),
            method = factor(method, c("Skim-RTI","BrB-RTI")),
            ylo = if_else(method == "Skim-RTI", 0.52, 0.00),
            yhi = if_else(method == "Skim-RTI", 1.00, 0.48))
