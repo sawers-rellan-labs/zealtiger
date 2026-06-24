@@ -1,0 +1,494 @@
+---
+title: "Skim-RTI / BrB-RTI / Skim-BIN — ancestry concordance on pedigree-matched NILs"
+author: "Fausto Rodríguez-Zapata"
+date: "`r Sys.Date()`"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    df-print: paged
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+params:
+  brb_calls:  "results/sim_calibration/brbseq_calls_r109/calls_common_schema.csv"        # BrB-RTI, KS-optimal r=109
+  skim_calls: "data/rtiger_50K/calls_taxa_r5.csv"                                       # Skim-RTI, per-taxon r=5
+  brb_meta:   "data/BRBseq_metadata.csv"                                                # BRB sample_id -> pedigree (coverage section)
+  skim_ped:   "data/skim_sample_pedigree.csv"                                           # skim sample -> pedigree (.B dropped; coverage section)
+  corr:       "results/sample_correspondence/skim_brbseq_correspondence.csv"            # curated NIL pairs (pedigree-matched, seq-restricted)
+  mb_counts:  "results/sim_calibration/gbts_calls/SNP_wsfilt/counts"                    # wideseq grid (9,157)
+  brb_cov:    "results/sim_calibration/brbseq_coverage.csv"                             # BRB-seq per-sample mean coverage (all 379)
+  skim_cov:   "results/sim_calibration/real_skim_lambda.csv"                            # SNP50K skim per-sample mean coverage (all 1,393)
+  brb_sweep:  "results/sim_calibration/brbseq_sweep_calls_r109/calls_common_schema.csv"  # BrB-RTI r=109 calls for the sweep samples + B73
+  skim_sweep: "results/sim_calibration/skim_sweep_calls/calls_common_schema.csv"        # Skim-RTI r=5 calls for the sweep samples + B73
+  members:    "results/sim_calibration/coverage_sweep_members.csv"                      # the two 10-NIL coverage sweeps
+  brb_taxa:   "results/sim_calibration/brbseq_taxa_r109/calls_common_schema.csv"        # BrB-RTI r=109, per teosinte species (full 379) — for the intro-size distribution
+  nil_seg:    "results/nil_segments.csv"                                                # n=1500 BC2S3 simulation introgression segments (NULL reference)
+  skimbin:    "results/sim_calibration/skimbin_calls/calls_common_schema.csv"           # Skim-BIN: BzeaSeq 1 Mb-bin GMM-HMM, SAME skim reads as Skim-RTI (keyed on skim name)
+---
+
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
+Ancestry concordance across **three callers** — **Skim-RTI**, **BrB-RTI**, and
+**Skim-BIN** — matched **by NIL pedigree string**, not by the `PN#_SID#` plate index,
+which is mislabeled in the BRB-seq run (`docs/brbseq-sample-mislabeling.md`,
+`docs/brbseq_sample_identity.html`). The BRB-seq plate id does not track the NIL; the
+**pedigree string is the cross-experiment identifier**. The only formatting difference
+between the two metadata files is a trailing **`.B`** the MolBreeding/skim registry
+appends and the BRB metadata omits, so we **drop `.B`** before joining.
+
+- **Skim-RTI** — SNP50K ~0.4× skim reads, RTIGER per-marker HMM (r=5, per-taxon);
+  identity from the BZea registry (`data/skim_sample_pedigree.csv`, `.B`-dropped).
+- **BrB-RTI** — BRB-seq 3′ RNA-seq, RTIGER per-marker HMM (r=109 KS-calibrated, per-species);
+  identity from `BRBseq_metadata.csv` (`sample_id` → `genotype`, drop `.B`).
+- **Skim-BIN** — the **same SNP50K skim reads as Skim-RTI**, called by the BzeaSeq
+  **1 Mb-bin GMM-HMM** (`data/bzeaseq_ancestry/all_samples_ancestry_segments.bed`). It
+  shares the reads with Skim-RTI, so it is **keyed on the same skim sample name** — no
+  pedigree join between the two skim callers; the pedigree join only relates the skim
+  side to BRB.
+
+The pedigree-matched **pairs are sourced from the curated correspondence**
+(`results/sample_correspondence/skim_brbseq_correspondence.csv`, built by
+`sample_correspondence.qmd`); this doc keeps the pairs whose ancestry calls are available
+here. (The coverage section below still pairs the full dataset directly via the registries.)
+
+MolB-RTI is **not** included: the right NILs aren't in the 16-sample MolBreeding set,
+so it shares no pedigree with the BRB-seq run.
+
+## Setup
+
+```{r setup}
+library(tidyverse); library(data.table); library(GenomicRanges); library(ggpubr)
+pal <- c(REF = "gold", HET = "springgreen4", ALT = "purple4")
+chop <- function(x) sub("\\.B$", "", x)
+
+brb     <- read_csv(params$brb_calls,  show_col_types = FALSE)
+skim    <- read_csv(params$skim_calls, show_col_types = FALSE)
+skimbin <- read_csv(params$skimbin,    show_col_types = FALSE)   # Skim-BIN, keyed on skim sample name
+brbmeta <- read_csv(params$brb_meta, show_col_types = FALSE) %>%
+  transmute(sid = sample_id, nil = chop(genotype))
+skimped <- read_csv(params$skim_ped, show_col_types = FALSE)   # sample, pedigree (.B-dropped)
+
+# pairs sourced from the curated cross-experiment correspondence
+# (results/sample_correspondence/skim_brbseq_correspondence.csv): NILs matched by the
+# .B-dropped pedigree, sequence-data restricted. Prefixes are ";"-joined when a pedigree
+# has replicates, so split before matching. Keep only pairs whose calls exist in THIS
+# doc's call sets (BRB r=109; skim r=5) — a skim partner without calls reads as unmatched.
+corr <- read_csv(params$corr, show_col_types = FALSE) %>% filter(type == "NIL")
+brb_ped  <- corr %>% separate_rows(brbseq_prefix, sep = ";") %>%
+  transmute(brb_name = brbseq_prefix, nil = pedigree)
+skim_ped <- corr %>% separate_rows(skim_prefix, sep = ";") %>%
+  transmute(skim_name = skim_prefix, nil = pedigree) %>%
+  filter(skim_name %in% skim$name)
+pairs <- tibble(brb_name = sort(unique(brb$name))) %>%
+  left_join(brb_ped,  by = "brb_name") %>%
+  left_join(skim_ped, by = "nil", relationship = "many-to-many") %>%
+  group_by(brb_name, nil) %>%
+  summarise(skim_name = dplyr::first(skim_name), .groups = "drop") %>%
+  arrange(nil)
+
+# common wideseq grid + state-on-grid
+cf   <- read_tsv(list.files(params$mb_counts, full.names = TRUE)[1],
+                 col_names = c("chr_label","bp","rb","rc","ab","ac"), show_col_types = FALSE)
+grid <- tibble(chr = as.integer(sub("chr","",cf$chr_label)), bp = cf$bp)
+gg   <- GRanges(grid$chr, IRanges(grid$bp, width = 1))
+state_on_grid <- function(seg, nm) {
+  d <- seg[seg$name == nm, ]
+  d$state[findOverlaps(gg, GRanges(d$chr, IRanges(d$start_bp, d$end_bp)), select = "first")]
+}
+
+cat(sprintf("BrB-RTI samples: %d | with a pedigree-matched skim sample: %d | unmatched: %s\n",
+            n_distinct(brb$name), sum(!is.na(pairs$skim_name)),
+            paste(pairs$brb_name[is.na(pairs$skim_name)], collapse = ", ")))
+```
+
+## Coverage by platform — full dataset
+
+Mean per-sample sequencing coverage on each platform, paired **by NIL pedigree**
+across the **whole** dataset (every BRB-seq sample joined to its same-pedigree skim
+sample). SNP50K-skim λ from `real_skim_lambda.csv` (mean depth over the 50K grid);
+BRB-seq λ from `brbseq_coverage.csv` (mean depth over the brbseq SNP sites). One
+point = one NIL. The mean of each platform is drawn as a dotted reference line.
+
+```{r coverage-data}
+brb_cov <- read_csv(params$brb_cov, show_col_types = FALSE) %>%
+  mutate(sid = as.integer(sub(".*_SID", "", name)),
+         nil = brbmeta$nil[match(sid, brbmeta$sid)]) %>%
+  filter(!is.na(nil)) %>% transmute(nil, brb_name = name, brb_cov = lambda)
+skim_cov <- read_csv(params$skim_cov, show_col_types = FALSE) %>%
+  mutate(nil = skimped$pedigree[match(name, skimped$sample)]) %>%
+  filter(!is.na(nil)) %>%
+  group_by(nil) %>% summarise(skim_name = dplyr::first(name), skim_cov = dplyr::first(lambda), .groups = "drop")
+cov <- inner_join(brb_cov, skim_cov, by = "nil") %>%
+  filter(skim_name %in% skim$name)   # keep NILs that have a Skim-RTI call (so a pick is always paintable)
+ms <- mean(cov$skim_cov); mb <- mean(cov$brb_cov)
+cat(sprintf("%d pedigree-matched NILs | mean coverage: SNP50K skim %.3f× | BRB-seq %.3f×\n",
+            nrow(cov), ms, mb))
+```
+
+### Coverage-matched series — grid the varying platform across its central 95%
+
+To sweep one platform's coverage while controlling the other, we **grid the varying
+platform across its central 95% (P2.5–P97.5)** on 10 evenly-spaced steps; at each step we
+take the NIL **nearest the intersection of that grid line and the held platform's
+mean**, measuring distance in the plot's *screen* space (each coverage axis scaled by
+its plotted span, ≈ 10:1 skim:BRB). This pins picks to both the evenly-spaced grid and
+the held-mean line (feasible because the two coverages are uncorrelated). The screen
+weight was calibrated against hand-clicked picks on the skim sweep (reproduces 9/10).
+
+```{r grid-sample}
+# At each of the n grid steps, pick the NIL nearest the INTERSECTION of (grid_target on the
+# varying axis, hold_mean on the held axis), with distance measured in *screen* space — each
+# coverage axis scaled by its plotted span (weights `W`; BRB spans ~10× skim's range). This
+# lands picks on both the evenly-spaced grid and the held-mean line. Calibrated to reproduce
+# hand-clicked picks on the skim sweep (9/10); generalises to the BRB sweep by swapping which
+# axis carries the grid (the weights make it symmetric).
+W <- c(skim_cov = 1, brb_cov = 0.1)   # per-unit screen weight (skim:BRB ≈ 10:1)
+grid_series <- function(df, vary, hold, hold_mean, n = 10, q = c(0.025, 0.975)) {
+  v <- df[[vary]]; h <- df[[hold]]; wv <- W[[vary]]; wh <- W[[hold]]
+  gr <- seq(quantile(v, q[1]), quantile(v, q[2]), length.out = n)
+  chosen <- integer(0)
+  for (g in gr) {
+    free <- setdiff(seq_along(v), chosen)
+    D <- (wv * (v[free] - g))^2 + (wh * (h[free] - hold_mean))^2   # screen-space dist to (g, hold_mean)
+    chosen <- c(chosen, free[which.min(D)])
+  }
+  df[chosen, , drop = FALSE] %>% mutate(grid_target = gr)
+}
+vary_brb  <- grid_series(cov, "brb_cov",  "skim_cov", ms)   # sweep BRB-seq, hold skim ≈ mean
+vary_skim <- grid_series(cov, "skim_cov", "brb_cov", mb)    # sweep skim,    hold BRB  ≈ mean
+cat(sprintf("BRB-seq central 95%%: [%.2f, %.2f]× | skim central 95%%: [%.3f, %.3f]×\n",
+            quantile(cov$brb_cov,.025), quantile(cov$brb_cov,.975),
+            quantile(cov$skim_cov,.025), quantile(cov$skim_cov,.975)))
+```
+
+### Scatter — mean lines + the two gridded series
+
+```{r coverage-scatter, fig.width=7.5, fig.height=6}
+cov2 <- cov %>% mutate(series = case_when(
+  nil %in% vary_brb$nil & nil %in% vary_skim$nil ~ "both series",
+  nil %in% vary_brb$nil  ~ "vary BRB (skim≈mean)",
+  nil %in% vary_skim$nil ~ "vary skim (BRB≈mean)",
+  TRUE ~ "other"))
+ggplot(cov2, aes(skim_cov, brb_cov)) +
+  geom_vline(xintercept = ms, linetype = "dotted") +
+  geom_hline(yintercept = mb, linetype = "dotted") +
+  geom_point(aes(colour = series, size = series == "other"), alpha = 0.8) +
+  scale_size_manual(values = c(`TRUE` = 1.3, `FALSE` = 2.7), guide = "none") +
+  scale_colour_manual(values = c(other = "grey75", `vary BRB (skim≈mean)` = "firebrick",
+                                 `vary skim (BRB≈mean)` = "royalblue3", `both series` = "purple3"),
+                      name = NULL) +
+  labs(x = "SNP50K skim mean coverage (×)", y = "BRB-seq mean coverage (×)",
+       title = "Per-NIL coverage — SNP50K skim vs BRB-seq",
+       subtitle = sprintf("dotted = platform mean (skim %.2f×, BRB %.2f×) | 10-point grid across each varying platform's central 95%%",
+                          ms, mb)) +
+  theme_bw()
+```
+
+### The two coverage-matched series
+
+**Vary BRB-seq** across its central 95%, **skim held ≈ mean** — sorted by BRB-seq λ:
+
+```{r series-brb}
+vary_brb %>% arrange(brb_cov) %>%
+  transmute(NIL = nil, brb_cov = round(brb_cov,3), skim_cov = round(skim_cov,3),
+            grid_target = round(grid_target,2), brb_sample = brb_name, skim_sample = skim_name) %>%
+  knitr::kable(caption = "Skim held ≈ mean; BRB-seq λ stepped across its central 95% (P2.5–P97.5).")
+```
+
+**Vary skim** across its central 95%, **BRB-seq held ≈ mean** — sorted by skim λ:
+
+```{r series-skim}
+vary_skim %>% arrange(skim_cov) %>%
+  transmute(NIL = nil, skim_cov = round(skim_cov,3), brb_cov = round(brb_cov,3),
+            grid_target = round(grid_target,3), skim_sample = skim_name, brb_sample = brb_name) %>%
+  knitr::kable(caption = "BRB-seq held ≈ mean; skim λ stepped across its central 95% (P2.5–P97.5).")
+```
+
+**Read:** BRB-seq (3′ RNA-seq) mean depth (~2.8×) sits well above the ~0.4× SNP50K
+skim, and the two platforms' coverages are uncorrelated across NILs (library-driven).
+Each series steps one platform evenly across its central-95% coverage while holding
+the other ≈ its mean — a coverage-controlled sweep for asking how the ancestry calls
+move with the varying platform's depth, with the other platform's coverage held out
+as a confounder.
+
+## Coverage-sweep chromosome painting
+
+Ancestry calls for the two 10-NIL coverage sweeps, painted as the coverage of the
+*varying* platform climbs (rows ordered low→high; the row label prefixes the varying
+λ). Three tracks per NIL — **top = Skim-RTI (r=5), middle = BrB-RTI (r=109), bottom =
+Skim-BIN (1 Mb-bin)** — and a
+**B73 control** row pinned at top (forced, not pedigree-matched: skim `PN10_SID893`,
+BRB `PN1_SID15`). Each B73 control comes from its platform's **B73 check group**, fit
+separately from the teosinte donors (skim from the 50K counts, BRB from the per-species fit).
+
+**BrB-RTI rigidity = r=109 (KS-calibrated).** RTIGER's rigidity is in *marker* units,
+but BRB-seq SNPs cluster within genes (non-iid spacing), so the even-grid FP+FN
+benchmark badly under-estimates it (r=5). Instead we chose r by **minimizing the KS
+distance** `D = sup_x|F_called − F_sim|` between the BrB-RTI donor-block size
+distribution (pooled, all 379 BRB samples) and the n=1500 BC2S3 simulation's — a log₂
+grid (2→256) then golden-section refine gave a clean valley at **r=109** (`D=0.112`;
+called median block 11.9 Mb ≈ the sim's 10.74 Mb). Curve in
+`results/sim_calibration/brbseq_ks/brbseq_ks_refined.csv`. **BrB-RTI is then fit per
+teosinte species** (taxon — *Z. mays* ssp. *parviglumis* `Zv`, ssp. *mexicana* `Zx`, ssp.
+*huehuetenangensis* `Zh`, *Z. diploperennis* `Zd`, *Z. luxurians* `Zl`), with **B73 and
+Purple as separate check groups**, mirroring the SNP50K per-taxon scheme; the sweep and
+pair calls subset from these fits. (A single joint EM pooled across species mis-specifies
+the emission regime — divergence from B73 differs by species — and inflates the B73
+false-donor floor.) At r=109 the **B73 check reads 0.00 donor on skim and ~0.13 on
+BrB-RTI** (74.6% REF, the remainder mostly HET) — the residual short-RNA false-donor floor.
+
+```{r sweep-paint-setup}
+brb_sw  <- read_csv(params$brb_sweep,  show_col_types = FALSE)
+skim_sw <- read_csv(params$skim_sweep, show_col_types = FALSE)
+mem     <- read_csv(params$members,    show_col_types = FALSE)
+BRB_B73 <- "PN1_SID15"; SKIM_B73 <- "PN10_SID893"
+
+lane2 <- function(seg, nm, method, rowlab) {
+  d <- seg %>% filter(name == nm)
+  if (!nrow(d)) return(NULL)
+  tibble(row = rowlab, chr = d$chr, start_bp = d$start_bp, end_bp = d$end_bp,
+         state = factor(d$state, 0:2, c("REF","HET","ALT")), method = method)
+}
+sweep_paint <- function(which) {
+  m <- mem %>% filter(sweep == which) %>% arrange(vary_cov) %>%
+    mutate(rowlab = sprintf("%.2f×<br>%s", vary_cov, gsub("_", "<br>", nil)))
+  nil_rows <- pmap_dfr(list(m$skim_name, m$brb_name, m$rowlab), function(sk, br, rl)
+    bind_rows(lane2(skim_sw, sk, "Skim-RTI", rl), lane2(brb_sw, br, "BrB-RTI", rl),
+              lane2(skimbin, sk, "Skim-BIN", rl)))   # Skim-BIN keyed on the skim sample name
+  b73 <- bind_rows(lane2(skim_sw, SKIM_B73, "Skim-RTI", "**B73 control**"),
+                   lane2(brb_sw,  BRB_B73,  "BrB-RTI",  "**B73 control**"),
+                   lane2(skimbin, SKIM_B73, "Skim-BIN", "**B73 control**"))
+  # B73 control pinned at the TOP; coverage rows keep their current descending order below
+  bind_rows(b73, nil_rows) %>%
+    mutate(chr = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)),
+           row = factor(row, levels = c("**B73 control**", rev(m$rowlab))),
+           method = factor(method, c("Skim-RTI","BrB-RTI","Skim-BIN")),
+           ylo = case_when(method == "Skim-RTI" ~ 0.68, method == "BrB-RTI" ~ 0.34, TRUE ~ 0.00),
+           yhi = case_when(method == "Skim-RTI" ~ 1.00, method == "BrB-RTI" ~ 0.66, TRUE ~ 0.32))
+}
+paint_plot <- function(df, title, sub) {
+  ggplot(df, aes(xmin = start_bp/1e6, xmax = end_bp/1e6, ymin = ylo, ymax = yhi, fill = state)) +
+    geom_rect() +
+    facet_grid(row ~ chr, scales = "free_x", space = "free_x", switch = "y") +
+    scale_fill_manual(values = pal, drop = FALSE) +
+    scale_x_continuous(labels = scales::unit_format(unit = "", scale = 1)) +
+    scale_y_continuous(breaks = c(0.16, 0.50, 0.84), labels = c("Skim-BIN","BrB-RTI","Skim-RTI"),
+                       expand = expansion(mult = 0.02), position = "right") +
+    labs(title = title, subtitle = sub, x = "Position (Mb)", fill = "Genotype") +
+    ggpubr::theme_classic2(base_size = 9) +
+    theme(legend.position = "bottom", strip.background = element_blank(),
+          strip.text.x = element_text(face = "bold"),
+          strip.text.y.left = ggtext::element_markdown(angle = 0, hjust = 1, size = 9, lineheight = 0.8),
+          panel.spacing.x = unit(0.05, "lines"), panel.spacing.y = unit(0.18, "lines"),
+          axis.text.y.right = element_text(size = 9), axis.ticks.y = element_blank(),
+          axis.title.y = element_blank(), axis.line.y = element_blank(),
+          axis.text.x = element_text(size = 6))
+}
+```
+
+### Vary BRB-seq (skim ≈ mean)
+
+```{r sweep-vary-brb, fig.width=12, fig.height=12}
+paint_plot(sweep_paint("vary_brb"),
+           "Coverage sweep — vary BRB-seq depth, skim held ≈ mean",
+           "rows: B73 control then 10 NILs by increasing BRB-seq λ | Skim-RTI / BrB-RTI / Skim-BIN | gold REF, green HET, purple ALT")
+```
+
+### Vary skim (BRB-seq ≈ mean)
+
+```{r sweep-vary-skim, fig.width=12, fig.height=12}
+paint_plot(sweep_paint("vary_skim"),
+           "Coverage sweep — vary skim depth, BRB-seq held ≈ mean",
+           "rows: B73 control then 10 NILs by increasing skim λ | Skim-RTI / BrB-RTI / Skim-BIN")
+```
+
+**Read:** the **B73 control** anchors both panels — Skim-RTI paints it ~all-REF
+(gold), while BrB-RTI speckles it with spurious het/donor (its RNA false-donor
+floor). Down the sweeps, watch how each platform's calls fill in (or fragment) as its
+own depth rises and as the other platform's depth stays fixed. **Skim-BIN** (the same
+skim reads, 1 Mb bins) tracks Skim-RTI's donor footprint but is coarser — it cannot
+resolve sub-Mb structure, so its blocks read blockier than the per-marker Skim-RTI lane.
+
+## Pedigree-matched pairs
+
+```{r pairs-table}
+matched <- pairs %>% filter(!is.na(skim_name))
+# pairwise donor Jaccard between two grid-projected state vectors (donor = state>0)
+jac <- function(x, y) { ok <- !is.na(x) & !is.na(y); xd <- x[ok] > 0; yd <- y[ok] > 0
+  u <- sum(xd | yd); if (u == 0) NA_real_ else sum(xd & yd) / u }
+jac_one <- function(s_nil) {
+  p <- matched[matched$nil == s_nil, ]
+  k <- state_on_grid(skim,    p$skim_name)   # Skim-RTI
+  b <- state_on_grid(brb,     p$brb_name)    # BrB-RTI
+  n <- state_on_grid(skimbin, p$skim_name)   # Skim-BIN (same skim sample)
+  tibble(J_RTI_BrB = jac(k, b), J_RTI_BIN = jac(k, n), J_BrB_BIN = jac(b, n),
+         skim_donor = mean(k > 0, na.rm = TRUE), brb_donor = mean(b > 0, na.rm = TRUE),
+         bin_donor = mean(n > 0, na.rm = TRUE))
+}
+pair_tab <- matched %>% mutate(m = map(nil, jac_one)) %>% unnest(m) %>%
+  transmute(NIL = nil, brb_label = brb_name, skim_sample = skim_name,
+            J_RTI_BrB = round(J_RTI_BrB, 2), J_RTI_BIN = round(J_RTI_BIN, 2), J_BrB_BIN = round(J_BrB_BIN, 2),
+            skim_donor = round(skim_donor, 3), brb_donor = round(brb_donor, 3), bin_donor = round(bin_donor, 3)) %>%
+  arrange(desc(J_RTI_BrB))
+knitr::kable(pair_tab,
+             caption = "Per pedigree-matched NIL: pairwise donor Jaccard across the three callers (RTI=Skim-RTI, BrB=BrB-RTI, BIN=Skim-BIN) and per-caller donor fraction. (PN#_SID# plate labels for provenance only.)")
+```
+
+**Read:** `J_RTI_BIN` is the cleanest check — Skim-RTI vs Skim-BIN on the **same reads**,
+so it isolates the *caller* difference (per-marker HMM vs 1 Mb-bin GMM-HMM). `J_RTI_BrB`
+and `J_BrB_BIN` also fold in the platform/coverage difference. A NIL where the pedigree
+matches but `J_RTI_BrB` is low (watch `Zx.0370`) flags BRB-seq content disagreeing with
+its stated pedigree — a residual identity problem beyond the `.B` fix.
+
+## Confusion matrices — pairwise across callers (pooled, matched NILs)
+
+```{r confusion-setup}
+# grid-project all three callers per NIL (Skim-BIN keyed on the skim sample)
+paired <- map_dfr(matched$nil, function(s_nil) {
+  p <- matched[matched$nil == s_nil, ]
+  tibble(nil  = s_nil,
+         skim = state_on_grid(skim,    p$skim_name),
+         brb  = state_on_grid(brb,     p$brb_name),
+         bin  = state_on_grid(skimbin, p$skim_name))
+})
+cats <- c("0 recurrent", "1 het", "2 donor")
+cm_kable <- function(rows, cols, rlab, clab) {
+  ok <- !is.na(rows) & !is.na(cols)
+  cm <- table(factor(rows[ok], 0:2), factor(cols[ok], 0:2))
+  prop <- sweep(cm, 1, rowSums(cm), "/")
+  disp <- matrix(sprintf("%d (%.1f%%)", cm, 100*prop), nrow = 3, dimnames = list(cats, cats))
+  knitr::kable(disp, align = "r",
+               caption = sprintf("%s (rows) vs %s (cols): count (row %%). Overall concordance %.3f.",
+                                 rlab, clab, sum(diag(cm)) / sum(cm)))
+}
+```
+
+### Skim-RTI vs BrB-RTI
+
+```{r cm-rti-brb}
+cm_kable(paired$skim, paired$brb, "Skim-RTI", "BrB-RTI")
+```
+
+### Skim-RTI vs Skim-BIN — same reads, caller-only difference
+
+```{r cm-rti-bin}
+cm_kable(paired$skim, paired$bin, "Skim-RTI", "Skim-BIN")
+```
+
+### BrB-RTI vs Skim-BIN
+
+```{r cm-brb-bin}
+cm_kable(paired$brb, paired$bin, "BrB-RTI", "Skim-BIN")
+```
+
+## Introgression-size distribution
+
+Donor-block sizes (runs of donor state — HET or ALT — collapsed per chromosome) pooled
+across the **full set of NILs called on *both* platforms** (pedigree-matched via the
+correspondence; BrB-RTI from the per-species fit). All three callers: **Skim-RTI** and
+**Skim-BIN** on the same skim reads, **BrB-RTI** on BRB-seq. Grey curve is the **Null**
+n=1500 BC2S3 simulation — the modeled expectation under no selection.
+
+```{r intro-sizes, fig.width=8, fig.height=5}
+brb_taxa <- read_csv(params$brb_taxa, show_col_types = FALSE)   # full per-species BrB-RTI (379)
+nil_seg  <- read_csv(params$nil_seg,  show_col_types = FALSE)   # n=1500 sim (NULL)
+
+# FULL set of NILs with calls on BOTH platforms (pedigree-matched, ";"-split replicates)
+brb_in  <- corr %>% separate_rows(brbseq_prefix, sep = ";") %>%
+  transmute(name = brbseq_prefix, nil = pedigree) %>% filter(name %in% brb_taxa$name)
+skim_in <- corr %>% separate_rows(skim_prefix,  sep = ";") %>%
+  transmute(name = skim_prefix,  nil = pedigree) %>% filter(name %in% skim$name)
+both_nils <- intersect(brb_in$nil, skim_in$nil)
+
+# introgression block = maximal run of donor (state>0) within a (sample, chromosome)
+donor_blocks <- function(seg) seg %>% arrange(name, chr, start_bp) %>% group_by(name, chr) %>%
+  mutate(run = cumsum(c(TRUE, diff(state > 0) != 0)), donor = state > 0) %>% filter(donor) %>%
+  group_by(name, chr, run) %>% summarise(size_mb = (max(end_bp) - min(start_bp))/1e6, .groups = "drop")
+
+skim_b <- donor_blocks(skim     %>% filter(name %in% skim_in$name[skim_in$nil %in% both_nils])) %>%
+  mutate(src = "Skim-RTI (r=5)")
+brb_b  <- donor_blocks(brb_taxa %>% filter(name %in% brb_in$name[brb_in$nil  %in% both_nils])) %>%
+  mutate(src = "BrB-RTI (r=109)")
+# Skim-BIN on the SAME skim samples as Skim-RTI (keyed on skim name)
+bin_b  <- donor_blocks(skimbin  %>% filter(name %in% skim_in$name[skim_in$nil %in% both_nils])) %>%
+  mutate(src = "Skim-BIN (1 Mb)")
+null_b <- nil_seg %>% transmute(size_mb = mb)
+cat(sprintf("NILs on both platforms: %d | Skim-RTI %d blocks | BrB-RTI %d blocks | Skim-BIN %d blocks\n",
+            length(both_nils), nrow(skim_b), nrow(brb_b), nrow(bin_b)))
+
+ggplot(bind_rows(skim_b, brb_b, bin_b), aes(x = size_mb, fill = src)) +
+  geom_histogram(aes(y = after_stat(density)), position = "identity", alpha = 0.45, bins = 30) +
+  geom_freqpoly(data = null_b, aes(x = size_mb, y = after_stat(density)),
+                bins = 30, colour = "grey20", linewidth = 0.9, inherit.aes = FALSE) +
+  scale_fill_manual(values = c("Skim-RTI (r=5)" = "purple4", "BrB-RTI (r=109)" = "orange3",
+                               "Skim-BIN (1 Mb)" = "seagreen4")) +
+  scale_x_log10() +
+  labs(x = "introgression size (Mb, log scale)", y = "density", fill = NULL,
+       title = "Introgression-size distribution — Skim-RTI / BrB-RTI / Skim-BIN",
+       subtitle = sprintf("%d NILs called on both platforms (pedigree-matched, full set) | grey = Null (n=1500 sim)",
+                          length(both_nils))) +
+  theme_bw()
+```
+
+## Chromosome painting — Skim-RTI / BrB-RTI / Skim-BIN per NIL
+
+Three tracks per NIL (**top = Skim-RTI r=5, middle = BrB-RTI r=109, bottom = Skim-BIN
+1 Mb**), grouped and labelled by the `.B`-dropped **pedigree** (wrapped at the left); the
+method label is at the right. NILs ordered by Skim-RTI vs BrB-RTI donor Jaccard (best first).
+
+```{r painting, fig.width=12, fig.height=11}
+nil_ord <- pair_tab$NIL
+lane <- function(seg, nm, method, s_nil) {
+  d <- seg[seg$name == nm, ]
+  tibble(nil = s_nil, chr = d$chr, start_bp = d$start_bp, end_bp = d$end_bp,
+         state = factor(d$state, 0:2, c("REF","HET","ALT")), method = method)
+}
+paint <- map_dfr(matched$nil, function(s_nil) {
+  p <- matched[matched$nil == s_nil, ]
+  bind_rows(lane(skim,    p$skim_name, "Skim-RTI", s_nil),
+            lane(brb,     p$brb_name,  "BrB-RTI",  s_nil),
+            lane(skimbin, p$skim_name, "Skim-BIN", s_nil))   # same skim sample
+}) %>%
+  mutate(chr  = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)),
+         nil  = factor(gsub("_", "<br>", nil), levels = gsub("_", "<br>", nil_ord)),
+         method = factor(method, c("Skim-RTI","BrB-RTI","Skim-BIN")),
+         ylo = case_when(method == "Skim-RTI" ~ 0.68, method == "BrB-RTI" ~ 0.34, TRUE ~ 0.00),
+         yhi = case_when(method == "Skim-RTI" ~ 1.00, method == "BrB-RTI" ~ 0.66, TRUE ~ 0.32))
+
+ggplot(paint, aes(xmin = start_bp/1e6, xmax = end_bp/1e6, ymin = ylo, ymax = yhi, fill = state)) +
+  geom_rect() +
+  facet_grid(nil ~ chr, scales = "free_x", space = "free_x", switch = "y") +
+  scale_fill_manual(values = pal, drop = FALSE) +
+  scale_x_continuous(labels = scales::unit_format(unit = "", scale = 1)) +
+  scale_y_continuous(breaks = c(0.16, 0.50, 0.84), labels = c("Skim-BIN","BrB-RTI","Skim-RTI"),
+                     expand = expansion(mult = 0.02), position = "right") +
+  labs(title = "Skim-RTI / BrB-RTI / Skim-BIN — pedigree-matched NILs",
+       subtitle = "per NIL: top Skim-RTI (r=5) / middle BrB-RTI (r=109) / bottom Skim-BIN (1 Mb) | gold REF, green HET, purple ALT",
+       x = "Position (Mb)", fill = "Genotype") +
+  ggpubr::theme_classic2(base_size = 9) +
+  theme(legend.position = "bottom", strip.background = element_blank(),
+        strip.text.x = element_text(face = "bold"),
+        strip.text.y.left = ggtext::element_markdown(angle = 0, hjust = 1, size = 9, lineheight = 0.85),
+        panel.spacing.x = unit(0.05, "lines"), panel.spacing.y = unit(0.15, "lines"),
+        axis.text.y.right = element_text(size = 9), axis.ticks.y = element_blank(),
+        axis.title.y = element_blank(), axis.line.y = element_blank(),
+        axis.text.x = element_text(size = 6))
+```
+
+## Findings
+
+- Matched **by pedigree** (dropping `.B`), `r sum(!is.na(pairs$skim_name))`/`r n_distinct(brb$name)`
+  BRB-seq samples have a Skim-RTI partner; `r sum(is.na(pairs$skim_name))` has none in the
+  skim call set.
+- Where the pedigrees genuinely correspond, Skim-RTI and BrB-RTI agree on the donor
+  landscape (high donor Jaccard); BrB-RTI is the sparser, noisier track (low coverage RNA).
+- **Skim-BIN** (same skim reads, 1 Mb-bin GMM-HMM) tracks Skim-RTI's donor footprint —
+  the `J_RTI_BIN` column isolates the *caller* difference on identical reads — but is
+  coarser, so it blurs sub-Mb structure the per-marker Skim-RTI HMM resolves.
+- Any matched NIL with low Jaccard (e.g. `Zx.0370`) is a sample whose BRB-seq genotype
+  disagrees with its stated pedigree — a residual identity issue the `.B` fix does not
+  resolve, to be confirmed by the Hazel rerun (`docs/brbseq-sample-mislabeling.md`).
+```
