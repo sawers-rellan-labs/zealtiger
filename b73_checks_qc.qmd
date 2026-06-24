@@ -90,7 +90,7 @@ nonref <- calls %>% mutate(l = end_bp - start_bp + 1) %>% group_by(exp, name) %>
 sel <- qc %>% filter(exp %in% exps) %>% group_by(exp) %>%
   filter(row_number(desc(dosage)) <= 5 | row_number(dosage) <= 5) %>% ungroup() %>%
   left_join(nonref, by = c("exp", "name")) %>%
-  mutate(eo = match(exp, exps)) %>% arrange(eo, nonref) %>%   # within experiment, increasing non-REF
+  mutate(eo = match(exp, exps)) %>% arrange(eo, desc(nonref)) %>%   # cleanest (lowest non-REF) at TOP of each panel
   mutate(yidx = row_number(), ylab = sprintf("%s · %.3f", name, nonref),
          exp_lab = factor(short(exp), c("BrB-seq", "Skim", "MolB")))
 paint <- calls %>% inner_join(sel %>% select(exp, name, yidx, exp_lab), by = c("exp", "name")) %>%
@@ -104,7 +104,7 @@ ggplot(paint, aes(xmin = start_bp/1e6, xmax = end_bp/1e6, ymin = yidx - 0.45, ym
   scale_x_continuous(labels = scales::unit_format(unit = "", scale = 1)) +
   scale_y_continuous(breaks = sel$yidx, labels = sel$ylab, expand = expansion(mult = 0.01)) +
   labs(title = "B73 reps — 5 worst + 5 cleanest within each experiment (ordered by donor content)",
-       subtitle = "samples ordered by non-REF content (HET+ALT fraction), ascending | gold REF, green HET, purple ALT — a clean B73 is all gold",
+       subtitle = "samples ordered by non-REF content (HET+ALT fraction) — cleanest at top | gold REF, green HET, purple ALT — a clean B73 is all gold",
        x = "Position (Mb)", fill = "Genotype") +
   ggpubr::theme_classic2(base_size = 9) +
   theme(legend.position = "bottom", strip.background = element_blank(),
