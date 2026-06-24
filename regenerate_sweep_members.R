@@ -30,15 +30,17 @@ skim_calls <- read_csv("data/rtiger_50K/calls_taxa_r5.csv", show_col_types = FAL
 cov <- cov %>% filter(skim_name %in% skim_calls$name)
 ms <- mean(cov$skim_cov); mb <- mean(cov$brb_cov)
 
-# ---- FIXED grid_series: pick among the k nearest-to-target unused NILs ----
-grid_series <- function(df, vary, hold, hold_mean, n = 10, q = c(0.025, 0.975), k = 3) {
-  v <- df[[vary]]; h <- df[[hold]]
+# ---- grid_series: nearest NIL to (grid_target, hold_mean) in screen space ----
+# Must stay identical to the grid-sample chunk in skim_vs_brbseq.qmd.
+W <- c(skim_cov = 1, brb_cov = 0.1)   # per-unit screen weight (skim:BRB ≈ 10:1)
+grid_series <- function(df, vary, hold, hold_mean, n = 10, q = c(0.025, 0.975)) {
+  v <- df[[vary]]; h <- df[[hold]]; wv <- W[[vary]]; wh <- W[[hold]]
   gr <- seq(quantile(v, q[1]), quantile(v, q[2]), length.out = n)
   chosen <- integer(0)
   for (g in gr) {
     free <- setdiff(seq_along(v), chosen)
-    near <- free[order(abs(v[free] - g))][seq_len(min(k, length(free)))]
-    chosen <- c(chosen, near[which.min(abs(h[near] - hold_mean))])
+    D <- (wv * (v[free] - g))^2 + (wh * (h[free] - hold_mean))^2
+    chosen <- c(chosen, free[which.min(D)])
   }
   df[chosen, , drop = FALSE] %>% mutate(grid_target = gr)
 }

@@ -122,26 +122,30 @@ cat(sprintf("%d pedigree-matched NILs | mean coverage: SNP50K skim %.3f× | BRB-
 
 To sweep one platform's coverage while controlling the other, we **grid the varying
 platform across its central 95% (P2.5–P97.5)** on 10 evenly-spaced steps; at each step we
-take the NIL whose varying coverage falls in that step, **preferring the one whose
-held coverage is closest to its mean**. The result is ~10 NILs spread evenly along
-the varying axis with the held axis pinned ≈ its mean (feasible because the two
-coverages are uncorrelated).
+take the NIL **nearest the intersection of that grid line and the held platform's
+mean**, measuring distance in the plot's *screen* space (each coverage axis scaled by
+its plotted span, ≈ 10:1 skim:BRB). This pins picks to both the evenly-spaced grid and
+the held-mean line (feasible because the two coverages are uncorrelated). The screen
+weight was calibrated against hand-clicked picks on the skim sweep (reproduces 9/10).
 
 ```{r grid-sample}
-# grid `vary` across its P2.5–P97.5 (n steps); at each step pick the NIL nearest the grid
-# point, breaking toward the one whose `hold` coverage is closest to `hold_mean`.
+# At each of the n grid steps, pick the NIL nearest the INTERSECTION of (grid_target on the
+# varying axis, hold_mean on the held axis), with distance measured in *screen* space — each
+# coverage axis scaled by its plotted span (weights `W`; BRB spans ~10× skim's range). This
+# lands picks on both the evenly-spaced grid and the held-mean line. Calibrated to reproduce
+# hand-clicked picks on the skim sweep (9/10); generalises to the BRB sweep by swapping which
+# axis carries the grid (the weights make it symmetric).
+W <- c(skim_cov = 1, brb_cov = 0.1)   # per-unit screen weight (skim:BRB ≈ 10:1)
 grid_series <- function(df, vary, hold, hold_mean, n = 10, q = c(0.025, 0.975)) {
-  v <- df[[vary]]; h <- df[[hold]]
-  gr   <- seq(quantile(v, q[1]), quantile(v, q[2]), length.out = n)
-  step <- (gr[n] - gr[1]) / (n - 1)
-  chosen <- integer(0); idx <- integer(0)
+  v <- df[[vary]]; h <- df[[hold]]; wv <- W[[vary]]; wh <- W[[hold]]
+  gr <- seq(quantile(v, q[1]), quantile(v, q[2]), length.out = n)
+  chosen <- integer(0)
   for (g in gr) {
-    cand <- which(abs(v - g) <= step/2 & !(seq_along(v) %in% chosen))   # NILs in this grid step
-    if (!length(cand)) cand <- setdiff(order(abs(v - g)), chosen)[1]    # fallback: nearest free
-    pick <- cand[which.min(abs(h[cand] - hold_mean))]                   # prefer near held-mean
-    chosen <- c(chosen, pick); idx <- c(idx, pick)
+    free <- setdiff(seq_along(v), chosen)
+    D <- (wv * (v[free] - g))^2 + (wh * (h[free] - hold_mean))^2   # screen-space dist to (g, hold_mean)
+    chosen <- c(chosen, free[which.min(D)])
   }
-  df[idx, , drop = FALSE] %>% mutate(grid_target = gr)
+  df[chosen, , drop = FALSE] %>% mutate(grid_target = gr)
 }
 vary_brb  <- grid_series(cov, "brb_cov",  "skim_cov", ms)   # sweep BRB-seq, hold skim ≈ mean
 vary_skim <- grid_series(cov, "skim_cov", "brb_cov", mb)    # sweep skim,    hold BRB  ≈ mean
