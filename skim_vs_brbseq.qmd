@@ -24,6 +24,8 @@ params:
   brb_sweep:  "results/sim_calibration/brbseq_sweep_calls_r109/calls_common_schema.csv"  # BrB-RTI r=109 calls for the sweep samples + B73
   skim_sweep: "results/sim_calibration/skim_sweep_calls/calls_common_schema.csv"        # Skim-RTI r=5 calls for the sweep samples + B73
   members:    "results/sim_calibration/coverage_sweep_members.csv"                      # the two 10-NIL coverage sweeps
+  brb_taxa:   "results/sim_calibration/brbseq_taxa_r109/calls_common_schema.csv"        # BrB-RTI r=109, per teosinte species (full 379) — for the intro-size distribution
+  nil_seg:    "results/nil_segments.csv"                                                # n=1500 BC2S3 simulation introgression segments (NULL reference)
 ---
 
 **Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
@@ -344,6 +346,51 @@ knitr::kable(disp, align = "r",
 dp <- paired$skim %in% c(1,2)
 cat(sprintf("Skim donor-present markers: %d | BrB also donor-present: %.1f%%\n",
             sum(dp), 100*mean(paired$brb[dp] %in% c(1,2))))
+```
+
+## Introgression-size distribution
+
+Donor-block sizes (runs of donor state — HET or ALT — collapsed per chromosome) pooled
+across the **full set of NILs called on *both* platforms** (pedigree-matched via the
+correspondence; BrB-RTI from the per-species fit, all teosinte species). Grey curve is
+the **Null** n=1500 BC2S3 simulation — the modeled expectation under no selection.
+
+```{r intro-sizes, fig.width=8, fig.height=5}
+brb_taxa <- read_csv(params$brb_taxa, show_col_types = FALSE)   # full per-species BrB-RTI (379)
+nil_seg  <- read_csv(params$nil_seg,  show_col_types = FALSE)   # n=1500 sim (NULL)
+
+# FULL set of NILs with calls on BOTH platforms (pedigree-matched, ";"-split replicates)
+brb_in  <- corr %>% separate_rows(brbseq_prefix, sep = ";") %>%
+  transmute(name = brbseq_prefix, nil = pedigree) %>% filter(name %in% brb_taxa$name)
+skim_in <- corr %>% separate_rows(skim_prefix,  sep = ";") %>%
+  transmute(name = skim_prefix,  nil = pedigree) %>% filter(name %in% skim$name)
+both_nils <- intersect(brb_in$nil, skim_in$nil)
+
+# introgression block = maximal run of donor (state>0) within a (sample, chromosome)
+donor_blocks <- function(seg) seg %>% arrange(name, chr, start_bp) %>% group_by(name, chr) %>%
+  mutate(run = cumsum(c(TRUE, diff(state > 0) != 0)), donor = state > 0) %>% filter(donor) %>%
+  group_by(name, chr, run) %>% summarise(size_mb = (max(end_bp) - min(start_bp))/1e6, .groups = "drop")
+
+skim_b <- donor_blocks(skim     %>% filter(name %in% skim_in$name[skim_in$nil %in% both_nils])) %>%
+  mutate(src = "Skim-RTI (r=5)")
+brb_b  <- donor_blocks(brb_taxa %>% filter(name %in% brb_in$name[brb_in$nil  %in% both_nils])) %>%
+  mutate(src = "BrB-RTI (r=109)")
+null_b <- nil_seg %>% transmute(size_mb = mb)
+cat(sprintf("NILs called on both platforms: %d | Skim samples %d (%d blocks) | BrB samples %d (%d blocks)\n",
+            length(both_nils), n_distinct(skim_in$name[skim_in$nil %in% both_nils]), nrow(skim_b),
+            n_distinct(brb_in$name[brb_in$nil %in% both_nils]), nrow(brb_b)))
+
+ggplot(bind_rows(skim_b, brb_b), aes(x = size_mb, fill = src)) +
+  geom_histogram(aes(y = after_stat(density)), position = "identity", alpha = 0.5, bins = 30) +
+  geom_freqpoly(data = null_b, aes(x = size_mb, y = after_stat(density)),
+                bins = 30, colour = "grey20", linewidth = 0.9, inherit.aes = FALSE) +
+  scale_fill_manual(values = c("Skim-RTI (r=5)" = "purple4", "BrB-RTI (r=109)" = "orange3")) +
+  scale_x_log10() +
+  labs(x = "introgression size (Mb, log scale)", y = "density", fill = NULL,
+       title = "Introgression-size distribution — Skim-RTI vs BrB-RTI",
+       subtitle = sprintf("%d NILs called on both platforms (pedigree-matched, full set) | grey = Null (n=1500 sim)",
+                          length(both_nils))) +
+  theme_bw()
 ```
 
 ## Chromosome painting — Skim-RTI vs BrB-RTI per NIL
