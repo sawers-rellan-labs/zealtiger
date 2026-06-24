@@ -19,7 +19,7 @@ params:
   skim_checks: "data/rtiger_50K/calls_checks_common_schema.csv"                         # Skim-RTI r=5 on the B73/Purple checks (NIL run excludes them)
   skim_cov:    "results/sim_calibration/real_skim_lambda.csv"                            # SNP50K skim per-sample mean coverage λ (NIL set)
   skim_chkcnt: "data/rtiger_50K/counts_checks/B73"                                       # 50K count files for the B73 checks (to compute their λ)
-  brb_calls:   "data/brbseq_nil_partners/calls_common_schema.csv"                       # BrB-RTI r=109 on the 4 pedigree-matched NIL BRB partners
+  brb_calls:   "results/sim_calibration/brbseq_taxa_r109/calls_common_schema.csv"        # BrB-RTI r=109, per teosinte species (emissions per species partition); the 4 NIL partners are subset by the correspondence join
   brb_b73fill: "data/brbseq_checks/B73/calls_common_schema.csv"                         # BrB-RTI r=109 on the BRB B73 checks (putative fill)
   corr3:       "results/sample_correspondence/molbreeding_3way_correspondence.csv"      # real MolB<->BRB pedigree matches
   b73_fill:    "results/sample_correspondence/putative_b73_brb_fill_triple.csv"         # putative best-hit BRB B73 for the 2 MolB B73 checks
@@ -48,7 +48,11 @@ ground truth; the neutral breeding-scheme single-locus expectation is **p0**.
    Choosing r by **KS-minimisation** against the skim donor-size distribution gives a
    clean valley at **r=109** (commit `e147fca`, also used in `skim_vs_brbseq`). At
    r=109 the spurious short RNA donor-calls collapse — the B73 control false-donor
-   floor drops from ~0.32 (r=5) toward ~0.
+   floor drops from ~0.32 (r=5) toward ~0. BrB-RTI is fit **per teosinte species**
+   (emissions estimated within each species partition, B73/Purple as separate checks;
+   `results/sim_calibration/brbseq_taxa_r109/`), and the 4 NIL calls are subset from that
+   fit — a single EM pooled across species mis-specifies the emission regime and
+   destabilises the B73 control (it read 0.41 donor in a mixed cohort, 0.13 per-species).
 
 2. **BRB↔MolB is matched by pedigree, not by `PN#_SID#` prefix.** The prefix is
    **per-experiment**: Skim and MolBreeding share one id space, but **BRB-seq has its
@@ -101,7 +105,7 @@ p0      <- single_locus_p0(n_bc = 2L, n_self = 3L)
 # DISABLED pending a physical-sample key from Hannah (checks have no pedigree, so a
 # cross-experiment B73 id can't be confirmed). To restore: uncomment `fill` and add it
 # to `brb_pool`/`brb_map` (params$brb_b73fill, params$b73_fill).
-brb_pool <- read_csv(params$brb_calls, show_col_types = FALSE)   # BrB-RTI r=109, 4 NIL partners
+brb_pool <- read_csv(params$brb_calls, show_col_types = FALSE)   # BrB-RTI r=109, per-species fit (379); the 4 NIL partners are subset by the join below
 
 corr <- read_csv(params$corr3, show_col_types = FALSE) %>%
   filter(type == "NIL", in_brbseq) %>%
