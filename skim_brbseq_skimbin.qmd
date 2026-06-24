@@ -289,7 +289,7 @@ paint_plot <- function(df, title, sub) {
 }
 ```
 
-### Vary BRB-seq (skim ≈ mean)
+### Vary BRB-seq coverage (skim ≈ mean)
 
 ```{r sweep-vary-brb, fig.width=12, fig.height=12}
 paint_plot(sweep_paint("vary_brb"),
@@ -297,7 +297,7 @@ paint_plot(sweep_paint("vary_brb"),
            "rows: B73 control then 10 NILs by increasing BRB-seq λ | Skim-BIN / Skim-RTI / BrB-RTI | gold REF, green HET, purple ALT")
 ```
 
-### Vary skim (BRB-seq ≈ mean)
+### Vary skim coverage (BRB-seq ≈ mean)
 
 ```{r sweep-vary-skim, fig.width=12, fig.height=12}
 paint_plot(sweep_paint("vary_skim"),
