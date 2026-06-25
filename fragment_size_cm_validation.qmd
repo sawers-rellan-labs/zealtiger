@@ -363,6 +363,50 @@ knitr::kable(ks_methods,
   caption = "Per-method MLE gamma fit and KS distance, vs the method's own gamma and vs the sim-derived benchmark gamma (k=1.15, λ=4.72/Morgan).")
 ```
 
+## The Mb-space expectation is lognormal, not gamma
+
+The clean gamma holds **in cM**. Pushed through the empirical, position-dependent genetic map
+(ρ(x) varies ~10× along the genome), the **Mb** fragment-size distribution becomes markedly more
+skewed (sim Mb CV 1.43, skew 2.08, vs the cM gamma's 0.88, 1.57) and is **best described by a
+lognormal, not a gamma** — and there is **no closed-form cM→Mb conversion** (the position-mixture
+has no analytic form; this is why the derivation lives in cM). The table compares ways to express
+the BC2S3 expectation in Mb.
+
+```{r mb-lognormal}
+mb        <- nil_seg$mb[nil_seg$mb > 0]
+genome_mb <- sum(read_csv("data/rtiger_50K/seqlengths.csv", show_col_types = FALSE)[[2]]) / 1e6
+cm_tot    <- mp %>% group_by(chr) %>% summarise(L = max(cm), .groups = "drop") %>% pull(L) %>% sum()
+rbar      <- cm_tot / genome_mb                      # genome-mean rate (cM/Mb)
+
+mom      <- list(shape = mean(mb)^2 / var(mb), rate = mean(mb) / var(mb))
+g_mb     <- suppressWarnings(MASS::fitdistr(mb, "gamma", start = mom)$estimate)
+ln_mb    <- suppressWarnings(MASS::fitdistr(mb, "lognormal")$estimate)
+lam_unif <- lam / 100 * rbar                         # cM gamma rate -> per-Mb under a uniform map
+
+mk <- function(name, params, med, ks)
+  tibble(`Mb representation` = name, params = params,
+         `median Mb` = round(med, 1), `KS vs sim Mb` = round(ks, 3))
+mb_tbl <- bind_rows(
+  mk("(A) n=1500 sim Mb segments — the expectation", "empirical", median(mb), 0),
+  mk("(A′) lognormal MLE", sprintf("μ=%.2f, σ=%.2f", ln_mb["meanlog"], ln_mb["sdlog"]),
+     exp(ln_mb["meanlog"]), suppressWarnings(ks.test(mb, "plnorm", meanlog = ln_mb["meanlog"], sdlog = ln_mb["sdlog"])$statistic)),
+  mk("(A″) gamma MLE", sprintf("k=%.2f, rate=%.3f/Mb", g_mb["shape"], g_mb["rate"]),
+     qgamma(.5, g_mb["shape"], g_mb["rate"]), suppressWarnings(ks.test(mb, "pgamma", shape = g_mb["shape"], rate = g_mb["rate"])$statistic)),
+  mk("(B) uniform-rate scaled cM gamma", sprintf("k=%.2f (same shape), rate=%.3f/Mb", k, lam_unif),
+     qgamma(.5, k, lam_unif), suppressWarnings(ks.test(mb, "pgamma", shape = k, rate = lam_unif)$statistic)))
+knitr::kable(mb_tbl, caption = sprintf(
+  "BC2S3 expectation in Mb (genome %.0f Mb, map %.0f cM, mean rate %.2f cM/Mb). The cM gamma does NOT push forward to a gamma in Mb; lognormal fits best. (B) the naive uniform-rate scaling gets the mean right but the median/tail wrong.",
+  genome_mb, cm_tot, rbar))
+```
+
+**Convention.** The **n=1500 BC2S3 simulation** (`results/nil_segments.csv`, `mb` column) **is the
+BC2S3 expectation in Mb** — use it directly as the reference (Null) in all Mb introgression-size
+plots. Do **not** substitute the uniform-rate-scaled gamma (row B: KS ≈ 0.22; right mean, wrong
+median/tail). The smooth parametric stand-in, if needed, is the lognormal (row A′), not a gamma.
+RTIGER rigidity (`r`) calibration targets this same distribution — the BrB-RTI KS sweep already
+does (`ks_sweep_brbseq_wideseq.R` keys on the `mb` column); Skim-RTI's `r=5` should be reconciled
+against the same reference.
+
 # Interpretation & caveats
 
 - **The derivation is validated:** the BC2S3 recombination model predicts a near-exponential

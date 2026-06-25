@@ -3632,6 +3632,7 @@ window.Quarto = {
   <li><a href="#part-3-cm-space-validation-of-the-three-callers" id="toc-part-3-cm-space-validation-of-the-three-callers" class="nav-link" data-scroll-target="#part-3-cm-space-validation-of-the-three-callers">Part 3 — cM-space validation of the three callers</a>
   <ul class="collapse">
   <li><a href="#per-method-gamma-fits" id="toc-per-method-gamma-fits" class="nav-link" data-scroll-target="#per-method-gamma-fits">Per-method gamma fits</a></li>
+  <li><a href="#the-mb-space-expectation-is-lognormal-not-gamma" id="toc-the-mb-space-expectation-is-lognormal-not-gamma" class="nav-link" data-scroll-target="#the-mb-space-expectation-is-lognormal-not-gamma">The Mb-space expectation is lognormal, not gamma</a></li>
   </ul></li>
   <li><a href="#interpretation-caveats" id="toc-interpretation-caveats" class="nav-link" data-scroll-target="#interpretation-caveats">Interpretation &amp; caveats</a></li>
   </ul>
@@ -4135,6 +4136,85 @@ window.Quarto = {
 </table>
 </div>
 </div>
+</section>
+<section id="the-mb-space-expectation-is-lognormal-not-gamma" class="level2">
+<h2 class="anchored" data-anchor-id="the-mb-space-expectation-is-lognormal-not-gamma">The Mb-space expectation is lognormal, not gamma</h2>
+<p>The clean gamma holds <strong>in cM</strong>. Pushed through the empirical, position-dependent genetic map (ρ(x) varies ~10× along the genome), the <strong>Mb</strong> fragment-size distribution becomes markedly more skewed (sim Mb CV 1.43, skew 2.08, vs the cM gamma’s 0.88, 1.57) and is <strong>best described by a lognormal, not a gamma</strong> — and there is <strong>no closed-form cM→Mb conversion</strong> (the position-mixture has no analytic form; this is why the derivation lives in cM). The table compares ways to express the BC2S3 expectation in Mb.</p>
+<div class="cell">
+<details open class="code-fold">
+<summary>Code</summary>
+<div class="code-copy-outer-scaffold"><div class="sourceCode cell-code" id="cb15"><pre class="sourceCode r code-with-copy"><code class="sourceCode r"><span id="cb15-1"><a href="#cb15-1" aria-hidden="true" tabindex="-1"></a>mb        <span class="ot">&lt;-</span> nil_seg<span class="sc">$</span>mb[nil_seg<span class="sc">$</span>mb <span class="sc">&gt;</span> <span class="dv">0</span>]</span>
+<span id="cb15-2"><a href="#cb15-2" aria-hidden="true" tabindex="-1"></a>genome_mb <span class="ot">&lt;-</span> <span class="fu">sum</span>(<span class="fu">read_csv</span>(<span class="st">&quot;data/rtiger_50K/seqlengths.csv&quot;</span>, <span class="at">show_col_types =</span> <span class="cn">FALSE</span>)[[<span class="dv">2</span>]]) <span class="sc">/</span> <span class="fl">1e6</span></span>
+<span id="cb15-3"><a href="#cb15-3" aria-hidden="true" tabindex="-1"></a>cm_tot    <span class="ot">&lt;-</span> mp <span class="sc">%&gt;%</span> <span class="fu">group_by</span>(chr) <span class="sc">%&gt;%</span> <span class="fu">summarise</span>(<span class="at">L =</span> <span class="fu">max</span>(cm), <span class="at">.groups =</span> <span class="st">&quot;drop&quot;</span>) <span class="sc">%&gt;%</span> <span class="fu">pull</span>(L) <span class="sc">%&gt;%</span> <span class="fu">sum</span>()</span>
+<span id="cb15-4"><a href="#cb15-4" aria-hidden="true" tabindex="-1"></a>rbar      <span class="ot">&lt;-</span> cm_tot <span class="sc">/</span> genome_mb                      <span class="co"># genome-mean rate (cM/Mb)</span></span>
+<span id="cb15-5"><a href="#cb15-5" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-6"><a href="#cb15-6" aria-hidden="true" tabindex="-1"></a>mom      <span class="ot">&lt;-</span> <span class="fu">list</span>(<span class="at">shape =</span> <span class="fu">mean</span>(mb)<span class="sc">^</span><span class="dv">2</span> <span class="sc">/</span> <span class="fu">var</span>(mb), <span class="at">rate =</span> <span class="fu">mean</span>(mb) <span class="sc">/</span> <span class="fu">var</span>(mb))</span>
+<span id="cb15-7"><a href="#cb15-7" aria-hidden="true" tabindex="-1"></a>g_mb     <span class="ot">&lt;-</span> <span class="fu">suppressWarnings</span>(MASS<span class="sc">::</span><span class="fu">fitdistr</span>(mb, <span class="st">&quot;gamma&quot;</span>, <span class="at">start =</span> mom)<span class="sc">$</span>estimate)</span>
+<span id="cb15-8"><a href="#cb15-8" aria-hidden="true" tabindex="-1"></a>ln_mb    <span class="ot">&lt;-</span> <span class="fu">suppressWarnings</span>(MASS<span class="sc">::</span><span class="fu">fitdistr</span>(mb, <span class="st">&quot;lognormal&quot;</span>)<span class="sc">$</span>estimate)</span>
+<span id="cb15-9"><a href="#cb15-9" aria-hidden="true" tabindex="-1"></a>lam_unif <span class="ot">&lt;-</span> lam <span class="sc">/</span> <span class="dv">100</span> <span class="sc">*</span> rbar                         <span class="co"># cM gamma rate -&gt; per-Mb under a uniform map</span></span>
+<span id="cb15-10"><a href="#cb15-10" aria-hidden="true" tabindex="-1"></a></span>
+<span id="cb15-11"><a href="#cb15-11" aria-hidden="true" tabindex="-1"></a>mk <span class="ot">&lt;-</span> <span class="cf">function</span>(name, params, med, ks)</span>
+<span id="cb15-12"><a href="#cb15-12" aria-hidden="true" tabindex="-1"></a>  <span class="fu">tibble</span>(<span class="st">`</span><span class="at">Mb representation</span><span class="st">`</span> <span class="ot">=</span> name, <span class="at">params =</span> params,</span>
+<span id="cb15-13"><a href="#cb15-13" aria-hidden="true" tabindex="-1"></a>         <span class="st">`</span><span class="at">median Mb</span><span class="st">`</span> <span class="ot">=</span> <span class="fu">round</span>(med, <span class="dv">1</span>), <span class="st">`</span><span class="at">KS vs sim Mb</span><span class="st">`</span> <span class="ot">=</span> <span class="fu">round</span>(ks, <span class="dv">3</span>))</span>
+<span id="cb15-14"><a href="#cb15-14" aria-hidden="true" tabindex="-1"></a>mb_tbl <span class="ot">&lt;-</span> <span class="fu">bind_rows</span>(</span>
+<span id="cb15-15"><a href="#cb15-15" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mk</span>(<span class="st">&quot;(A) n=1500 sim Mb segments — the expectation&quot;</span>, <span class="st">&quot;empirical&quot;</span>, <span class="fu">median</span>(mb), <span class="dv">0</span>),</span>
+<span id="cb15-16"><a href="#cb15-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mk</span>(<span class="st">&quot;(A′) lognormal MLE&quot;</span>, <span class="fu">sprintf</span>(<span class="st">&quot;μ=%.2f, σ=%.2f&quot;</span>, ln_mb[<span class="st">&quot;meanlog&quot;</span>], ln_mb[<span class="st">&quot;sdlog&quot;</span>]),</span>
+<span id="cb15-17"><a href="#cb15-17" aria-hidden="true" tabindex="-1"></a>     <span class="fu">exp</span>(ln_mb[<span class="st">&quot;meanlog&quot;</span>]), <span class="fu">suppressWarnings</span>(<span class="fu">ks.test</span>(mb, <span class="st">&quot;plnorm&quot;</span>, <span class="at">meanlog =</span> ln_mb[<span class="st">&quot;meanlog&quot;</span>], <span class="at">sdlog =</span> ln_mb[<span class="st">&quot;sdlog&quot;</span>])<span class="sc">$</span>statistic)),</span>
+<span id="cb15-18"><a href="#cb15-18" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mk</span>(<span class="st">&quot;(A″) gamma MLE&quot;</span>, <span class="fu">sprintf</span>(<span class="st">&quot;k=%.2f, rate=%.3f/Mb&quot;</span>, g_mb[<span class="st">&quot;shape&quot;</span>], g_mb[<span class="st">&quot;rate&quot;</span>]),</span>
+<span id="cb15-19"><a href="#cb15-19" aria-hidden="true" tabindex="-1"></a>     <span class="fu">qgamma</span>(.<span class="dv">5</span>, g_mb[<span class="st">&quot;shape&quot;</span>], g_mb[<span class="st">&quot;rate&quot;</span>]), <span class="fu">suppressWarnings</span>(<span class="fu">ks.test</span>(mb, <span class="st">&quot;pgamma&quot;</span>, <span class="at">shape =</span> g_mb[<span class="st">&quot;shape&quot;</span>], <span class="at">rate =</span> g_mb[<span class="st">&quot;rate&quot;</span>])<span class="sc">$</span>statistic)),</span>
+<span id="cb15-20"><a href="#cb15-20" aria-hidden="true" tabindex="-1"></a>  <span class="fu">mk</span>(<span class="st">&quot;(B) uniform-rate scaled cM gamma&quot;</span>, <span class="fu">sprintf</span>(<span class="st">&quot;k=%.2f (same shape), rate=%.3f/Mb&quot;</span>, k, lam_unif),</span>
+<span id="cb15-21"><a href="#cb15-21" aria-hidden="true" tabindex="-1"></a>     <span class="fu">qgamma</span>(.<span class="dv">5</span>, k, lam_unif), <span class="fu">suppressWarnings</span>(<span class="fu">ks.test</span>(mb, <span class="st">&quot;pgamma&quot;</span>, <span class="at">shape =</span> k, <span class="at">rate =</span> lam_unif)<span class="sc">$</span>statistic)))</span>
+<span id="cb15-22"><a href="#cb15-22" aria-hidden="true" tabindex="-1"></a>knitr<span class="sc">::</span><span class="fu">kable</span>(mb_tbl, <span class="at">caption =</span> <span class="fu">sprintf</span>(</span>
+<span id="cb15-23"><a href="#cb15-23" aria-hidden="true" tabindex="-1"></a>  <span class="st">&quot;BC2S3 expectation in Mb (genome %.0f Mb, map %.0f cM, mean rate %.2f cM/Mb). The cM gamma does NOT push forward to a gamma in Mb; lognormal fits best. (B) the naive uniform-rate scaling gets the mean right but the median/tail wrong.&quot;</span>,</span>
+<span id="cb15-24"><a href="#cb15-24" aria-hidden="true" tabindex="-1"></a>  genome_mb, cm_tot, rbar))</span></code></pre></div><button title="Copy to Clipboard" class="code-copy-button"><i class="bi"></i></button></div>
+</details>
+<div class="cell-output-display">
+<table class="caption-top table table-sm table-striped small">
+<caption>BC2S3 expectation in Mb (genome 2132 Mb, map 1783 cM, mean rate 0.84 cM/Mb). The cM gamma does NOT push forward to a gamma in Mb; lognormal fits best. (B) the naive uniform-rate scaling gets the mean right but the median/tail wrong.</caption>
+<colgroup>
+<col style="width: 43%">
+<col style="width: 33%">
+<col style="width: 9%">
+<col style="width: 12%">
+</colgroup>
+<thead>
+<tr class="header">
+<th style="text-align: left;">Mb representation</th>
+<th style="text-align: left;">params</th>
+<th style="text-align: right;">median Mb</th>
+<th style="text-align: right;">KS vs sim Mb</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td style="text-align: left;">(A) n=1500 sim Mb segments — the expectation</td>
+<td style="text-align: left;">empirical</td>
+<td style="text-align: right;">10.8</td>
+<td style="text-align: right;">0.000</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">(A′) lognormal MLE</td>
+<td style="text-align: left;">μ=2.31, σ=1.71</td>
+<td style="text-align: right;">10.1</td>
+<td style="text-align: right;">0.040</td>
+</tr>
+<tr class="odd">
+<td style="text-align: left;">(A″) gamma MLE</td>
+<td style="text-align: left;">k=0.59, rate=0.021/Mb</td>
+<td style="text-align: right;">15.0</td>
+<td style="text-align: right;">0.084</td>
+</tr>
+<tr class="even">
+<td style="text-align: left;">(B) uniform-rate scaled cM gamma</td>
+<td style="text-align: left;">k=1.15 (same shape), rate=0.039/Mb</td>
+<td style="text-align: right;">21.2</td>
+<td style="text-align: right;">0.222</td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+<p><strong>Convention.</strong> The <strong>n=1500 BC2S3 simulation</strong> (<code>results/nil_segments.csv</code>, <code>mb</code> column) <strong>is the BC2S3 expectation in Mb</strong> — use it directly as the reference (Null) in all Mb introgression-size plots. Do <strong>not</strong> substitute the uniform-rate-scaled gamma (row B: KS ≈ 0.22; right mean, wrong median/tail). The smooth parametric stand-in, if needed, is the lognormal (row A′), not a gamma. RTIGER rigidity (<code>r</code>) calibration targets this same distribution — the BrB-RTI KS sweep already does (<code>ks_sweep_brbseq_wideseq.R</code> keys on the <code>mb</code> column); Skim-RTI’s <code>r=5</code> should be reconciled against the same reference.</p>
 </section>
 </section>
 <section id="interpretation-caveats" class="level1">
