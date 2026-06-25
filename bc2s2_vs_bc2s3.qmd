@@ -1,0 +1,223 @@
+---
+title: "BC2S2 vs BC2S3 — which generation do the bulked skim genotypes reflect?"
+author: "Fausto Rodríguez-Zapata"
+date: "`r Sys.Date()`"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    df-print: paged
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+params:
+  skim_calls: "data/rtiger_50K/calls_taxa_r5.csv"          # Skim-RTI per-taxon r=5 ancestry calls (state 0/1/2)
+  map:        "results/maize_map_v5_clean.rds"             # consensus Marey map: (chr, bp, cm) anchors, B73 NAM v5
+---
+
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
+## The question
+
+The SNP50K skim genotypes are **not single BC2S3 plants**. Each "line" was genotyped from a
+**bulk of 6 individual S3 plants sampled from one S2 ear** (the `.B`-suffixed *bulked genotypes*).
+Pooling 6 S3 sibs averages out their individual S2→S3 recombination and Mendelian segregation,
+so the bulk **recovers the genotype of the shared S2 parent** — these are **S2:3 lines**, and the
+genotype expectations to compare against are the **BC2S2** generation, not BC2S3. (Established
+with R. Rellán-Álvarez and J. Holland, Nov 2025.)
+
+This document tests that interpretation two independent ways, **assuming the current ancestry
+calls are good enough**:
+
+1. **Genomic proportions** — does the genome-wide REF/HET/ALT composition match the single-locus
+   model at **BC2S2** better than at BC2S3? (The discriminator is **heterozygosity**.)
+2. **Fragment size** — does the donor-segment-size distribution match the **BC2S2** expectation
+   (one fewer meiosis → slightly longer blocks) better than BC2S3?
+
+The two tests probe different things: (1) depends on *composition* (and is sensitive to
+selection on donor content), while (2) depends on *recombination* (set by the number of meioses,
+and is selection-independent). Agreement between them is the robustness check.
+
+```{r setup}
+library(tidyverse); library(simcross); library(furrr)
+purrr::walk(fs::dir_ls("R", glob = "*.R"), source)
+theme_set(theme_bw())
+
+anchors  <- readRDS(params$map)
+chr_cm   <- anchors %>% group_by(chr) %>% summarise(L = max(cm), .groups = "drop") %>% arrange(chr)
+ped      <- bc2s3_pedigree()          # id7 = S2 (BC2S2), id8 = S3 (BC2S3)
+mp       <- anchors %>% group_by(chr, bp) %>% summarise(cm = mean(cm), .groups = "drop")
+mb2cm    <- function(chr, bp) {        # forward consensus-map lookup, clamp past last anchor
+  o <- numeric(length(bp))
+  for (cc in unique(chr)) { i <- chr == cc; a <- mp %>% filter(chr == cc) %>% arrange(bp)
+    o[i] <- approx(a$bp, a$cm, xout = bp[i], rule = 2)$y }
+  o
+}
+```
+
+## The single-locus model
+
+With no selection the donor *dosage* (allele frequency) stays at 0.125 from BC2 onward, so it
+**cannot** distinguish generations. What changes under selfing is the split between heterozygous
+and homozygous-donor: **heterozygosity halves each selfing generation**. That makes HET the
+discriminator.
+
+```{r single-locus}
+h <- 0.25; a <- 0; rows <- list()
+for (g in c("BC2 (S0)","BC2S1","BC2S2","BC2S3","BC2S4")) {
+  rows[[g]] <- tibble(generation = g, REF = 1 - h - a, HET = h, ALT_hom = a, dosage = h/2 + a)
+  hn <- h/2; a <- a + h/4; h <- hn
+}
+single_locus <- bind_rows(rows)
+knitr::kable(single_locus %>% mutate(across(where(is.numeric), ~round(., 4))),
+  caption = "Single-locus genotype frequencies (no selection). BC2S2 HET = 0.0625 vs BC2S3 = 0.0312 — the 2× difference is the generation discriminator.")
+exp_bc2s2 <- single_locus %>% filter(generation == "BC2S2")
+exp_bc2s3 <- single_locus %>% filter(generation == "BC2S3")
+```
+
+## Analysis 1 — genomic proportions
+
+Genome-wide fraction in each state (REF / HET / ALT-homozygous), per skim sample, then averaged.
+
+```{r obs-proportions, fig.width=7.5, fig.height=4}
+sk <- read_csv(params$skim_calls, show_col_types = FALSE)
+sf <- sk %>% mutate(len = end_bp - start_bp) %>% group_by(name) %>%
+  summarise(HET = sum(len[state == 1]) / sum(len),
+            ALT = sum(len[state == 2]) / sum(len), .groups = "drop") %>%
+  mutate(dosage = HET/2 + ALT)
+
+obs_tbl <- tibble(
+  source = c("Observed skim (mean)", "BC2S2 expectation", "BC2S3 expectation"),
+  n      = c(nrow(sf), NA, NA),
+  HET    = c(mean(sf$HET), exp_bc2s2$HET, exp_bc2s3$HET),
+  ALT_hom= c(mean(sf$ALT), exp_bc2s2$ALT_hom, exp_bc2s3$ALT_hom),
+  dosage = c(mean(sf$dosage), exp_bc2s2$dosage, exp_bc2s3$dosage))
+knitr::kable(obs_tbl %>% mutate(across(c(HET, ALT_hom, dosage), ~round(., 4))),
+  caption = sprintf("Observed skim genome composition (%d samples) vs the single-locus expectations. Observed HET %.4f (median %.4f).",
+                    nrow(sf), mean(sf$HET), median(sf$HET)))
+
+ggplot(sf, aes(HET)) +
+  geom_histogram(bins = 40, fill = "grey82", colour = "grey55", linewidth = 0.2) +
+  geom_vline(xintercept = exp_bc2s2$HET, colour = "firebrick", linewidth = 1) +
+  geom_vline(xintercept = exp_bc2s3$HET, colour = "royalblue3", linewidth = 1, linetype = "dashed") +
+  annotate("text", x = exp_bc2s2$HET, y = Inf, label = "BC2S2 (0.0625)", colour = "firebrick",
+           hjust = -0.05, vjust = 1.5) +
+  annotate("text", x = exp_bc2s3$HET, y = Inf, label = "BC2S3 (0.0312)", colour = "royalblue3",
+           hjust = 1.05, vjust = 1.5) +
+  coord_cartesian(xlim = c(0, quantile(sf$HET, 0.98))) +
+  labs(x = "per-sample genome HET fraction", y = "samples",
+       title = "Observed skim heterozygosity vs the two single-locus expectations",
+       subtitle = "red = BC2S2, blue dashed = BC2S3")
+```
+
+**Read.** Observed HET (mean `r round(mean(sf$HET),3)`, median `r round(median(sf$HET),3)`) sits
+on the **BC2S2** value (0.0625) and far from BC2S3 (0.0312) — consistent with the 6-plant bulk
+recovering the S2 parent. Two confounds sit *on top* of the generation signal and do not change
+the call:
+
+- **Total donor dosage is `r round(mean(sf$dosage),3)`, well below the model's 0.125** → directional
+  **selection against donor** (temperate-adaptation selection purging teosinte alleles).
+- **HET:ALT ≈ `r round(mean(sf$HET)/mean(sf$ALT),1)`:1, vs BC2S2's `r round(exp_bc2s2$HET/exp_bc2s2$ALT_hom,2)`:1**
+  → **het excess** (overdominance / heterozygote-biased retention) beyond any neutral selfing
+  generation. (B73/Purple check samples, included here, only *lower* HET, so they make this a
+  conservative test of the BC2S2 call.)
+
+## The BC2S2 / BC2S3 fragment expectation (paired simulation)
+
+Simulate donor segments for **both** the S2 parent (`id7`) and its S3 self (`id8`) from the *same*
+pedigree realizations (`simcross`, Stahl m=10/p=0), so the only difference is **one extra meiosis**
+in BC2S3. Segments are the union of donor intervals over both haplotypes, converted to Mb through
+the consensus map.
+
+```{r sim-generations, cache=TRUE}
+n <- 1500L; set.seed(20260609); plan(multisession)
+segs_for <- function(sim, id) purrr::map_dfr(seq_along(chr_cm$L), function(ci) {
+  hs <- donor_segments_cm(sim[[ci]][[id]], donor_allele = 2L)
+  u  <- union_intervals(hs$start_cm, hs$end_cm)
+  if (nrow(u) == 0) return(tibble(chr = integer(0), start_cm = numeric(0), end_cm = numeric(0)))
+  tibble(chr = chr_cm$chr[ci], start_cm = u$start, end_cm = u$end)
+})
+res <- furrr::future_map(seq_len(n), function(i) {
+  sim <- simcross::sim_from_pedigree(ped, L = chr_cm$L, m = 10, p = 0)
+  list(s2 = segs_for(sim, "7") %>% mutate(nil_id = i),
+       s3 = segs_for(sim, "8") %>% mutate(nil_id = i))
+}, .options = furrr_options(seed = TRUE))
+to_mb <- function(cm) segments_to_mb(dplyr::select(cm, nil_id, chr, start_cm, end_cm), anchors) %>%
+  mutate(cm = end_cm - start_cm)
+sim_s2 <- to_mb(map_dfr(res, "s2")); sim_s3 <- to_mb(map_dfr(res, "s3"))
+```
+
+```{r sim-summary}
+gfit <- function(x) { f <- suppressWarnings(MASS::fitdistr(x/100, "gamma")$estimate)
+  sprintf("Gamma(k=%.2f, λ=%.2f/M)", f["shape"], f["rate"]) }
+knitr::kable(tibble(
+  generation = c("BC2S2 (g=4 meioses)", "BC2S3 (g=5 meioses)"),
+  n_segments = c(nrow(sim_s2), nrow(sim_s3)),
+  median_cM  = round(c(median(sim_s2$cm),  median(sim_s3$cm)), 1),
+  mean_cM    = round(c(mean(sim_s2$cm),    mean(sim_s3$cm)), 1),
+  median_Mb  = round(c(median(sim_s2$mb),  median(sim_s3$mb)), 1),
+  cM_law     = c(gfit(sim_s2$cm), gfit(sim_s3$cm))),
+  caption = "Paired fragment-size expectations. BC2S2 blocks are modestly longer (one fewer meiosis).")
+```
+
+## Analysis 2 — fragment size
+
+Observed skim donor blocks (maximal runs of donor state), in both cM (forward map lookup) and Mb,
+vs each generation's simulated distribution (KS).
+
+```{r frag-compare, fig.width=8, fig.height=4.6}
+obs <- sk %>% arrange(name, chr, start_bp) %>% group_by(name, chr) %>%
+  mutate(run = cumsum(c(TRUE, diff(state > 0) != 0)), donor = state > 0) %>% filter(donor) %>%
+  group_by(name, chr, run) %>% summarise(s = min(start_bp), e = max(end_bp), .groups = "drop") %>%
+  mutate(cm = mb2cm(chr, e) - mb2cm(chr, s), mb = (e - s)/1e6) %>% filter(cm > 0)
+
+ks_tbl <- tibble(
+  reference        = c("BC2S2 (g=4)", "BC2S3 (g=5)"),
+  median_cM        = round(c(median(sim_s2$cm), median(sim_s3$cm)), 1),
+  `KS cM`          = round(c(suppressWarnings(ks.test(obs$cm, sim_s2$cm)$statistic),
+                             suppressWarnings(ks.test(obs$cm, sim_s3$cm)$statistic)), 3),
+  `KS Mb`          = round(c(suppressWarnings(ks.test(obs$mb, sim_s2$mb)$statistic),
+                             suppressWarnings(ks.test(obs$mb, sim_s3$mb)$statistic)), 3))
+knitr::kable(ks_tbl, caption = sprintf(
+  "Observed skim donor blocks (n=%d; median %.1f cM / %.1f Mb) vs each generation. Lower KS = better fit.",
+  nrow(obs), median(obs$cm), median(obs$mb)))
+
+ecdf_df <- bind_rows(
+  tibble(cm = obs$cm,    src = "Observed skim"),
+  tibble(cm = sim_s2$cm, src = "BC2S2 (g=4)"),
+  tibble(cm = sim_s3$cm, src = "BC2S3 (g=5)"))
+ggplot(ecdf_df, aes(cm, colour = src)) +
+  stat_ecdf(linewidth = 0.9) +
+  scale_colour_manual(values = c("Observed skim" = "black", "BC2S2 (g=4)" = "firebrick",
+                                 "BC2S3 (g=5)" = "royalblue3")) +
+  coord_cartesian(xlim = c(0, quantile(obs$cm, 0.98))) +
+  labs(x = "donor-segment size (cM)", y = "ECDF", colour = NULL,
+       title = "Observed fragment sizes vs the BC2S2 and BC2S3 expectations",
+       subtitle = "BC2S2 (one fewer meiosis) is the closer reference") +
+  theme(legend.position = c(0.8, 0.3), legend.background = element_rect(fill = "white", colour = NA))
+```
+
+## Verdict
+
+Both independent tests point to **BC2S2**, consistent with the sampling (6 bulked S3 sibs per S2
+ear → the bulk reflects the S2 parent):
+
+- **Heterozygosity** is the decisive, high-contrast test (2× difference between generations):
+  observed HET ≈ `r round(mean(sf$HET),3)` lands on **BC2S2 (0.0625)**, not BC2S3 (0.0312).
+- **Fragment size** is the cleaner, selection-independent test: **BC2S2 fits better**
+  (KS `r round(ks_tbl[["KS cM"]][1],3)` vs `r round(ks_tbl[["KS cM"]][2],3)` in cM;
+  `r round(ks_tbl[["KS Mb"]][1],3)` vs `r round(ks_tbl[["KS Mb"]][2],3)` in Mb), though the
+  one-meiosis effect is small so its discriminating power is limited, and observed blocks still
+  exceed both generations (residual over-length — recombination suppression in teosinte
+  introgressions; see `fragment_size_cm_validation.html`).
+
+**Implication.** For these bulked skim samples the **BC2S2** generation is the correct reference —
+for the single-locus $p_0$, the introgression-size Null, and the RTIGER rigidity (`r`) calibration
+target — superseding BC2S3.
+
+**Caveats.** The conclusion is robust to two real but separate effects, neither of which changes
+the generation call: directional **selection against donor** (dosage `r round(mean(sf$dosage),3)` <
+0.125) and **overdominance / het-biased retention** (HET:ALT far above the neutral ratio). And the
+cM conversion of observed blocks leans on conserved marker order relative to the consensus map.
