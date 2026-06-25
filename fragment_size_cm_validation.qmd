@@ -284,16 +284,21 @@ ggplot(called, aes(cm, colour = src)) +
 ```
 
 ```{r plot-density, fig.width=8, fig.height=5}
+# On a log10 x-axis the histogram density is per-unit-log10(cM), so both references must be in
+# that same space: the sim freqpoly is a ggplot stat (already in-space); the analytic gamma is a
+# per-cM density and needs the change-of-variables Jacobian x*ln(10) to match the bars.
 ggplot(called, aes(cm, fill = src)) +
   geom_histogram(aes(y = after_stat(density)), position = "identity", alpha = 0.45, bins = 30) +
-  geom_line(data = curves %>% filter(grepl("derived", curve)), aes(cm, d), colour = "black",
-            linewidth = 0.9, inherit.aes = FALSE) +
+  geom_freqpoly(data = sim_cm, aes(cm, after_stat(density)), bins = 30,
+                colour = "grey25", linewidth = 0.8, inherit.aes = FALSE) +
+  geom_line(data = curves %>% filter(grepl("derived", curve)),
+            aes(cm, d * cm * log(10)), colour = "black", linewidth = 0.9, inherit.aes = FALSE) +
   scale_fill_manual(values = c("Skim-RTI (r=5)" = "purple4", "BrB-RTI (r=7, ws)" = "orange3",
                                "Skim-BIN (1 Mb)" = "seagreen4")) +
   scale_x_log10() +
-  labs(x = "donor-segment size (cM, log scale)", y = "density", fill = NULL,
+  labs(x = "donor-segment size (cM, log scale)", y = "density (per unit log10 cM)", fill = NULL,
        title = "Caller cM segment-size distributions vs the derived law",
-       subtitle = "black = derived Gamma (the map-free analytic reference)") +
+       subtitle = "black = derived Gamma (Jacobian-corrected for the log axis) | grey = n=1500 sim cM lengths") +
   theme(legend.position = c(0.8, 0.8), legend.background = element_rect(fill = "white", colour = NA))
 ```
 
