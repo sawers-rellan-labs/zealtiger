@@ -44,7 +44,7 @@ selection on donor content), while (2) depends on *recombination* (set by the nu
 and is selection-independent). Agreement between them is the robustness check.
 
 ```{r setup}
-library(tidyverse); library(simcross); library(furrr)
+library(tidyverse); library(simcross); library(furrr); library(patchwork)
 purrr::walk(fs::dir_ls("R", glob = "*.R"), source)
 theme_set(theme_bw())
 
@@ -101,39 +101,28 @@ knitr::kable(obs_tbl %>% mutate(across(c(HET, ALT_hom, dosage), ~round(., 4))),
   caption = sprintf("Observed skim genome composition (%d samples) vs the single-locus expectations. Observed HET %.4f (median %.4f).",
                     nrow(sf), mean(sf$HET), median(sf$HET)))
 
-ggplot(sf, aes(HET)) +
-  geom_histogram(bins = 40, fill = "grey82", colour = "grey55", linewidth = 0.2) +
-  geom_vline(xintercept = exp_bc2s2$HET, colour = "firebrick", linewidth = 1) +
-  geom_vline(xintercept = exp_bc2s3$HET, colour = "royalblue3", linewidth = 1, linetype = "dashed") +
-  geom_vline(xintercept = mean(sf$HET), colour = "black", linewidth = 1, linetype = "dotted") +
-  annotate("text", x = exp_bc2s2$HET, y = Inf, label = "BC2S2 (0.0625)", colour = "firebrick",
-           hjust = -0.05, vjust = 1.5) +
-  annotate("text", x = exp_bc2s3$HET, y = Inf, label = "BC2S3 (0.0312)", colour = "royalblue3",
-           hjust = 1.05, vjust = 1.5) +
-  annotate("text", x = mean(sf$HET), y = Inf, label = sprintf("observed mean (%.3f)", mean(sf$HET)),
-           colour = "black", hjust = -0.05, vjust = 3.2) +
-  coord_cartesian(xlim = c(0, quantile(sf$HET, 0.98))) +
-  labs(x = "per-sample genome HET fraction", y = "samples",
-       title = "Observed skim heterozygosity vs the two single-locus expectations",
-       subtitle = "red = BC2S2, blue dashed = BC2S3, black dotted = observed mean")
 ```
 
-```{r obs-alt, fig.width=7.5, fig.height=4}
-ggplot(sf, aes(ALT)) +
-  geom_histogram(bins = 40, fill = "grey82", colour = "grey55", linewidth = 0.2) +
-  geom_vline(xintercept = exp_bc2s2$ALT_hom, colour = "firebrick", linewidth = 1) +
-  geom_vline(xintercept = exp_bc2s3$ALT_hom, colour = "royalblue3", linewidth = 1, linetype = "dashed") +
-  geom_vline(xintercept = mean(sf$ALT), colour = "black", linewidth = 1, linetype = "dotted") +
-  annotate("text", x = mean(sf$ALT), y = Inf, label = sprintf("observed mean (%.3f)", mean(sf$ALT)),
-           colour = "black", hjust = -0.05, vjust = 1.5) +
-  annotate("text", x = exp_bc2s2$ALT_hom, y = Inf, label = "BC2S2 (0.0938)", colour = "firebrick",
-           hjust = -0.05, vjust = 1.5) +
-  annotate("text", x = exp_bc2s3$ALT_hom, y = Inf, label = "BC2S3 (0.1094)", colour = "royalblue3",
-           hjust = -0.05, vjust = 3.0) +
-  coord_cartesian(xlim = c(0, max(quantile(sf$ALT, 0.98), 0.13))) +
-  labs(x = "per-sample genome homozygous-donor (ALT) fraction", y = "samples",
-       title = "Observed skim homozygous-donor fraction vs the two single-locus expectations",
-       subtitle = "red = BC2S2, blue dashed = BC2S3, black dotted = observed mean")
+```{r obs-panels, fig.width=11, fig.height=4.3}
+frac_panel <- function(col, e2, e3, xlab, title) {
+  m <- mean(sf[[col]])
+  ggplot(sf, aes(.data[[col]])) +
+    geom_histogram(bins = 40, fill = "grey82", colour = "grey55", linewidth = 0.2) +
+    geom_vline(xintercept = e2, colour = "firebrick",  linewidth = 1) +
+    geom_vline(xintercept = e3, colour = "royalblue3", linewidth = 1, linetype = "dashed") +
+    geom_vline(xintercept = m,  colour = "black",      linewidth = 1, linetype = "dotted") +
+    annotate("text", x = m,  y = Inf, label = sprintf("obs mean %.3f", m), colour = "black",      hjust = -0.05, vjust = 1.5) +
+    annotate("text", x = e2, y = Inf, label = sprintf("BC2S2 %.3f", e2),   colour = "firebrick",  hjust = -0.05, vjust = 3.0) +
+    annotate("text", x = e3, y = Inf, label = sprintf("BC2S3 %.3f", e3),   colour = "royalblue3", hjust = -0.05, vjust = 4.5) +
+    coord_cartesian(xlim = c(0, max(quantile(sf[[col]], 0.98), e3 + 0.02))) +
+    labs(x = xlab, y = "samples", title = title)
+}
+p_het <- frac_panel("HET", exp_bc2s2$HET,     exp_bc2s3$HET,     "genome HET fraction",              "Heterozygous (HET)")
+p_alt <- frac_panel("ALT", exp_bc2s2$ALT_hom, exp_bc2s3$ALT_hom, "genome homozygous-donor fraction",  "Homozygous donor (ALT)")
+(p_het | p_alt) +
+  plot_annotation(
+    title = "Observed skim genome composition vs the BC2S2 and BC2S3 single-locus expectations",
+    subtitle = "red = BC2S2, blue dashed = BC2S3, black dotted = observed mean | HET sits on BC2S2; ALT depleted below both")
 ```
 
 **Read.** Observed HET (mean `r round(mean(sf$HET),3)`, median `r round(median(sf$HET),3)`) sits
