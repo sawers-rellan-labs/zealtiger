@@ -240,6 +240,101 @@ ggplot() +
   theme(legend.position = c(0.72, 0.30), legend.background = element_rect(fill = "white", colour = NA))
 ```
 
+The QQ-plots make the per-platform fit explicit: observed quantiles (y) vs each expectation's
+fitted-gamma quantiles (x), with the dashed 1:1 line.
+
+```{r qq-expectations, fig.width=10, fig.height=5.2}
+qq_df <- function(x, k, l, label, p = ppoints(200)) tibble(
+  theo = qgamma(p, shape = k, rate = l) * 100,             # expectation quantiles (cM)
+  samp = as.numeric(quantile(x, p, names = FALSE)), series = label)
+cm_of <- function(s) callers$cm[callers$src == s]
+LIM <- 120
+
+p_qq1 <- ggplot(bind_rows(
+    qq_df(cm_of("Skim-RTI (r=5)"),  f2["shape"], f2["rate"], "Skim-RTI"),
+    qq_df(cm_of("Skim-BIN (1 Mb)"), f2["shape"], f2["rate"], "Skim-BIN")),
+    aes(theo, samp, colour = series)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey40") +
+  geom_point(size = 0.8, alpha = 0.7) +
+  scale_colour_manual(values = c("Skim-RTI" = "purple4", "Skim-BIN" = "seagreen4"), name = NULL) +
+  coord_equal(xlim = c(0, LIM), ylim = c(0, LIM)) +
+  labs(x = "BC2S2 expectation quantile (cM)", y = "observed quantile (cM)",
+       title = "vs BC2S2 expectation — the two skim methods") +
+  theme(legend.position = c(0.82, 0.16), legend.background = element_rect(fill = "white", colour = NA))
+
+p_qq2 <- ggplot(qq_df(cm_of("BrB-RTI (r=7, ws)"), f3["shape"], f3["rate"], "BrB-RTI"),
+    aes(theo, samp)) +
+  geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey40") +
+  geom_point(size = 0.8, alpha = 0.7, colour = "orange3") +
+  coord_equal(xlim = c(0, LIM), ylim = c(0, LIM)) +
+  labs(x = "BC2S3 expectation quantile (cM)", y = "observed quantile (cM)",
+       title = "vs BC2S3 expectation — BrB-seq")
+
+(p_qq1 | p_qq2) +
+  plot_annotation(subtitle = "QQ vs the fitted-gamma expectations; dashed = 1:1. Points above the line = observed blocks longer than expected (axes capped at 120 cM).")
+```
+
+**Read.** Each platform is tested against *its own* expected generation. Against **BC2S2** (left,
+the two skim methods), **Skim-RTI** hugs the 1:1 line — it *is* BC2S2 — while **Skim-BIN** (the same
+skim reads in 1 Mb bins) rides above in the tail, since bin merging inflates the largest blocks.
+Against **BC2S3** (right), **BrB-seq** sits above the line: its blocks run longer than even its own
+generation's expectation (over-merging; see `fragment_size_cm_validation.html`). So fragment length
+confirms skim ≈ BC2S2, but for BRB the over-merge dominates and the one-meiosis generation
+difference is not resolvable from block size — the BRB generation signal is in heterozygosity, not
+block length (next).
+
+## BRB-seq is a different generation (BC2S3 or later)
+
+The skim genotypes are BC2S2 (a bulk of 6 S3 sibs). The **BRB-seq** samples are not: each is a
+**single plant** grown from the line at **BC2S3 or later** — one realization of an advanced
+generation, not the S2 parent. Two consequences:
+
+1. **Lower expected heterozygosity** than skim — HET ≤ BC2S3's 0.031 (and lower for S4+), vs skim's
+   BC2S2 0.0625.
+2. **Built-in skim↔BRB discordance, independent of caller quality.** At a locus heterozygous in the
+   S2 parent, the bulked skim reads HET, but the single BRB plant has *resolved* it to ¼ homozygous
+   REF (donor **lost**), ½ HET, ¼ homozygous ALT. So ~half of skim's HET regions are not expected to
+   read HET on BRB — a structural difference from generation + bulk-vs-single sampling, before any
+   RNA-seq noise.
+
+But the BRB calls **cannot pin the generation**, because RNA-seq genotyping artifacts dominate the
+composition:
+
+```{r brb-het, fig.width=7.5, fig.height=4}
+brb_sf <- brb %>% mutate(len = end_bp - start_bp) %>% group_by(name) %>%
+  summarise(HET = sum(len[state == 1]) / sum(len),
+            ALT = sum(len[state == 2]) / sum(len), .groups = "drop") %>% mutate(dosage = HET/2 + ALT)
+cat(sprintf("BRB (n=%d): HET median %.3f mean %.3f | %.0f%% of samples HET=0 | HET 90th pctile %.2f | dosage median %.3f\n",
+  nrow(brb_sf), median(brb_sf$HET), mean(brb_sf$HET), 100*mean(brb_sf$HET == 0),
+  quantile(brb_sf$HET, 0.9), median(brb_sf$dosage)))
+ggplot(brb_sf, aes(HET)) +
+  geom_histogram(bins = 50, fill = "grey82", colour = "grey55", linewidth = 0.2) +
+  geom_vline(xintercept = exp_bc2s2$HET, colour = "firebrick", linewidth = 1) +
+  geom_vline(xintercept = exp_bc2s3$HET, colour = "royalblue3", linewidth = 1, linetype = "dashed") +
+  annotate("text", x = exp_bc2s2$HET, y = Inf, label = "BC2S2", colour = "firebrick", hjust = -0.1, vjust = 1.5) +
+  annotate("text", x = exp_bc2s3$HET, y = Inf, label = "BC2S3", colour = "royalblue3", hjust = -0.1, vjust = 3) +
+  labs(x = "per-sample genome HET fraction (BRB-seq)", y = "samples",
+       title = "BRB-seq heterozygosity is bimodal — generation signal swamped by RNA artifacts",
+       subtitle = "mode at HET ≈ 0 (advanced single plants) + an artifactual high-HET tail")
+```
+
+- **~61% of BRB samples have zero called HET** — consistent with advanced-generation single plants
+  (little residual heterozygosity) compounded by the rigid RTIGER (r=7) calling homozygous.
+- **A tail has biologically impossible HET** (90th percentile ≈ 0.48) — contamination / mislabeling
+  / RNA allelic noise (the documented BRB-seq impostors; see `b73_checks_qc.html`).
+
+So BRB is consistent with **BC2S3 or later**, but the generation is not identifiable from these
+calls the way it is for skim.
+
+**Implications for the cross-platform comparison.**
+
+- The two platforms need **platform-specific generation references**: skim → **BC2S2**, BRB →
+  **BC2S3+**. A single shared $p_0$ / Null (as in `skim_brbseq_skimbin.html`) is wrong for one of them.
+- **Part of the skim↔BRB discordance is structural** (generation + bulk-vs-single sampling, point 2),
+  not caller error — relevant when reading the cross-platform confusion / Jaccard.
+- For **fragment size**, BRB over-merges (QQ-plot above, vs BC2S3), so its blocks run long even vs
+  its own generation's expectation — the one-meiosis difference is not resolvable from BRB block size.
+
 ## Verdict
 
 Both independent tests point to **BC2S2**, consistent with the sampling (6 bulked S3 sibs per S2
@@ -256,7 +351,8 @@ ear → the bulk reflects the S2 parent):
 
 **Implication.** For these bulked skim samples the **BC2S2** generation is the correct reference —
 for the single-locus $p_0$, the introgression-size Null, and the RTIGER rigidity (`r`) calibration
-target — superseding BC2S3.
+target — superseding BC2S3. **BRB-seq, however, is a *different* generation (BC2S3+; see above) and
+needs its own reference** — the two platforms must not share one.
 
 **Caveats.** The conclusion is robust to two real but separate effects, neither of which changes
 the generation call: directional **selection against donor** (dosage `r round(mean(sf$dosage),3)` <
