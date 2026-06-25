@@ -299,7 +299,8 @@ ggplot(called, aes(cm, fill = src)) +
   labs(x = "donor-segment size (cM, log scale)", y = "density (per unit log10 cM)", fill = NULL,
        title = "Caller cM segment-size distributions vs the derived law",
        subtitle = "black = derived Gamma (Jacobian-corrected for the log axis) | grey = n=1500 sim cM lengths") +
-  theme(legend.position = c(0.8, 0.8), legend.background = element_rect(fill = "white", colour = NA))
+  theme(legend.position = c(0.01, 0.99), legend.justification = c("left", "top"),
+        legend.background = element_rect(fill = "white", colour = NA))
 ```
 
 # Interpretation & caveats
