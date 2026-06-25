@@ -102,14 +102,17 @@ ggplot(sf, aes(HET)) +
   geom_histogram(bins = 40, fill = "grey82", colour = "grey55", linewidth = 0.2) +
   geom_vline(xintercept = exp_bc2s2$HET, colour = "firebrick", linewidth = 1) +
   geom_vline(xintercept = exp_bc2s3$HET, colour = "royalblue3", linewidth = 1, linetype = "dashed") +
+  geom_vline(xintercept = mean(sf$HET), colour = "black", linewidth = 1, linetype = "dotted") +
   annotate("text", x = exp_bc2s2$HET, y = Inf, label = "BC2S2 (0.0625)", colour = "firebrick",
            hjust = -0.05, vjust = 1.5) +
   annotate("text", x = exp_bc2s3$HET, y = Inf, label = "BC2S3 (0.0312)", colour = "royalblue3",
            hjust = 1.05, vjust = 1.5) +
+  annotate("text", x = mean(sf$HET), y = Inf, label = sprintf("observed mean (%.3f)", mean(sf$HET)),
+           colour = "black", hjust = -0.05, vjust = 3.2) +
   coord_cartesian(xlim = c(0, quantile(sf$HET, 0.98))) +
   labs(x = "per-sample genome HET fraction", y = "samples",
        title = "Observed skim heterozygosity vs the two single-locus expectations",
-       subtitle = "red = BC2S2, blue dashed = BC2S3")
+       subtitle = "red = BC2S2, blue dashed = BC2S3, black dotted = observed mean")
 ```
 
 **Read.** Observed HET (mean `r round(mean(sf$HET),3)`, median `r round(median(sf$HET),3)`) sits
