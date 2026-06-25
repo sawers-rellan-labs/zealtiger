@@ -15,6 +15,9 @@ execute:
 params:
   skim_calls: "data/rtiger_50K/calls_taxa_r5.csv"          # Skim-RTI per-taxon r=5 ancestry calls (state 0/1/2)
   map:        "results/maize_map_v5_clean.rds"             # consensus Marey map: (chr, bp, cm) anchors, B73 NAM v5
+  brb_taxa:   "results/sim_calibration/brbseq_taxa_r7_wideseq/calls_common_schema.csv"   # BrB-RTI r=7, wideseq-filtered
+  skimbin:    "results/sim_calibration/skimbin_calls/calls_common_schema.csv"            # Skim-BIN 1 Mb-bin GMM-HMM
+  corr:       "results/sample_correspondence/skim_brbseq_correspondence.csv"             # pedigree-matched skim<->BRB NILs
 ---
 
 **Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
@@ -187,19 +190,44 @@ knitr::kable(ks_tbl, caption = sprintf(
   "Observed skim donor blocks (n=%d; median %.1f cM / %.1f Mb) vs each generation. Lower KS = better fit.",
   nrow(obs), median(obs$cm), median(obs$mb)))
 
-ecdf_df <- bind_rows(
-  tibble(cm = obs$cm,    src = "Observed skim"),
-  tibble(cm = sim_s2$cm, src = "BC2S2 (g=4)"),
-  tibble(cm = sim_s3$cm, src = "BC2S3 (g=5)"))
-ggplot(ecdf_df, aes(cm, colour = src)) +
-  stat_ecdf(linewidth = 0.9) +
-  scale_colour_manual(values = c("Observed skim" = "black", "BC2S2 (g=4)" = "firebrick",
-                                 "BC2S3 (g=5)" = "royalblue3")) +
-  coord_cartesian(xlim = c(0, quantile(obs$cm, 0.98))) +
-  labs(x = "donor-segment size (cM)", y = "ECDF", colour = NULL,
-       title = "Observed fragment sizes vs the BC2S2 and BC2S3 expectations",
-       subtitle = "BC2S2 (one fewer meiosis) is the closer reference") +
-  theme(legend.position = c(0.8, 0.3), legend.background = element_rect(fill = "white", colour = NA))
+# --- the 3 genotyping methods (cM segments) on the both-platforms NIL set (cf. fragment_size_cm_validation) ---
+brb     <- read_csv(params$brb_taxa, show_col_types = FALSE)
+skimbin <- read_csv(params$skimbin,  show_col_types = FALSE)
+corr    <- read_csv(params$corr, show_col_types = FALSE) %>% filter(type == "NIL")
+brb_in  <- corr %>% separate_rows(brbseq_prefix, sep = ";") %>% transmute(name = brbseq_prefix, nil = pedigree) %>% filter(name %in% brb$name)
+skim_in <- corr %>% separate_rows(skim_prefix,  sep = ";") %>% transmute(name = skim_prefix,  nil = pedigree) %>% filter(name %in% sk$name)
+both_nils <- intersect(brb_in$nil, skim_in$nil)
+blocks_cm <- function(seg) seg %>% arrange(name, chr, start_bp) %>% group_by(name, chr) %>%
+  mutate(run = cumsum(c(TRUE, diff(state > 0) != 0)), donor = state > 0) %>% filter(donor) %>%
+  group_by(name, chr, run) %>% summarise(s = min(start_bp), e = max(end_bp), .groups = "drop") %>%
+  mutate(cm = mb2cm(chr, e) - mb2cm(chr, s)) %>% filter(cm > 0)
+callers <- bind_rows(
+  blocks_cm(sk      %>% filter(name %in% skim_in$name[skim_in$nil %in% both_nils])) %>% mutate(src = "Skim-RTI (r=5)"),
+  blocks_cm(brb     %>% filter(name %in% brb_in$name [brb_in$nil  %in% both_nils])) %>% mutate(src = "BrB-RTI (r=7, ws)"),
+  blocks_cm(skimbin %>% filter(name %in% skim_in$name[skim_in$nil %in% both_nils])) %>% mutate(src = "Skim-BIN (1 Mb)"))
+
+# --- fitted gamma over each simulation = the BC2S2 / BC2S3 expectations (dotted) ---
+f2 <- suppressWarnings(MASS::fitdistr(sim_s2$cm/100, "gamma")$estimate)
+f3 <- suppressWarnings(MASS::fitdistr(sim_s3$cm/100, "gamma")$estimate)
+lab2 <- sprintf("BC2S2 Gamma(k=%.2f, λ=%.1f)", f2["shape"], f2["rate"])
+lab3 <- sprintf("BC2S3 Gamma(k=%.2f, λ=%.1f)", f3["shape"], f3["rate"])
+xs <- seq(0, quantile(callers$cm, 0.98), length.out = 400)
+gammas <- bind_rows(
+  tibble(cm = xs, F = pgamma(xs/100, f2["shape"], f2["rate"]), expectation = lab2),
+  tibble(cm = xs, F = pgamma(xs/100, f3["shape"], f3["rate"]), expectation = lab3))
+pal <- c("Skim-RTI (r=5)" = "purple4", "BrB-RTI (r=7, ws)" = "orange3", "Skim-BIN (1 Mb)" = "seagreen4")
+pal[lab2] <- "firebrick"; pal[lab3] <- "royalblue3"
+
+ggplot() +
+  stat_ecdf(data = callers, aes(cm, colour = src), linewidth = 0.9) +
+  geom_line(data = gammas, aes(cm, F, colour = expectation), linetype = "dotted", linewidth = 1) +
+  scale_colour_manual(values = pal, name = NULL,
+                      breaks = c("Skim-RTI (r=5)", "BrB-RTI (r=7, ws)", "Skim-BIN (1 Mb)", lab2, lab3)) +
+  coord_cartesian(xlim = c(0, quantile(callers$cm, 0.98))) +
+  labs(x = "donor-segment size (cM)", y = "ECDF",
+       title = "Caller fragment-size distributions vs the BC2S2 and BC2S3 expectations",
+       subtitle = "solid = genotyping methods | dotted = fitted-gamma expectations | both-platforms NIL set") +
+  theme(legend.position = c(0.72, 0.30), legend.background = element_rect(fill = "white", colour = NA))
 ```
 
 ## Verdict
