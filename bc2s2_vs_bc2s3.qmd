@@ -118,13 +118,34 @@ ggplot(sf, aes(HET)) +
        subtitle = "red = BC2S2, blue dashed = BC2S3, black dotted = observed mean")
 ```
 
+```{r obs-alt, fig.width=7.5, fig.height=4}
+ggplot(sf, aes(ALT)) +
+  geom_histogram(bins = 40, fill = "grey82", colour = "grey55", linewidth = 0.2) +
+  geom_vline(xintercept = exp_bc2s2$ALT_hom, colour = "firebrick", linewidth = 1) +
+  geom_vline(xintercept = exp_bc2s3$ALT_hom, colour = "royalblue3", linewidth = 1, linetype = "dashed") +
+  geom_vline(xintercept = mean(sf$ALT), colour = "black", linewidth = 1, linetype = "dotted") +
+  annotate("text", x = mean(sf$ALT), y = Inf, label = sprintf("observed mean (%.3f)", mean(sf$ALT)),
+           colour = "black", hjust = -0.05, vjust = 1.5) +
+  annotate("text", x = exp_bc2s2$ALT_hom, y = Inf, label = "BC2S2 (0.0938)", colour = "firebrick",
+           hjust = -0.05, vjust = 1.5) +
+  annotate("text", x = exp_bc2s3$ALT_hom, y = Inf, label = "BC2S3 (0.1094)", colour = "royalblue3",
+           hjust = -0.05, vjust = 3.0) +
+  coord_cartesian(xlim = c(0, max(quantile(sf$ALT, 0.98), 0.13))) +
+  labs(x = "per-sample genome homozygous-donor (ALT) fraction", y = "samples",
+       title = "Observed skim homozygous-donor fraction vs the two single-locus expectations",
+       subtitle = "red = BC2S2, blue dashed = BC2S3, black dotted = observed mean")
+```
+
 **Read.** Observed HET (mean `r round(mean(sf$HET),3)`, median `r round(median(sf$HET),3)`) sits
 on the **BC2S2** value (0.0625) and far from BC2S3 (0.0312) — consistent with the 6-plant bulk
 recovering the S2 parent. Two confounds sit *on top* of the generation signal and do not change
 the call:
 
 - **Total donor dosage is `r round(mean(sf$dosage),3)`, well below the model's 0.125** → directional
-  **selection against donor** (temperate-adaptation selection purging teosinte alleles).
+  **selection against donor** (temperate-adaptation selection purging teosinte alleles). The
+  homozygous-donor plot above shows this directly: observed ALT (mean `r round(mean(sf$ALT),3)`)
+  sits well *left* of both generations' expectations (BC2S2 0.094, BC2S3 0.109) — so the depletion
+  falls on the homozygous-donor class, while HET is retained at the BC2S2 level.
 - **HET:ALT ≈ `r round(mean(sf$HET)/mean(sf$ALT),1)`:1, vs BC2S2's `r round(exp_bc2s2$HET/exp_bc2s2$ALT_hom,2)`:1**
   → **het excess** (overdominance / heterozygote-biased retention) beyond any neutral selfing
   generation. (B73/Purple check samples, included here, only *lower* HET, so they make this a
