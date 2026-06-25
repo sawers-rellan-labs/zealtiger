@@ -303,6 +303,66 @@ ggplot(called, aes(cm, fill = src)) +
         legend.background = element_rect(fill = "white", colour = NA))
 ```
 
+## Per-method gamma fits
+
+Each caller's own cM fragment-size distribution, with a **gamma fit by MLE to that caller's
+data** (its own $k,\lambda$ in the legend) — not the simulation-derived law. This reads off the
+*effective* shape and rate each method's calls imply, and how well a gamma describes each.
+
+```{r per-method-fit, fig.width=7.5, fig.height=8}
+fit_gamma <- function(x) {
+  f <- suppressWarnings(MASS::fitdistr(x / 100, "gamma")$estimate)   # fit in Morgans
+  tibble(k = unname(f["shape"]), lam = unname(f["rate"]))
+}
+fits <- called %>% group_by(src) %>% group_modify(~ fit_gamma(.x$cm)) %>% ungroup() %>%
+  left_join(called %>% group_by(src) %>%
+              summarise(xmax = quantile(cm, 0.99), mean_cm = mean(cm), .groups = "drop"),
+            by = "src") %>%
+  mutate(lab = sprintf("%s — Gamma(k=%.2f, λ=%.1f/M, mean %.0f cM)", src, k, lam, mean_cm))
+
+mle_curves <- fits %>% group_by(src, lab) %>%
+  reframe(cm = seq(0, xmax, length.out = 300), d = dgamma(cm / 100, k, lam) / 100)
+
+src_col <- c("Skim-RTI (r=5)" = "purple4", "BrB-RTI (r=7, ws)" = "orange3",
+             "Skim-BIN (1 Mb)" = "seagreen4")
+pal_lab <- setNames(src_col[fits$src], fits$lab)
+
+ggplot(called, aes(cm)) +
+  geom_histogram(aes(y = after_stat(density)), bins = 30,
+                 fill = "grey82", colour = "grey55", linewidth = 0.2) +
+  geom_line(data = mle_curves, aes(cm, d, colour = lab), linewidth = 1) +
+  facet_wrap(~ src, ncol = 1, scales = "free") +
+  scale_colour_manual(values = pal_lab, name = "MLE gamma fit (per method)") +
+  labs(x = "donor-segment size (cM)", y = "density",
+       title = "Per-method cM fragment-size distributions with their own MLE gamma fit") +
+  theme(legend.position = "bottom") +
+  guides(colour = guide_legend(ncol = 1))
+```
+
+Each method's own MLE gamma vs (i) **its own data** — does a gamma describe its shape at all
+— and (ii) the **sim-derived benchmark gamma** — how far its calls sit from the neutral model.
+The simulation row is the reference (its own gamma *is* the benchmark, so both KS columns equal
+its self-fit floor).
+
+```{r per-method-ks-table}
+bench_k <- k; bench_lam <- lam   # sim-derived benchmark gamma (from Part 2)
+fit_row <- function(x, label) {
+  f <- suppressWarnings(MASS::fitdistr(x / 100, "gamma")$estimate)
+  tibble(method = label, n = length(x),
+         k = unname(f["shape"]), lambda = unname(f["rate"]), mean_cM = mean(x),
+         D_own_gamma = suppressWarnings(ks.test(x/100, "pgamma", shape = f["shape"], rate = f["rate"])$statistic),
+         D_vs_sim_gamma = suppressWarnings(ks.test(x/100, "pgamma", shape = bench_k, rate = bench_lam)$statistic))
+}
+ks_methods <- bind_rows(
+  fit_row(sim_cm$cm, "Simulation (n=1500)"),
+  called %>% group_split(src) %>%
+    map_dfr(~ fit_row(.x$cm, .x$src[1]))) %>%
+  mutate(across(c(k, lambda, mean_cM), ~round(., 2)),
+         across(starts_with("D_"), ~round(., 3)))
+knitr::kable(ks_methods,
+  caption = "Per-method MLE gamma fit and KS distance, vs the method's own gamma and vs the sim-derived benchmark gamma (k=1.15, λ=4.72/Morgan).")
+```
+
 # Interpretation & caveats
 
 - **The derivation is validated:** the BC2S3 recombination model predicts a near-exponential
