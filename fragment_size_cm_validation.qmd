@@ -1,0 +1,316 @@
+---
+title: "Fragment-size distribution in cM — theory and cross-caller validation"
+author: "Fausto Rodríguez-Zapata"
+date: "`r Sys.Date()`"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    code-fold: show
+    df-print: paged
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+params:
+  skim_calls: "data/rtiger_50K/calls_taxa_r5.csv"                                       # Skim-RTI, per-taxon r=5
+  brb_taxa:   "results/sim_calibration/brbseq_taxa_r7_wideseq/calls_common_schema.csv"   # BrB-RTI r=7, wideseq-filtered, per teosinte species
+  skimbin:    "results/sim_calibration/skimbin_calls/calls_common_schema.csv"           # Skim-BIN: BzeaSeq 1 Mb-bin GMM-HMM (same skim reads as Skim-RTI)
+  corr:       "results/sample_correspondence/skim_brbseq_correspondence.csv"            # curated NIL pairs (pedigree-matched)
+  nil_seg:    "results/nil_segments.csv"                                                # n=1500 BC2S3 simulation segments — carries BOTH cM and Mb endpoints
+  map:        "results/maize_map_v5_clean.rds"                                          # consensus Marey map: (chr, bp, cm) anchors, B73 NAM v5
+---
+
+**Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
+
+The [introgression-size panel](skim_brbseq_skimbin.html) compares the three callers
+(Skim-RTI / BrB-RTI / Skim-BIN) against the n=1500 BC2S3 simulation **in megabases**. The
+Mb fragment-size law has **no closed form**: it is the genetic-distance (cM) law pushed
+through the cM→Mb change of variables $x_{\text{Mb}}=\int dx_{\text{cM}}/\rho(x)$, and the
+local recombination rate $\rho(x)=d\text{cM}/d\text{Mb}$ is an *empirical, position-dependent*
+lookup (strong pericentromeric suppression, hot arms) — so the simulation is doing Monte-Carlo
+integration over the map. **In cM the segment-length law is analytic.** This document
+
+1. **derives** the theoretical donor-segment-size distribution in cM from the BC2S3
+   recombination model,
+2. confirms the derived law reproduces the simcross output (its own cM segment lengths), and
+3. uses it as a **map-free reference** to validate the three callers, after converting their
+   called Mb segments back to cM through the consensus map.
+
+> **Why this is a *validation* panel, not the calibration metric.** A caller's resolution
+> limit lives in Mb (Skim-BIN's hard 1 Mb floor; RTIGER's marker-space rigidity `r`).
+> Converting to cM turns a clean Mb floor into a *position-dependent* cM floor (≈0 cM at a
+> centromere, tens of cM on an arm), entangling caller resolution with map non-linearity. So
+> the [Mb panel](skim_brbseq_skimbin.html) stays the `r`-calibration space; this cM panel
+> tests whether the *population's* fragment law matches the analytic recombination
+> expectation, with the map entering **once, deterministically, on the data side**. It leans
+> on **conserved marker order** relative to the consensus map — load-bearing here, since any
+> introgression with local rearrangement makes $\rho(x)$ wrong and biases $\Delta$cM.
+
+# Part 1 — The theoretical fragment-size distribution in cM
+
+## The crossover process (Haldane)
+
+Under Haldane's no-interference model, crossovers along a chromosome form a **homogeneous
+Poisson process in genetic distance**: 1 Morgan = 1 expected crossover, and the count in any
+interval of length $\ell$ Morgans is $\text{Poisson}(\ell)$. Consequently the distance to the
+next crossover is **exponential**,
+
+$$P(D > x) = e^{-x}, \qquad x \text{ in Morgans},$$
+
+with mean 1 Morgan, $\text{CV}=1$, skewness $=2$ — the most-skewed member of the gamma family
+($\text{Gamma}(1)$). Genetic distance is literally the scale parameter: it *is* the expected
+number of crossovers, so it plays the role temperature plays for a Maxwell–Boltzmann speed.
+
+## From crossovers to junctions: superposition over meioses
+
+A donor↔recurrent boundary ("junction") on the final NIL haplotype is a crossover — laid down
+in *some* meiosis of the NIL's ancestry — that happened to fall where one parental haplotype
+carried donor ancestry and the other recurrent. If the NIL haplotype descends through $g$
+meioses since the donor haplotype was intact, and each meiosis sprinkles an independent
+Poisson($1/$Morgan) crossover field, the **superposition** of those $g$ fields is itself
+Poisson at rate $g$ per Morgan. (Exact under Haldane; and by the Palm–Khinchin superposition
+theorem, the pooled process tends to Poisson *even with per-meiosis interference*, because
+independent point processes superpose toward Poisson.)
+
+If every crossover were a junction, junction density would be $g$/Morgan and donor tracts would
+be $\text{Exp}(g)$. The correction is that **only crossovers in still-heterozygous (donor/recurrent)
+territory create a D↔R junction**, and that territory shrinks each generation as the donor
+fraction is diluted. So the effective junction rate is $\lambda \le g$.
+
+## Counting meioses in the BC2S3 pedigree
+
+The simulated scheme (`R/02_simulate.R`, `bc2s3_pedigree()`) is two backcrosses to the
+recurrent parent then three generations of selfing; the donor founder (id 2) is inbred, so the
+donor haplotype enters the F1 (id 3) **intact** and is first broken in the F1's meiosis. Tracing
+one homolog of the final NIL (id 8) back to that intact donor haplotype crosses **five**
+meioses:
+
+| # | meiosis (gametogenesis in) | produces | territory still D/R |
+|---|---|---|---|
+| 1 | F1 (id 3) | BC1 (id 4) | **whole genome** (F1 het everywhere) |
+| 2 | BC1 (id 4) | BC2 (id 5) | donor regions only (~50% of remaining) |
+| 3 | BC2 (id 5) | S1  (id 6) | shrinking donor regions |
+| 4 | S1  (id 6) | S2  (id 7) | shrinking donor regions |
+| 5 | S2  (id 7) | S3  (id 8) = NIL | shrinking donor regions |
+
+So $g = 5$. The naïve Haldane prediction is therefore $\text{Exp}(5)$ per Morgan — donor tracts
+with mean $1/5$ Morgan $= 20$ cM. Because junction-creating territory shrinks after meiosis 1,
+the *effective* rate is a bit below 5.
+
+## The donor-tract length distribution
+
+Two quantities, distinguished by the **inspection paradox**:
+
+- **Genome-wide tracts** (a randomly chosen donor segment, no selection): by renewal theory the
+  length is $\text{Exp}(\lambda)$, mean $1/\lambda$ Morgans.
+- **The tract covering a fixed target locus** (a selected NIL around a target gene): *length-biased*
+  → left flank + right flank, each $\text{Exp}(\lambda)$, so $T^\star \sim \text{Gamma}(2,\lambda)$,
+  mean $2/\lambda$, skewness $\sqrt2\approx1.41$. This is the $\text{Gamma}(2)$ "segment around a
+  locus" case.
+
+These simulations are **unselected**, so the **genome-wide** quantity applies — the law sits near
+the exponential end, not at $\text{Gamma}(2)$.
+
+## Three departures from the clean exponential
+
+The simulated segments are not exactly $\text{Exp}(5)$ for three reasons, each pushing in a
+definite direction:
+
+1. **Union of the two haplotypes.** A simulated "segment" is the *union* of donor intervals
+   across the mat and pat homologs (a region is introgressed if *either* carries donor). Unions
+   merge nearby tracts and lengthen them → mean up, and the shortest tracts are absorbed → **shape
+   $k>1$**.
+2. **Interference ($m=10$).** simcross uses the Stahl chi-square model with $m=10,\,p=0$ (a
+   crossover at every 11th point of a Poisson process) — strong positive interference, which
+   *regularizes* spacing within each meiosis → $\text{CV}<1$, skewness $<2$, again **$k>1$**.
+3. **Shrinking heterozygous territory.** Only meiosis 1 acts genome-wide; later meioses add
+   junctions only in the dwindling donor neighborhoods → **effective rate $\lambda<g=5$**.
+
+## The theoretical distribution we will test against
+
+Net: the donor-tract length in cM is well-described by a **gamma law**
+
+$$T \sim \text{Gamma}(k,\lambda), \qquad k \gtrsim 1,\ \lambda \lesssim 5\ \text{Morgan}^{-1},$$
+
+**bracketed below by $\text{Exp}(5)$** (no interference, no union, full rate) and **above by
+$\text{Gamma}(2)$** (the locus-anchored / heavily size-biased extreme). Part 2 estimates
+$(k,\lambda)$ from the simulation and checks both brackets; Part 3 uses the fitted analytic law
+plus the simulation's own cM lengths as the reference for the callers.
+
+```{r setup}
+library(tidyverse)
+theme_set(theme_bw())
+
+nil_seg <- read_csv(params$nil_seg, show_col_types = FALSE)
+# simulated segments carry BOTH endpoints; the cM length is exact (no map needed) — this IS the
+# generative model's realization of the law derived above.
+sim_cm <- nil_seg %>% transmute(cm = end_cm - start_cm, M = (end_cm - start_cm) / 100)
+
+g  <- 5                                   # meioses on the donor lineage (pedigree count)
+mu <- mean(sim_cm$cm)                     # empirical mean (cM)
+
+cat(sprintf("sim cM segments: n=%d | mean %.2f  median %.2f  sd %.2f  CV %.3f  skew %.3f\n",
+            nrow(sim_cm), mu, median(sim_cm$cm), sd(sim_cm$cm),
+            sd(sim_cm$cm)/mu, mean(((sim_cm$cm - mu)/sd(sim_cm$cm))^3)))
+```
+
+# Part 2 — Does the derived law reproduce the simulation?
+
+We fit $\text{Gamma}(k,\lambda)$ to the simulation's own cM segment lengths by maximum
+likelihood, and overlay the two analytic brackets, $\text{Exp}(5)$ and the mean-matched
+$\text{Gamma}(2)$.
+
+```{r fit-gamma}
+fit <- MASS::fitdistr(sim_cm$M, "gamma")           # in Morgans
+k   <- unname(fit$estimate["shape"])
+lam <- unname(fit$estimate["rate"])                # per Morgan
+ks_gamma <- suppressWarnings(ks.test(sim_cm$M, "pgamma", shape = k, rate = lam)$statistic)
+ks_exp5  <- suppressWarnings(ks.test(sim_cm$M, "pexp",  rate = g)$statistic)
+ks_gam2  <- suppressWarnings(ks.test(sim_cm$M, "pgamma", shape = 2, rate = 2/mean(sim_cm$M))$statistic)
+
+cat(sprintf("Gamma MLE (cM): shape k=%.3f  rate lambda=%.3f /Morgan  -> mean %.2f cM, CV %.3f, skew %.3f\n",
+            k, lam, 100*k/lam, 1/sqrt(k), 2/sqrt(k)))
+cat(sprintf("KS vs derived Gamma(k,lambda): D=%.4f   [Exp(5): D=%.4f | Gamma(2): D=%.4f]\n",
+            ks_gamma, ks_exp5, ks_gam2))
+```
+
+The fitted **$k\approx`r round(k,2)`$, $\lambda\approx`r round(lam,2)`$/Morgan** lands exactly
+where the derivation predicts: just above the exponential ($k>1$, from interference + the union)
+with a rate a little under $g=5$ (shrinking het territory). It fits the simulation tightly
+(KS $D\approx`r round(ks_gamma,3)`$), while both brackets — $\text{Exp}(5)$ and $\text{Gamma}(2)$
+— are rejected, confirming the segment law sits *between* them, near the exponential end.
+
+```{r plot-theory, fig.width=8, fig.height=4.6}
+xs <- seq(0, quantile(sim_cm$cm, 0.995), length.out = 400)
+curves <- bind_rows(
+  tibble(cm = xs, d = dgamma(xs/100, shape = k, rate = lam)/100,
+         curve = sprintf("derived Gamma(k=%.2f, λ=%.1f)", k, lam)),
+  tibble(cm = xs, d = dexp(xs/100, rate = g)/100,           curve = "Exp(5)  [lower bracket]"),
+  tibble(cm = xs, d = dgamma(xs/100, shape = 2, rate = 2/mean(sim_cm$M))/100,
+         curve = "Gamma(2)  [upper bracket]"))
+
+ggplot() +
+  geom_histogram(data = sim_cm, aes(cm, after_stat(density)), bins = 40,
+                 fill = "grey80", colour = "grey55", linewidth = 0.2) +
+  geom_line(data = curves, aes(cm, d, colour = curve, linetype = curve), linewidth = 0.9) +
+  scale_colour_manual(values = c("black", "firebrick", "royalblue3")) +
+  scale_linetype_manual(values = c("solid", "dashed", "dashed")) +
+  labs(x = "donor-segment size (cM)", y = "density", colour = NULL, linetype = NULL,
+       title = "Simulated cM segment lengths vs the derived gamma law",
+       subtitle = sprintf("n=%d segments from the n=1500 BC2S3 sim | derived Gamma KS D=%.3f",
+                          nrow(sim_cm), ks_gamma)) +
+  theme(legend.position = c(0.72, 0.8), legend.background = element_rect(fill = "white", colour = NA))
+```
+
+# Part 3 — cM-space validation of the three callers
+
+Convert each caller's **called Mb segments back to cM** by evaluating the consensus cumulative
+map at the segment endpoints and differencing,
+$\Delta\text{cM}=M(\text{end\_bp})-M(\text{start\_bp})$ — a *forward* map lookup (per-chromosome
+monotone linear interpolation), no inversion. Then compare each caller's cM distribution to the
+**map-free reference**: the derived $\text{Gamma}(k,\lambda)$ and, equivalently, the
+simulation's own cM lengths.
+
+```{r load-calls}
+skim    <- read_csv(params$skim_calls, show_col_types = FALSE)
+brb     <- read_csv(params$brb_taxa,   show_col_types = FALSE)
+skimbin <- read_csv(params$skimbin,    show_col_types = FALSE)
+corr    <- read_csv(params$corr, show_col_types = FALSE) %>% filter(type == "NIL")
+
+# scope = full set of NILs called on BOTH platforms (mirrors the Mb intro-size panel)
+brb_in  <- corr %>% separate_rows(brbseq_prefix, sep = ";") %>%
+  transmute(name = brbseq_prefix, nil = pedigree) %>% filter(name %in% brb$name)
+skim_in <- corr %>% separate_rows(skim_prefix, sep = ";") %>%
+  transmute(name = skim_prefix, nil = pedigree) %>% filter(name %in% skim$name)
+both_nils <- intersect(brb_in$nil, skim_in$nil)
+
+# consensus map -> per-chr monotone Mb->cM interpolator (dedup anchors that share a bp)
+mp <- readRDS(params$map) %>% group_by(chr, bp) %>% summarise(cm = mean(cm), .groups = "drop")
+mb2cm <- function(chr, bp) {
+  out <- numeric(length(bp))
+  for (cc in unique(chr)) {
+    i <- chr == cc; a <- mp %>% filter(chr == cc) %>% arrange(bp)
+    out[i] <- approx(a$bp, a$cm, xout = bp[i], rule = 2)$y   # rule=2 clamps endpoints past the last anchor
+  }
+  out
+}
+
+# donor block = maximal run of donor state (HET or ALT) within (sample, chromosome); size in cM
+donor_blocks_cm <- function(seg) seg %>% arrange(name, chr, start_bp) %>% group_by(name, chr) %>%
+  mutate(run = cumsum(c(TRUE, diff(state > 0) != 0)), donor = state > 0) %>% filter(donor) %>%
+  group_by(name, chr, run) %>%
+  summarise(s = min(start_bp), e = max(end_bp), .groups = "drop") %>%
+  mutate(cm = mb2cm(chr, e) - mb2cm(chr, s)) %>% filter(cm > 0)
+
+skim_b <- donor_blocks_cm(skim    %>% filter(name %in% skim_in$name[skim_in$nil %in% both_nils])) %>% mutate(src = "Skim-RTI (r=5)")
+brb_b  <- donor_blocks_cm(brb     %>% filter(name %in% brb_in$name [brb_in$nil  %in% both_nils])) %>% mutate(src = "BrB-RTI (r=7, ws)")
+bin_b  <- donor_blocks_cm(skimbin %>% filter(name %in% skim_in$name[skim_in$nil %in% both_nils])) %>% mutate(src = "Skim-BIN (1 Mb)")
+called <- bind_rows(skim_b, brb_b, bin_b)
+
+cat(sprintf("NILs on both platforms: %d | Skim-RTI %d | BrB-RTI %d | Skim-BIN %d blocks\n",
+            length(both_nils), nrow(skim_b), nrow(brb_b), nrow(bin_b)))
+```
+
+```{r ks-table}
+ks_vs <- function(x) tibble(
+  n          = length(x),
+  median_cM  = median(x),
+  mean_cM    = mean(x),
+  D_vs_Gamma = suppressWarnings(ks.test(x/100, "pgamma", shape = k, rate = lam)$statistic),
+  D_vs_sim   = suppressWarnings(ks.test(x, sim_cm$cm)$statistic))
+
+ks_summary <- called %>% group_by(src) %>% group_modify(~ ks_vs(.x$cm)) %>%
+  mutate(across(c(median_cM, mean_cM), ~round(.,2)), across(starts_with("D_"), ~round(.,3)))
+knitr::kable(ks_summary, caption = "Caller cM segment distributions vs the derived Gamma and the n=1500 sim (KS D).")
+```
+
+```{r plot-ecdf, fig.width=8, fig.height=5}
+xs2 <- seq(0, quantile(c(called$cm, sim_cm$cm), 0.99), length.out = 400)
+ref <- tibble(cm = xs2, F = pgamma(xs2/100, shape = k, rate = lam))
+
+ggplot(called, aes(cm, colour = src)) +
+  stat_ecdf(linewidth = 0.9) +
+  geom_line(data = ref, aes(cm, F), colour = "black", linewidth = 1.0, linetype = "dashed",
+            inherit.aes = FALSE) +
+  scale_colour_manual(values = c("Skim-RTI (r=5)" = "purple4", "BrB-RTI (r=7, ws)" = "orange3",
+                                 "Skim-BIN (1 Mb)" = "seagreen4")) +
+  coord_cartesian(xlim = c(0, quantile(called$cm, 0.99))) +
+  labs(x = "donor-segment size (cM)", y = "ECDF", colour = NULL,
+       title = "Caller cM segment distributions vs the derived analytic law",
+       subtitle = sprintf("dashed black = derived Gamma(k=%.2f, λ=%.1f) | %d NILs on both platforms",
+                          k, lam, length(both_nils))) +
+  theme(legend.position = c(0.78, 0.3), legend.background = element_rect(fill = "white", colour = NA))
+```
+
+```{r plot-density, fig.width=8, fig.height=5}
+ggplot(called, aes(cm, fill = src)) +
+  geom_histogram(aes(y = after_stat(density)), position = "identity", alpha = 0.45, bins = 30) +
+  geom_line(data = curves %>% filter(grepl("derived", curve)), aes(cm, d), colour = "black",
+            linewidth = 0.9, inherit.aes = FALSE) +
+  scale_fill_manual(values = c("Skim-RTI (r=5)" = "purple4", "BrB-RTI (r=7, ws)" = "orange3",
+                               "Skim-BIN (1 Mb)" = "seagreen4")) +
+  scale_x_log10() +
+  labs(x = "donor-segment size (cM, log scale)", y = "density", fill = NULL,
+       title = "Caller cM segment-size distributions vs the derived law",
+       subtitle = "black = derived Gamma (the map-free analytic reference)") +
+  theme(legend.position = c(0.8, 0.8), legend.background = element_rect(fill = "white", colour = NA))
+```
+
+# Interpretation & caveats
+
+- **The derivation is validated:** the BC2S3 recombination model predicts a near-exponential
+  gamma ($k\gtrsim1$, $\lambda\lesssim5$/Morgan), and the simulation's own cM lengths match it to
+  KS $D\approx`r round(ks_gamma,3)`$ — so the analytic law is a faithful, map-free stand-in for
+  the n=1500 reference, now available in closed form.
+- **Caller comparison in cM** (table above) mirrors the Mb panel but against the analytic
+  reference. Deviations read the same way: a caller that over-fragments donor blocks shifts mass
+  to short cM; one that under-resolves (Skim-BIN's 1 Mb bins) loses the short tail.
+- **Conserved marker order is load-bearing.** The cM conversion uses the consensus $\rho(x)$;
+  for any introgression with local rearrangement the map is wrong and $\Delta$cM is biased. This
+  assumption is *heavier* here than in the Mb panel.
+- **Pericentromeric pile-up.** Recombination deserts map large Mb spans to ≈0 cM, so a chunk of
+  centromeric blocks collapse near cM 0 — map physics, not caller behavior.
+- **Keep Mb for tuning `r`.** The caller resolution limit is defined in Mb; cM smears it through
+  the map. This panel is the *validation* view; the [Mb panel](skim_brbseq_skimbin.html) remains
+  the calibration space. Agreement across both is the robustness check.
