@@ -24,3 +24,11 @@
 
 /.quarto/
 **/*.quarto_ipynb
+
+# Quarto render artifacts: freeze/exec caches (regenerated) and the stray per-figure
+# _files dirs from embed-resources docs (self-contained HTML needs no sidecar dir).
+# NB: docs/sample_correspondence_files/ is intentionally tracked (non-embed doc), so
+# only the specific bc2s2 _files dirs are ignored, not a blanket *_files/.
+*_cache/
+/bc2s2_vs_bc2s3_files/
+/docs/bc2s2_vs_bc2s3_files/
