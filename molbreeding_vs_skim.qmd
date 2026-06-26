@@ -13,12 +13,12 @@ execute:
   warning: false
   message: false
 params:
-  mb_calls:   "data/molbreeding_gbts/SNP_wsfilt/calls_common_schema.csv"  # target-seq real counts, wideseq-filtered, r=8, all 16
-  mb_full:    "data/molbreeding_gbts/SNP/calls_common_schema.csv"         # target-seq real counts, all 20,347 v5 SNPs, r=8
+  mb_calls:   "data/molbreeding_targetseq/SNP_wsfilt/calls_common_schema.csv"  # target-seq real counts, wideseq-filtered, r=8, all 16
+  mb_full:    "data/molbreeding_targetseq/SNP/calls_common_schema.csv"         # target-seq real counts, all 20,347 v5 SNPs, r=8
   skim_calls: "data/rtiger_50K/calls_taxa_r8.csv"                         # skim, per-taxon r=8
   brb_calls:  "data/brbseq/calls_common_schema.csv"                       # BRB-seq 3' RNA-seq real counts, r=8 (no wsfilt)
   sample_map: "data/molbreeding_45k_sample_map.tsv"
-  mb_counts:  "data/molbreeding_gbts/SNP_wsfilt/counts"                   # filtered marker grid (RTIGER 6-col)
+  mb_counts:  "data/molbreeding_targetseq/SNP_wsfilt/counts"                   # filtered marker grid (RTIGER 6-col)
   sim_seg:    "results/rtiger_45k_benchmark/truth_segments.csv"           # consensus-map simulation (NULL)
   seqlengths: "data/rtiger_50K/seqlengths.csv"
 ---
@@ -129,19 +129,19 @@ should read ≈ 0 — a built-in validity test that needs no external truth.
 dosage <- function(seg) seg %>% mutate(len = end_bp - start_bp + 1) %>%
   group_by(name) %>% summarise(dosage = sum(len * state/2) / sum(len), .groups = "drop")
 checks <- c("PN4_SID326", "PN6_SID576")
-dose <- dosage(mb) %>% dplyr::rename(gbts_wsfilt = dosage) %>%
-  left_join(dosage(mb_full) %>% dplyr::rename(gbts_full = dosage), by = "name") %>%
+dose <- dosage(mb) %>% dplyr::rename(molb_wsfilt = dosage) %>%
+  left_join(dosage(mb_full) %>% dplyr::rename(molb_full = dosage), by = "name") %>%
   left_join(dosage(skim)    %>% dplyr::rename(skim = dosage),       by = "name") %>%
   left_join(dosage(brb)     %>% dplyr::rename(brbseq = dosage),     by = "name") %>%
-  mutate(is_B73_check = name %in% checks) %>% arrange(gbts_full)
+  mutate(is_B73_check = name %in% checks) %>% arrange(molb_full)
 dose
 cat(sprintf("mean donor dosage — MolB-RTI full %.3f | MolB-RTI wsfilt %.3f | Skim-RTI (shared) %.3f | BrB-RTI (shared) %.3f\n",
-            mean(dose$gbts_full), mean(dose$gbts_wsfilt),
+            mean(dose$molb_full), mean(dose$molb_wsfilt),
             mean(dose$skim[!is.na(dose$skim)]),
             mean(dose$brbseq[!is.na(dose$brbseq)])))
 cat(sprintf("B73-bulk checks dosage (MolB-RTI full): %s — expect ≈ 0\n",
             paste(sprintf("%s=%.3f", checks,
-                          dose$gbts_full[match(checks, dose$name)]), collapse = ", ")))
+                          dose$molb_full[match(checks, dose$name)]), collapse = ", ")))
 ```
 
 ## State on the common grid
@@ -149,7 +149,7 @@ cat(sprintf("B73-bulk checks dosage (MolB-RTI full): %s — expect ≈ 0\n",
 ```{r state-grid}
 paired <- map_dfr(samples, function(s) {
   a <- state_at(mb, s); k <- state_at(skim, s); ok <- !is.na(a) & !is.na(k)
-  tibble(name = s, gbts = a[ok], skim = k[ok])
+  tibble(name = s, molb = a[ok], skim = k[ok])
 })
 ```
 
@@ -158,7 +158,7 @@ paired <- map_dfr(samples, function(s) {
 Rows = MolB-RTI state (wsfilt, r=8), cols = Skim-RTI (per-taxon r=8); cell = count (row %).
 
 ```{r confusion}
-cm <- table(gbts = factor(paired$gbts, 0:2), skim = factor(paired$skim, 0:2))
+cm <- table(molb = factor(paired$molb, 0:2), skim = factor(paired$skim, 0:2))
 overall <- sum(diag(cm)) / sum(cm)
 prop <- sweep(cm, 1, rowSums(cm), "/")
 disp <- matrix(sprintf("%d (%.1f%%)", cm, 100*prop), nrow = 3,
@@ -166,11 +166,11 @@ disp <- matrix(sprintf("%d (%.1f%%)", cm, 100*prop), nrow = 3,
                                c("0 recurrent","1 het","2 donor")))
 knitr::kable(disp, align = "r",
              caption = sprintf("MolB-RTI (rows) vs Skim-RTI (cols): count (row %%). Overall concordance %.3f.", overall))
-dp <- paired$gbts %in% c(1, 2)
+dp <- paired$molb %in% c(1, 2)
 cat(sprintf("MolB-RTI donor-present markers: %d | Skim-RTI also donor-present: %.1f%%\n",
             sum(dp), 100*mean(paired$skim[dp] %in% c(1,2))))
 cat(sprintf("MolB-RTI homozygous-donor markers: %d | Skim-RTI also hom-donor: %.1f%%\n",
-            sum(paired$gbts == 2), 100*mean(paired$skim[paired$gbts == 2] == 2)))
+            sum(paired$molb == 2), 100*mean(paired$skim[paired$molb == 2] == 2)))
 ```
 
 ## BrB-RTI cross-check (3′ RNA-seq, shared PN4 NILs)
@@ -184,15 +184,15 @@ qualitative read of donor presence, not a segment-resolution caller.
 paired_b <- map_dfr(brb_samples, function(s) {
   g <- state_at(mb, s); r <- state_at(brb, s); k <- state_at(skim, s)
   ok <- !is.na(g) & !is.na(r)
-  tibble(name = s, gbts = g[ok], brbseq = r[ok],
+  tibble(name = s, molb = g[ok], brbseq = r[ok],
          skim = if (s %in% samples) k[ok] else NA_integer_)
 })
 ```
 
 Rows = BrB-RTI state, cols = MolB-RTI (wsfilt, r=8); cell = count (row %).
 
-```{r brb-vs-gbts}
-cm_bg <- table(brbseq = factor(paired_b$brbseq, 0:2), gbts = factor(paired_b$gbts, 0:2))
+```{r brb-vs-molb}
+cm_bg <- table(brbseq = factor(paired_b$brbseq, 0:2), molb = factor(paired_b$molb, 0:2))
 prop  <- sweep(cm_bg, 1, rowSums(cm_bg), "/")
 disp  <- matrix(sprintf("%d (%.1f%%)", cm_bg, 100*prop), nrow = 3,
                 dimnames = list(`BrB-RTI \\ MolB-RTI` = c("0 recurrent","1 het","2 donor"),
@@ -200,12 +200,12 @@ disp  <- matrix(sprintf("%d (%.1f%%)", cm_bg, 100*prop), nrow = 3,
 knitr::kable(disp, align = "r",
              caption = sprintf("BrB-RTI (rows) vs MolB-RTI (cols): count (row %%). Overall concordance %.3f.",
                                sum(diag(cm_bg))/sum(cm_bg)))
-dp <- paired_b$gbts %in% c(1, 2)
+dp <- paired_b$molb %in% c(1, 2)
 cat(sprintf("MolB-RTI donor-present markers: %d | BrB-RTI also donor-present: %.1f%%\n",
             sum(dp), 100*mean(paired_b$brbseq[dp] %in% c(1,2))))
 cat(sprintf("BrB-RTI donor-present markers: %d | MolB-RTI also donor-present: %.1f%%\n",
             sum(paired_b$brbseq %in% c(1,2)),
-            100*mean(paired_b$gbts[paired_b$brbseq %in% c(1,2)] %in% c(1,2))))
+            100*mean(paired_b$molb[paired_b$brbseq %in% c(1,2)] %in% c(1,2))))
 ```
 
 Rows = BrB-RTI state, cols = Skim-RTI (per-taxon r=8); cell = count (row %). Restricted
@@ -250,11 +250,11 @@ bind_rows(
 ## Introgression-size distribution
 
 ```{r intro-sizes}
-gbts_b <- donor_blocks(mb_s)   %>% mutate(src = "MolB-RTI (wsfilt, r=8)")
+molb_b <- donor_blocks(mb_s)   %>% mutate(src = "MolB-RTI (wsfilt, r=8)")
 skim_b <- donor_blocks(skim_s) %>% mutate(src = "Skim-RTI (r=8)")
 brb_b  <- donor_blocks(brb_s)  %>% mutate(src = "BrB-RTI (r=8, PN4)")
 sim_b  <- donor_blocks(sim_seg)
-ggplot(bind_rows(gbts_b, skim_b, brb_b), aes(x = size_mb, fill = src)) +
+ggplot(bind_rows(molb_b, skim_b, brb_b), aes(x = size_mb, fill = src)) +
   geom_histogram(aes(y = after_stat(density)), position = "identity", alpha = 0.5, bins = 30) +
   geom_freqpoly(data = sim_b, aes(x = size_mb, y = after_stat(density)),
                 bins = 30, colour = "grey20", linewidth = 0.9, inherit.aes = FALSE) +
@@ -275,7 +275,7 @@ ggplot(bind_rows(gbts_b, skim_b, brb_b), aes(x = size_mb, fill = src)) +
 tot_gs <- count(paired,   name, name = "tot")
 tot_b  <- count(paired_b, name, name = "tot")
 comp <- bind_rows(
-  paired   %>% transmute(name, platform = "MolB-RTI (wsfilt, r=8)", state = gbts) %>%
+  paired   %>% transmute(name, platform = "MolB-RTI (wsfilt, r=8)", state = molb) %>%
     filter(state %in% c(1,2)) %>% count(name, platform, state) %>% left_join(tot_gs, by = "name"),
   paired   %>% transmute(name, platform = "Skim-RTI (r=8)",        state = skim) %>%
     filter(state %in% c(1,2)) %>% count(name, platform, state) %>% left_join(tot_gs, by = "name"),
@@ -283,7 +283,7 @@ comp <- bind_rows(
     filter(state %in% c(1,2)) %>% count(name, platform, state) %>% left_join(tot_b, by = "name")) %>%
   mutate(pct = n/tot, state = factor(state, c(1,2), c("het","homozygous donor")),
          platform = factor(platform, c("MolB-RTI (wsfilt, r=8)", "Skim-RTI (r=8)", "BrB-RTI (r=8, PN4)")))
-ord <- paired %>% group_by(name) %>% summarise(d = mean(gbts)/2) %>% arrange(d) %>% pull(name)
+ord <- paired %>% group_by(name) %>% summarise(d = mean(molb)/2) %>% arrange(d) %>% pull(name)
 comp$name <- factor(comp$name, levels = ord)
 ggplot(comp, aes(y = name, x = pct, fill = state)) +
   geom_col(position = "stack") + facet_wrap(~ platform) +

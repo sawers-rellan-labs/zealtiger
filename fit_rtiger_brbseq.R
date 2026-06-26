@@ -7,7 +7,7 @@
 # teosinte-introgression NIL on a B73 background, ALT reads at a segregating site
 # are donor (teosinte) reads, so the counts are already in the RTIGER polarity
 # (REF = recurrent/B73, ALT = donor/teosinte) like the SNP50K skim (Source 2) and
-# the MolBreeding GBTS (Source 5) — no wideseq panel filter is applied here, the
+# the MolBreeding target sequencing (Source 5) — no wideseq panel filter is applied here, the
 # brbseq sites are used as-is.
 #
 # Mirrors fit_rtiger_molbreeding.R (real-count pipeline, MLE E-step, ~20x cap) but

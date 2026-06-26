@@ -25,8 +25,8 @@ params:
 
 > Simulation-calibrated ancestry calling for the **SNP50K skim** (Source 2, ~0.4×).
 > Outputs are **isolated** to `results/sim_calibration/`; the frozen direct
-> comparison (`docs/molbreeding_vs_skim.html`) is untouched. The GBTS companion is
-> `gbts_sim_calibration.qmd`; the cross-platform comparison is
+> comparison (`docs/molbreeding_vs_skim.html`) is untouched. The target sequencing companion is
+> `molb_sim_calibration.qmd`; the cross-platform comparison is
 > `molbreeding_vs_skim_calibrated.qmd`. Methodology: `docs/15-rigidity-and-scoring.md`,
 > `docs/13-single-locus-validation.md`, `docs/14-interference-and-rigidity.md`.
 
@@ -181,8 +181,8 @@ deviation (heterozygote excess / donor-homozygote deficit → selection against
 donor homozygotes, residual heterozygosity, or paralog mis-mapping inflating
 het) — the question `docs/12-het-excess-diagnosis.md` takes up. The simulation
 baseline is what makes this separable: without (2) you couldn't tell method bias
-from biology. The GBTS platform reaches the **same** conclusion independently
-(`gbts_sim_calibration.qmd`); the cross-platform comparison is
+from biology. The target sequencing platform reaches the **same** conclusion independently
+(`molb_sim_calibration.qmd`); the cross-platform comparison is
 `molbreeding_vs_skim_calibrated.qmd`.
 
 ## Notes

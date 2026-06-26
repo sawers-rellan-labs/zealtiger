@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Fausto Rodríguez-Zapata">
-<meta name="dcterms.date" content="2026-06-23">
+<meta name="dcterms.date" content="2026-06-26">
 
 <title>Ancestry callers compared — MolB-RTI, Skim-RTI, and Skim-BIN</title>
 <style>
@@ -3509,7 +3509,7 @@ window.onload = function() {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">June 23, 2026</p>
+      <p class="date">June 26, 2026</p>
     </div>
   </div>
   
@@ -3551,8 +3551,8 @@ window.onload = function() {
 <span id="cb1-14"><a href="#cb1-14" aria-hidden="true" tabindex="-1"></a><span class="co"># per-sample donor dosage (bp-weighted state/2), used to order the lines</span></span>
 <span id="cb1-15"><a href="#cb1-15" aria-hidden="true" tabindex="-1"></a>dosage <span class="ot">&lt;-</span> <span class="cf">function</span>(seg) seg <span class="sc">%&gt;%</span> <span class="fu">mutate</span>(<span class="at">len =</span> end_bp <span class="sc">-</span> start_bp <span class="sc">+</span> <span class="dv">1</span>) <span class="sc">%&gt;%</span></span>
 <span id="cb1-16"><a href="#cb1-16" aria-hidden="true" tabindex="-1"></a>  <span class="fu">group_by</span>(name) <span class="sc">%&gt;%</span> <span class="fu">summarise</span>(<span class="at">d =</span> <span class="fu">sum</span>(len <span class="sc">*</span> state<span class="sc">/</span><span class="dv">2</span>) <span class="sc">/</span> <span class="fu">sum</span>(len), <span class="at">.groups =</span> <span class="st">&quot;drop&quot;</span>)</span>
-<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>gbts_d <span class="ot">&lt;-</span> <span class="fu">dosage</span>(mb)</span>
-<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>ord <span class="ot">&lt;-</span> <span class="fu">c</span>(checks, gbts_d <span class="sc">%&gt;%</span> <span class="fu">filter</span>(<span class="sc">!</span>name <span class="sc">%in%</span> checks) <span class="sc">%&gt;%</span> <span class="fu">arrange</span>(d) <span class="sc">%&gt;%</span> <span class="fu">pull</span>(name))</span>
+<span id="cb1-17"><a href="#cb1-17" aria-hidden="true" tabindex="-1"></a>molb_d <span class="ot">&lt;-</span> <span class="fu">dosage</span>(mb)</span>
+<span id="cb1-18"><a href="#cb1-18" aria-hidden="true" tabindex="-1"></a>ord <span class="ot">&lt;-</span> <span class="fu">c</span>(checks, molb_d <span class="sc">%&gt;%</span> <span class="fu">filter</span>(<span class="sc">!</span>name <span class="sc">%in%</span> checks) <span class="sc">%&gt;%</span> <span class="fu">arrange</span>(d) <span class="sc">%&gt;%</span> <span class="fu">pull</span>(name))</span>
 <span id="cb1-19"><a href="#cb1-19" aria-hidden="true" tabindex="-1"></a></span>
 <span id="cb1-20"><a href="#cb1-20" aria-hidden="true" tabindex="-1"></a><span class="co"># NIL identifier = the pedigree string (sample_map `genotype`). The two B73-bulk</span></span>
 <span id="cb1-21"><a href="#cb1-21" aria-hidden="true" tabindex="-1"></a><span class="co"># checks share the pedigree &quot;B73-bulk&quot;, so disambiguate them by their SID.</span></span>

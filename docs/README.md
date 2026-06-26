@@ -12,7 +12,7 @@ RTIGER r=3 benchmark results. Regenerate with
 `quarto render nil_introgression_1400.qmd` (the source `.qmd` is at the repo root).
 
 **Rendered notebook:** [`molbreeding_vs_skim.html`](molbreeding_vs_skim.html) — concordance
-of the MolBreeding GBTS calls (source #5, **real ~110× allele counts**) vs the SNP50K skim
+of the MolBreeding target sequencing calls (source #5, **real ~110× allele counts**) vs the SNP50K skim
 RTIGER calls (source #2) for the NILs on both platforms (donor dosage + B73-bulk control,
 confusion matrix, segment scale, introgression-size distribution, donor composition).
 **Frozen** direct comparison at a borrowed r=8. Regenerate with
@@ -24,11 +24,11 @@ confusion matrix, segment scale, introgression-size distribution, donor composit
 - [`skim_sim_calibration.html`](skim_sim_calibration.html) — SNP50K skim (r=5):
   coverage-model calibration (layer 2), recovery vs truth (layer 3), three-`f_i`
   bias decomposition. `quarto render skim_sim_calibration.qmd`.
-- [`gbts_sim_calibration.html`](gbts_sim_calibration.html) — MolBreeding GBTS (r=2):
-  same three layers. `quarto render gbts_sim_calibration.qmd`.
+- [`molb_sim_calibration.html`](molb_sim_calibration.html) — MolBreeding target sequencing (r=2):
+  same three layers. `quarto render molb_sim_calibration.qmd`.
 - [`molbreeding_vs_skim_calibrated.html`](molbreeding_vs_skim_calibrated.html) —
-  calibrated GBTS-vs-skim comparison on the 14 shared NILs (calls at skim r=5 /
-  GBTS r=2; null = n=1500 simulation). `quarto render molbreeding_vs_skim_calibrated.qmd`.
+  calibrated target sequencing-vs-skim comparison on the 14 shared NILs (calls at skim r=5 /
+  target sequencing r=2; null = n=1500 simulation). `quarto render molbreeding_vs_skim_calibrated.qmd`.
 
 | Doc | Step |
 |---|---|
@@ -48,7 +48,7 @@ confusion matrix, segment scale, introgression-size distribution, donor composit
 | [12-het-excess-diagnosis.md](12-het-excess-diagnosis.md) | Diagnosing a heterozygote excess in real ancestry calls (selection vs heterosis vs paralogs vs caller) |
 | [13-single-locus-validation.md](13-single-locus-validation.md) | Validate the simulation vs the BC2S3 single-locus expectation (f_i mean/variance, Hotelling, three-f_i bias decomposition) |
 | [14-interference-and-rigidity.md](14-interference-and-rigidity.md) | Where m=10 comes from, why the map can't fit it, and how m sets the truth-optimal rigidity r |
-| [15-rigidity-and-scoring.md](15-rigidity-and-scoring.md) | Deriving per-platform rigidity r from a truth sweep (vs RTIGER's `optimize_R`); FP/FN definitions side by side; the skim/GBTS sweep tables |
+| [15-rigidity-and-scoring.md](15-rigidity-and-scoring.md) | Deriving per-platform rigidity r from a truth sweep (vs RTIGER's `optimize_R`); FP/FN definitions side by side; the skim/target sequencing sweep tables |
 
 ## Pipeline at a glance
 

@@ -44,7 +44,7 @@ depth.**
 |---|---|---|
 | $\ll 1\times$ (skim, ~0.4×) | counts needed, but **HET is invisible** — a single alt read can't distinguish HET from donor-hom (data-limited, *not* emission-limited) | BetaBinomial counts (best available; still degenerate) |
 | $\sim 1\text{–}20\times$ (BRB-seq, ~2.8×) | depth-weighting is genuinely informative; HET/HOM resolvable | **BetaBinomial counts** |
-| $\gtrsim 20\times$ (GBTS / MolBreeding) | **saturated** — the count likelihood collapses to a near-delta = a hard call | **categorical hard GT** (equivalent *and* cheaper) |
+| $\gtrsim 20\times$ (target sequencing / MolBreeding) | **saturated** — the count likelihood collapses to a near-delta = a hard call | **categorical hard GT** (equivalent *and* cheaper) |
 
 The BetaBinomial matters **only in the middle band.** The two boundaries are the interesting
 part.
@@ -114,7 +114,7 @@ depth-weighting does work a hard call couldn't.
 |---|---|---|---|
 | **Skim** (SNP50K) | ~0.4× | degenerate (HET invisible) | BetaBinomial counts — best available, still degenerate |
 | **BRB-seq** | ~2.8× | intermediate | **BetaBinomial counts** — the band where they pay off |
-| **MolBreeding** (GBTS 45K) | genotyping assay, high | **saturated** | **categorical hard GT** — equivalent + cheaper |
+| **MolBreeding** (target sequencing, 45K) | genotyping assay, high | **saturated** | **categorical hard GT** — equivalent + cheaper |
 
 MolBreeding is the **saturated** regime: the BetaBinomial degenerates to a hard call by
 construction, so the categorical-GT emission (Holland's original nilHMM GT path — the one we

@@ -32,7 +32,7 @@ The truth-optimal r scales with physical resolution:
 
     true_r(platform) ≈ L_floor(m) × informative_marker_density(platform)
 
-The skim (~6.7 informative markers/Mb at 0.4×, ~70% missing) and GBTS
+The skim (~6.7 informative markers/Mb at 0.4×, ~70% missing) and target sequencing
 (~4.3 informative markers/Mb on the wideseq-filtered panel, but ~110× and
 near-complete) sit in different regimes, so a shared r (the borrowed `r=8` of the
 frozen `molbreeding_vs_skim.qmd`) does **not** give a matched physical floor.
@@ -96,7 +96,7 @@ class (donor-present, states 1+2) | F1 het (state 1) | F1 hom-donor (state 2).
 F1s are introgression / het / hom-donor — **not** REF.
 
 Resolution conventions (`docs/14`; scripts `agent/informative_resolution.R`,
-`agent/gbts_resolution.R`): **mean = r·AM** (AM = average informative-marker
+`agent/molb_resolution.R`): **mean = r·AM** (AM = average informative-marker
 spacing) and **median = the window-span median** — *not* `r·median(gap)` (which
 underestimates) and *not* the harmonic mean (degenerate).
 
@@ -119,9 +119,9 @@ plateau from r=2 to r=8 with the **argmin at r=5**. CO bias drifts
 while holding het F1 reasonable; pushing lower buys nothing on FP+FN and pushing
 higher degrades het and CO recovery.
 
-### GBTS sweep (MolBreeding target-capture, ~110× → capped 20×; wsfilt density 4.3/Mb)
+### target sequencing sweep (MolBreeding target-capture, ~110× → capped 20×; wsfilt density 4.3/Mb)
 
-Source: `results/sim_calibration/gbts_rigidity_sweep.csv`.
+Source: `results/sim_calibration/molb_rigidity_sweep.csv`.
 
 | r | res median | res mean (r/4.3) | F1 intro | F1 het | F1 hom-donor |
 |---|---|---|---|---|---|
@@ -133,7 +133,7 @@ Source: `results/sim_calibration/gbts_rigidity_sweep.csv`.
 
 Counted FP+FN over r = 2,3,5,8,10 → **39 / 48 / 62 / 118 / 153**: **monotone**
 increasing, **argmin at r=2**. CO bias drifts −0.48 → −2.06. We take **r=2**:
-the error minimum and the F1 peak across all three classes. GBTS tolerates the
+the error minimum and the F1 peak across all three classes. target sequencing tolerates the
 finer resolution because ~110× coverage resolves het and crossovers the skim
 misses — so the binding constraint is the interference floor, not coverage, and
 r=2 sits right at it.
@@ -142,7 +142,7 @@ r=2 sits right at it.
 
 The skim's coarse informative density (6.7/Mb but ~70% missing, low confidence per
 marker) makes its error curve **flat** down to r=2 — there is no resolution to be
-gained below ~0.5 Mb, so r=5 is chosen at the plateau argmin. GBTS's near-complete
+gained below ~0.5 Mb, so r=5 is chosen at the plateau argmin. target sequencing's near-complete
 high-confidence calls make the error curve **monotone**, rewarding the finest r=2.
 Same simulated biology, two coverage regimes, two derived resolutions — exactly
 the per-platform tuning `docs/14` argues for.

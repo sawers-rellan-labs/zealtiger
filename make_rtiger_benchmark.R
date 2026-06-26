@@ -25,7 +25,7 @@ args <- commandArgs(trailingOnly = TRUE)
 # Coverage/grid defaults model the SNP50K skim; override via env vars to benchmark
 # other regimes (e.g. seqcapture capped to ~20x: LAMBDA_MEAN=20 PI_FLOOR=0.002
 # OUT_DIR=results/rtiger_benchmark_20x). pi_floor is the structural missingness
-# (SNP50K ~0.16; GBTS seqcapture ~0.002 — near-complete).
+# (SNP50K ~0.16; target sequencing seqcapture ~0.002 — near-complete).
 env_num <- function(k, d) { v <- Sys.getenv(k); if (nzchar(v)) as.numeric(v) else d }
 env_chr <- function(k, d) { v <- Sys.getenv(k); if (nzchar(v)) v else d }
 

@@ -13,8 +13,8 @@ execute:
   warning: false
   message: false
 params:
-  mb_calls:    "results/sim_calibration/gbts_calls/SNP_wsfilt/calls_common_schema.csv"  # MolB-RTI, wsfilt, r=2
-  mb_counts:   "results/sim_calibration/gbts_calls/SNP_wsfilt/counts"                   # wsfilt marker grid (9,157)
+  mb_calls:    "results/sim_calibration/molb_calls/SNP_wsfilt/calls_common_schema.csv"  # MolB-RTI, wsfilt, r=2
+  mb_counts:   "results/sim_calibration/molb_calls/SNP_wsfilt/counts"                   # wsfilt marker grid (9,157)
   skim_calls:  "data/rtiger_50K/calls_taxa_r5.csv"                                      # Skim-RTI, per-taxon r=5 (NILs)
   skim_checks: "data/rtiger_50K/calls_checks_common_schema.csv"                         # Skim-RTI r=5 on the B73/Purple checks (NIL run excludes them)
   nilhmm:      "results/sim_calibration/nilhmm_calls/calls_common_schema.csv"           # nilHMM count-HMM, per-taxon r, SAME skim reads (MolB-shared id)
@@ -70,7 +70,7 @@ and Jaccard panels.
    fit — a single EM pooled across species mis-specifies the emission regime and
    destabilises the B73 control (it read 0.41 donor in a mixed cohort, 0.13 per-species).
 
-2. **BRB↔MolB is matched by pedigree, not by `PN#_SID#` prefix.** The prefix is
+2. **BRB↔MolB is matched by NIL id (pedigree string), not by `PN#_SID#` prefix.** The prefix is
    **per-experiment**: Skim and MolBreeding share one id space, but **BRB-seq has its
    own**. The frozen notebook's `intersect(brb$name, mb$name)` therefore compared
    *incomparable* samples (8 unrelated PN4 BRB libraries). The true cross-experiment
@@ -231,7 +231,7 @@ cat(sprintf("B73-bulk checks dosage (MolB-RTI): %s — expect ≈ 0\n",
 ```{r state-grid}
 paired <- map_dfr(samples, function(s) {
   a <- state_at(mb, s); k <- state_at(skim, s); ok <- !is.na(a) & !is.na(k)
-  tibble(name = s, gbts = a[ok], skim = k[ok])
+  tibble(name = s, molb = a[ok], skim = k[ok])
 })
 ```
 
@@ -240,7 +240,7 @@ paired <- map_dfr(samples, function(s) {
 Rows = MolB-RTI state (wsfilt, r=2), cols = Skim-RTI (per-taxon r=5); cell = count (row %).
 
 ```{r confusion}
-cm <- table(gbts = factor(paired$gbts, 0:2), skim = factor(paired$skim, 0:2))
+cm <- table(molb = factor(paired$molb, 0:2), skim = factor(paired$skim, 0:2))
 overall <- sum(diag(cm)) / sum(cm)
 prop <- sweep(cm, 1, rowSums(cm), "/")
 disp <- matrix(sprintf("%d (%.1f%%)", cm, 100*prop), nrow = 3,
@@ -248,7 +248,7 @@ disp <- matrix(sprintf("%d (%.1f%%)", cm, 100*prop), nrow = 3,
                                c("0 recurrent","1 het","2 donor")))
 knitr::kable(disp, align = "r",
              caption = sprintf("MolB-RTI (r=2, rows) vs Skim-RTI (r=5, cols): count (row %%). Overall concordance %.3f.", overall))
-dp <- paired$gbts %in% c(1, 2)
+dp <- paired$molb %in% c(1, 2)
 cat(sprintf("MolB-RTI donor-present markers: %d | Skim-RTI also donor-present: %.1f%%\n",
             sum(dp), 100*mean(paired$skim[dp] %in% c(1,2))))
 ```
@@ -259,19 +259,19 @@ calls **het** and Skim-RTI calls **recurrent** — the ~0.4× skim's het under-c
 ## BrB-RTI cross-check (3′ RNA-seq, r=7 wideseq, 4 pedigree-matched NILs)
 
 BrB-RTI on the `r length(brb_samples)` NILs sequenced on both BRB-seq and the others
-(matched by pedigree). Even wideseq-filtered at r=7, 3′ RNA-seq covers only
+(matched by NIL id). Even wideseq-filtered at r=7, 3′ RNA-seq covers only
 expressed regions, so treat BrB-RTI as a qualitative read of donor presence.
 
 ```{r brb-grid}
 paired_b <- map_dfr(brb_samples, function(s) {
   g <- state_at(mb, s); rr <- state_at(brb_nils, s); k <- state_at(skim, s)
   ok <- !is.na(g) & !is.na(rr)
-  tibble(name = s, gbts = g[ok], brbseq = rr[ok], skim = k[ok])
+  tibble(name = s, molb = g[ok], brbseq = rr[ok], skim = k[ok])
 })
 ```
 
-```{r brb-vs-gbts}
-cm_bg <- table(brbseq = factor(paired_b$brbseq, 0:2), gbts = factor(paired_b$gbts, 0:2))
+```{r brb-vs-molb}
+cm_bg <- table(brbseq = factor(paired_b$brbseq, 0:2), molb = factor(paired_b$molb, 0:2))
 prop  <- sweep(cm_bg, 1, rowSums(cm_bg), "/")
 disp  <- matrix(sprintf("%d (%.1f%%)", cm_bg, 100*prop), nrow = 3,
                 dimnames = list(`BrB-RTI \\ MolB-RTI` = c("0 recurrent","1 het","2 donor"),
@@ -279,7 +279,7 @@ disp  <- matrix(sprintf("%d (%.1f%%)", cm_bg, 100*prop), nrow = 3,
 knitr::kable(disp, align = "r",
              caption = sprintf("BrB-RTI (r=7 ws, rows) vs MolB-RTI (r=2, cols): count (row %%). Overall concordance %.3f. n=%d NILs.",
                                sum(diag(cm_bg))/sum(cm_bg), length(brb_samples)))
-dp <- paired_b$gbts %in% c(1, 2)
+dp <- paired_b$molb %in% c(1, 2)
 cat(sprintf("MolB-RTI donor-present markers: %d | BrB-RTI also donor-present: %.1f%%\n",
             sum(dp), 100*mean(paired_b$brbseq[dp] %in% c(1,2))))
 ```
@@ -320,13 +320,13 @@ bind_rows(
 ## Introgression-size distribution
 
 ```{r intro-sizes}
-gbts_b   <- donor_blocks(mb_s)     %>% mutate(src = "MolB-RTI (r=2)")
+molb_b   <- donor_blocks(mb_s)     %>% mutate(src = "MolB-RTI (r=2)")
 skim_b   <- donor_blocks(skim_s)   %>% mutate(src = "Skim-RTI (r=5)")
 nilh_b   <- donor_blocks(nilh_s)   %>% mutate(src = "Skim-nilHMM (counts)")
 brb_b    <- donor_blocks(brb_s)    %>% mutate(src = "BrB-RTI (r=7, ws)")
 brbnil_b <- donor_blocks(brbnil_s) %>% mutate(src = "BrB-nilHMM (counts)")
 null_b <- nil_seg %>% transmute(size_mb = mb)
-ggplot(bind_rows(gbts_b, skim_b, nilh_b, brb_b, brbnil_b), aes(x = size_mb, fill = src)) +
+ggplot(bind_rows(molb_b, skim_b, nilh_b, brb_b, brbnil_b), aes(x = size_mb, fill = src)) +
   geom_histogram(aes(y = after_stat(density)), position = "identity", alpha = 0.35, bins = 30) +
   geom_freqpoly(data = null_b, aes(x = size_mb, y = after_stat(density)),
                 bins = 30, colour = "grey20", linewidth = 0.9, inherit.aes = FALSE) +

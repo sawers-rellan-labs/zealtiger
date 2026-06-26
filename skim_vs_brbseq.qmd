@@ -18,7 +18,7 @@ params:
   brb_meta:   "data/BRBseq_metadata.csv"                                                # BRB sample_id -> pedigree (coverage section)
   skim_ped:   "data/skim_sample_pedigree.csv"                                           # skim sample -> pedigree (.B dropped; coverage section)
   corr:       "results/sample_correspondence/skim_brbseq_correspondence.csv"            # curated NIL pairs (pedigree-matched, seq-restricted)
-  mb_counts:  "results/sim_calibration/gbts_calls/SNP_wsfilt/counts"                    # wideseq grid (9,157)
+  mb_counts:  "results/sim_calibration/molb_calls/SNP_wsfilt/counts"                    # wideseq grid (9,157)
   brb_cov:    "results/sim_calibration/brbseq_coverage.csv"                             # BRB-seq per-sample mean coverage (all 379)
   skim_cov:   "results/sim_calibration/real_skim_lambda.csv"                            # SNP50K skim per-sample mean coverage (all 1,393)
   brb_sweep:  "results/sim_calibration/brbseq_taxa_r7_wideseq/calls_common_schema.csv"   # BrB-RTI r=7 wideseq-filtered, per-species (sweep samples + B73 subset by name)
@@ -34,7 +34,7 @@ params:
 
 **Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
 
-Skim-RTI, BrB-RTI, **Skim-nilHMM**, and **BrB-nilHMM** ancestry concordance, matched **by NIL pedigree string** — not by
+Skim-RTI, BrB-RTI, **Skim-nilHMM**, and **BrB-nilHMM** ancestry concordance, matched **by NIL id (pedigree string)** — not by
 the `PN#_SID#` plate index, which is mislabeled in the BRB-seq run
 (`docs/brbseq-sample-mislabeling.md`, `docs/brbseq_sample_identity.html`). The BRB-seq
 plate id does not track the NIL; the **pedigree string is the cross-experiment
@@ -69,7 +69,7 @@ The pedigree-matched **pairs are sourced from the curated correspondence**
 here. (The coverage section below still pairs the full dataset directly via the registries.)
 
 The per-NIL painting / confusion / Jaccard cover the **4 NILs that have both
-MolBreeding-GBTS and BRB-seq** (pedigree-matched: `Zv.0080`, `Zx.0340`, `Zx.0540`,
+MolBreeding target sequencing and BRB-seq** (pedigree-matched: `Zv.0080`, `Zx.0340`, `Zx.0540`,
 `Zd.0030`) — the lines with the most cross-platform support. The coverage and
 introgression-size sections use the full skim∩BRB set. (The earlier 8 `PN4_SID#` samples
 were a cross-id-space mislabeling artifact, not genuine MolBreeding∩BRB NILs — see
@@ -93,7 +93,7 @@ brbmeta <- read_csv(params$brb_meta, show_col_types = FALSE) %>%
 skimped <- read_csv(params$skim_ped, show_col_types = FALSE)   # sample, pedigree (.B-dropped)
 corr <- read_csv(params$corr, show_col_types = FALSE) %>% filter(type == "NIL")  # full skim<->BRB map (intro-size section)
 
-# Per-NIL painting / confusion / Jaccard scope = the MolBreeding-GBTS NILs that ALSO have
+# Per-NIL painting / confusion / Jaccard scope = the MolBreeding target sequencing NILs that ALSO have
 # BRB-seq, matched BY PEDIGREE (molbreeding_3way_correspondence.csv, in_brbseq == TRUE).
 # Their real BRB libraries are PN3_SID265 / PN2_SID137 / PN1_SID10 / PN2_SID169 — NOT the
 # PN4 plate names, which are a cross-id-space mislabeling artifact
@@ -118,7 +118,7 @@ cat(sprintf("Per-NIL scope — MolBreeding NILs that also have BRB-seq (pedigree
 
 ## Coverage by platform — full dataset
 
-Mean per-sample sequencing coverage on each platform, paired **by NIL pedigree**
+Mean per-sample sequencing coverage on each platform, paired **by NIL id (pedigree string)**
 across the **whole** dataset (every BRB-seq sample joined to its same-pedigree skim
 sample). SNP50K-skim λ from `real_skim_lambda.csv` (mean depth over the 50K grid);
 BRB-seq λ from `brbseq_coverage.csv` (mean depth over the brbseq SNP sites). One
@@ -514,8 +514,8 @@ ggplot(paint, aes(xmin = start_bp/1e6, xmax = end_bp/1e6, ymin = ylo, ymax = yhi
 
 ## Findings
 
-- The per-NIL painting, confusion, and Jaccard cover the **4 MolBreeding-GBTS NILs that
-  also have BRB-seq** (`Zv.0080`, `Zx.0340`, `Zx.0540`, `Zd.0030`; matched by pedigree) —
+- The per-NIL painting, confusion, and Jaccard cover the **4 MolBreeding target sequencing NILs that
+  also have BRB-seq** (`Zv.0080`, `Zx.0340`, `Zx.0540`, `Zd.0030`; matched by NIL id) —
   the lines with the most cross-platform support. Coverage and introgression-size use the
   full skim∩BRB set.
 - Where the pedigrees genuinely correspond, Skim-RTI and BrB-RTI agree on the donor

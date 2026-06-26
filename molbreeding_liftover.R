@@ -1,5 +1,5 @@
 #!/usr/bin/env Rscript
-# Liftover the MolBreeding GBTS marker positions to B73 NAM v5.
+# Liftover the MolBreeding target sequencing marker positions to B73 NAM v5.
 #
 # The MolBreeding panel is on AGPv3 (GRMZM2G… gene IDs), the rest of the project
 # is B73 NAM v5, and there is no direct v3→v5 chain — so lift in two hops:

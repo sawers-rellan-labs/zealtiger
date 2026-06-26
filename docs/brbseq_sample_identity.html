@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Fausto Rodríguez-Zapata">
-<meta name="dcterms.date" content="2026-06-20">
+<meta name="dcterms.date" content="2026-06-26">
 
 <title>BRB-seq sample-identity check — best Skim-RTI / MolB-RTI match per BrB-RTI sample</title>
 <style>
@@ -3519,7 +3519,7 @@ window.onload = function() {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">June 20, 2026</p>
+      <p class="date">June 26, 2026</p>
     </div>
   </div>
   
@@ -3532,7 +3532,7 @@ window.onload = function() {
 
 
 <p><strong>Repo:</strong> <a href="https://github.com/sawers-rellan-labs/zealtiger">sawers-rellan-labs/zealtiger</a></p>
-<p>Mislabeling check for the <strong>BRB-seq</strong> run. For every BrB-RTI sample we search the <strong>full Skim-RTI pool</strong> (1,393 SNP50K samples) and the <strong>MolB-RTI</strong> set (16 target- sequencing samples) for the best genotype match — the same donor-pattern comparison used for the <code>PN4_SID330</code> swap (<code>agent/find_pn4_sid330_match.R</code>, <code>agent/gbts330_vs_skim322.png</code>). If a BrB sample’s donor pattern matches a <strong>differently-named</strong> sample better than its own label, that flags a likely swap.</p>
+<p>Mislabeling check for the <strong>BRB-seq</strong> run. For every BrB-RTI sample we search the <strong>full Skim-RTI pool</strong> (1,393 SNP50K samples) and the <strong>MolB-RTI</strong> set (16 target- sequencing samples) for the best genotype match — the same donor-pattern comparison used for the <code>PN4_SID330</code> swap (<code>agent/find_pn4_sid330_match.R</code>, <code>agent/molb330_vs_skim322.png</code>). If a BrB sample’s donor pattern matches a <strong>differently-named</strong> sample better than its own label, that flags a likely swap.</p>
 <p><strong>Metric.</strong> Each call set is projected onto the common wideseq grid (9,157 sites); similarity is the <strong>donor Jaccard</strong> <code>J = |donor_a ∩ donor_b| / |donor_a ∪ donor_b|</code> (donor = state ∈ {het, hom-donor}), with marker-level concordance reported alongside. Jaccard keys on <em>where the introgressions are</em>, which is what identifies a line.</p>
 <blockquote class="blockquote">
 <p>Caveat: BrB-RTI is sparse 3′ RNA-seq and over-segments, so its donor sets are noisy — absolute J is low. The <strong>rank</strong> of the own-label vs the best match is the signal, not the absolute value.</p>

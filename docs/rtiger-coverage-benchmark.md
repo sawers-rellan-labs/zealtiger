@@ -20,12 +20,12 @@ Distinct pairs scale with coverage, so **compute scales with coverage**:
 | input | distinct (k,n) pairs | RTIGER fit (16 samples, 9,157 markers, r=8) |
 |---|---|---|
 | 0/1/2 pseudo-counts (fixed depth) | 3 | 13 s |
-| GBTS real counts, downsampled 3× | 66 | 4 s |
-| GBTS real counts, downsampled 30× | 817 | 18 s |
-| GBTS real counts, **110×** | 7,555 | **240 s** |
+| target sequencing real counts, downsampled 3× | 66 | 4 s |
+| target sequencing real counts, downsampled 30× | 817 | 18 s |
+| target sequencing real counts, **110×** | 7,555 | **240 s** |
 
 This is why the old array-style 0/1/2 pseudo-count fit ran in seconds while real ~110×
-GBTS counts take minutes: same markers, same samples, ~57× the distinct pairs.
+target sequencing counts take minutes: same markers, same samples, ~57× the distinct pairs.
 
 ## 2. Three approaches
 
@@ -57,9 +57,9 @@ confidence `Q ≈ 3.01·(n−1)` — **each read adds ~3 Phred points**:
 (matters at breakpoints / short introgressions where HMM smoothing can't help). Beyond
 ~20–30× the per-marker call adds nothing for Mb-scale ancestry.
 
-## 3. Empirical sweep (MolBreeding GBTS, provisional)
+## 3. Empirical sweep (MolBreeding target sequencing, provisional)
 
-Binomial-thinned the wideseq-filtered GBTS table (110×, 9,157 markers, 16 samples) to a
+Binomial-thinned the wideseq-filtered target sequencing table (110×, 9,157 markers, 16 samples) to a
 depth grid, fit r=8 with MLE and MoM, scored **per-marker state concordance vs the 110× MLE
 fit**. ⚠️ The reference is the 110× MLE *fit*, **not ground truth** — see the caveat in §4.
 
@@ -156,7 +156,7 @@ autotune (objectively minimize erroneous segments), but grounded in known truth:
    structure (calibrated overdispersion, the real depth distribution, contamination/outlier
    markers). A clean binomial simulation would make MoM look fine at 110× and yield the wrong
    boundaries — the §3 MoM divergence is *caused* by real overdispersion that a naive sim omits.
-   Calibrate to the GBTS count distribution (and reuse the fitted λ/π/k coverage models).
+   Calibrate to the target sequencing count distribution (and reuse the fitted λ/π/k coverage models).
 4. **Fit** {MLE, MoM} × {no cap, cap 10/20/30} at each depth.
 5. **Score vs truth** with one uniform metric (segment F1 / per-marker accuracy / breakpoint
    distance) + record cost (fit time, #pairs).

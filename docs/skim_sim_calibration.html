@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Fausto Rodríguez-Zapata">
-<meta name="dcterms.date" content="2026-06-17">
+<meta name="dcterms.date" content="2026-06-26">
 
 <title>SNP50K skim — simulation-calibrated ancestry calling</title>
 <style>
@@ -3513,7 +3513,7 @@ window.onload = function() {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">June 17, 2026</p>
+      <p class="date">June 26, 2026</p>
     </div>
   </div>
   
@@ -3527,7 +3527,7 @@ window.onload = function() {
 
 <p><strong>Repo:</strong> <a href="https://github.com/sawers-rellan-labs/zealtiger">sawers-rellan-labs/zealtiger</a></p>
 <blockquote class="blockquote">
-<p>Simulation-calibrated ancestry calling for the <strong>SNP50K skim</strong> (Source 2, ~0.4×). Outputs are <strong>isolated</strong> to <code>results/sim_calibration/</code>; the frozen direct comparison (<code>docs/molbreeding_vs_skim.html</code>) is untouched. The GBTS companion is <code>gbts_sim_calibration.qmd</code>; the cross-platform comparison is <code>molbreeding_vs_skim_calibrated.qmd</code>. Methodology: <code>docs/15-rigidity-and-scoring.md</code>, <code>docs/13-single-locus-validation.md</code>, <code>docs/14-interference-and-rigidity.md</code>.</p>
+<p>Simulation-calibrated ancestry calling for the <strong>SNP50K skim</strong> (Source 2, ~0.4×). Outputs are <strong>isolated</strong> to <code>results/sim_calibration/</code>; the frozen direct comparison (<code>docs/molbreeding_vs_skim.html</code>) is untouched. The target sequencing companion is <code>molb_sim_calibration.qmd</code>; the cross-platform comparison is <code>molbreeding_vs_skim_calibrated.qmd</code>. Methodology: <code>docs/15-rigidity-and-scoring.md</code>, <code>docs/13-single-locus-validation.md</code>, <code>docs/14-interference-and-rigidity.md</code>.</p>
 </blockquote>
 <section id="what-this-does" class="level2">
 <h2 class="anchored" data-anchor-id="what-this-does">What this does</h2>
@@ -3834,7 +3834,7 @@ window.onload = function() {
 </div>
 </div>
 </div>
-<p><strong>Read — the payoff.</strong> Method bias on the <em>fraction</em> is negligible (<code>(2)−(1)</code> ≈ Het −0.002 / ALT −0.006): RTIGER at r=5 recovers genome-wide fractions near p₀ even though it misses ~17 % of het <em>segments</em> (the missed het is small, so little Mb is lost). The real signal is <code>(3)−(2)</code>: <strong>Het ≈ +0.047 and ALT ≈ −0.069</strong> — the real skim NILs carry roughly <strong>2.6× the heterozygosity and ~⅓ the homozygous-donor</strong> the neutral BC2S3 scheme predicts (donor dosage <strong>0.072 vs 0.125</strong>), and this is <strong>not</strong> a method artifact. That’s a genuine biological deviation (heterozygote excess / donor-homozygote deficit → selection against donor homozygotes, residual heterozygosity, or paralog mis-mapping inflating het) — the question <code>docs/12-het-excess-diagnosis.md</code> takes up. The simulation baseline is what makes this separable: without (2) you couldn’t tell method bias from biology. The GBTS platform reaches the <strong>same</strong> conclusion independently (<code>gbts_sim_calibration.qmd</code>); the cross-platform comparison is <code>molbreeding_vs_skim_calibrated.qmd</code>.</p>
+<p><strong>Read — the payoff.</strong> Method bias on the <em>fraction</em> is negligible (<code>(2)−(1)</code> ≈ Het −0.002 / ALT −0.006): RTIGER at r=5 recovers genome-wide fractions near p₀ even though it misses ~17 % of het <em>segments</em> (the missed het is small, so little Mb is lost). The real signal is <code>(3)−(2)</code>: <strong>Het ≈ +0.047 and ALT ≈ −0.069</strong> — the real skim NILs carry roughly <strong>2.6× the heterozygosity and ~⅓ the homozygous-donor</strong> the neutral BC2S3 scheme predicts (donor dosage <strong>0.072 vs 0.125</strong>), and this is <strong>not</strong> a method artifact. That’s a genuine biological deviation (heterozygote excess / donor-homozygote deficit → selection against donor homozygotes, residual heterozygosity, or paralog mis-mapping inflating het) — the question <code>docs/12-het-excess-diagnosis.md</code> takes up. The simulation baseline is what makes this separable: without (2) you couldn’t tell method bias from biology. The target sequencing platform reaches the <strong>same</strong> conclusion independently (<code>molb_sim_calibration.qmd</code>); the cross-platform comparison is <code>molbreeding_vs_skim_calibrated.qmd</code>.</p>
 </section>
 <section id="notes" class="level2">
 <h2 class="anchored" data-anchor-id="notes">Notes</h2>

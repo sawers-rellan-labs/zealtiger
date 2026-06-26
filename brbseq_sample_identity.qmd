@@ -15,8 +15,8 @@ execute:
 params:
   brb_calls:  "results/sim_calibration/brbseq_calls/calls_common_schema.csv"            # BrB-RTI, calibrated r=5
   skim_calls: "data/rtiger_50K/calls_taxa_r5.csv"                                       # Skim-RTI, per-taxon r=5 (1,393 samples)
-  mb_calls:   "results/sim_calibration/gbts_calls/SNP_wsfilt/calls_common_schema.csv"   # MolB-RTI, wsfilt r=2 (16 samples)
-  mb_counts:  "results/sim_calibration/gbts_calls/SNP_wsfilt/counts"                    # wsfilt marker grid (9,157)
+  mb_calls:   "results/sim_calibration/molb_calls/SNP_wsfilt/calls_common_schema.csv"   # MolB-RTI, wsfilt r=2 (16 samples)
+  mb_counts:  "results/sim_calibration/molb_calls/SNP_wsfilt/counts"                    # wsfilt marker grid (9,157)
 ---
 
 **Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
@@ -25,7 +25,7 @@ Mislabeling check for the **BRB-seq** run. For every BrB-RTI sample we search th
 **full Skim-RTI pool** (1,393 SNP50K samples) and the **MolB-RTI** set (16 target-
 sequencing samples) for the best genotype match — the same donor-pattern comparison
 used for the `PN4_SID330` swap (`agent/find_pn4_sid330_match.R`,
-`agent/gbts330_vs_skim322.png`). If a BrB sample's donor pattern matches a
+`agent/molb330_vs_skim322.png`). If a BrB sample's donor pattern matches a
 **differently-named** sample better than its own label, that flags a likely swap.
 
 **Metric.** Each call set is projected onto the common wideseq grid (9,157 sites);

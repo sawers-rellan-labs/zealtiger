@@ -18,7 +18,7 @@ abbreviate this as `…/rrellan/`). Others are in Google Drive or local `~/ref`.
 | `…/rrellan/BZea/bzeaseq/ancestry/PN#_SID#_bin_genotypes.tsv` (1,441 files) | per-sample wideseq bin tables | per-sample inspection |
 | `…/rrellan/BZea/bzeaseq/WGSmetrics_summary.tsv` | Picard per-sample genome-wide coverage, 1,437 samples (λ≈0.39) | coverage-distribution fit |
 | `…/rrellan/sara/RNA_Sequencing_raw/BZea_CLY23D1/NVS205B_RellanAlvarez/hannah/` | BRBseq: `metadata.txt`, `clean_reads/` (379 SE fastqs), `alignments/` (STAR BAMs) | Source 4 (BRBseq) |
-| `data/GSER2026030032P01/` (repo `data/`, git-ignored) | MolBreeding GBTS: `mSNP/` (264,553 sites) + `SNP/` (44,935), real `ref_depth`/`alt_depth` ~200×, `report.html` | Source 5 |
+| `data/GSER2026030032P01/` (repo `data/`, git-ignored) | MolBreeding target sequencing: `mSNP/` (264,553 sites) + `SNP/` (44,935), real `ref_depth`/`alt_depth` ~200×, `report.html` | Source 5 |
 
 ## References & reference genomes
 

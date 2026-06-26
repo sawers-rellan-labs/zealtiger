@@ -553,7 +553,7 @@ ad hoc:
   `Rscript score_rtiger.R --rtiger results/rtiger_benchmark/rtiger_out_r3/rtiger_result.rds`.
 - **r = 8** — chosen *objectively* by RTIGER's autotune (`optimize_R`, initial
   r₀ = 50, minimizing the expected number of erroneous segments) on the SNP50K skim,
-  and applied consistently to the MolBreeding GBTS calls so all sources share one
+  and applied consistently to the MolBreeding target sequencing calls so all sources share one
   rigidity (`molbreeding_vs_skim.qmd`). Reproduce with
   `Rscript agent/autotune_rtiger_benchmark.R 0 50 "" 4`
   (writes `rtiger_out_auto/`, records the pick in `autotune_selected.txt`).

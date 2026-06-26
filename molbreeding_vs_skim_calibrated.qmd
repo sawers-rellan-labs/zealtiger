@@ -13,8 +13,8 @@ execute:
   warning: false
   message: false
 params:
-  mb_calls:   "results/sim_calibration/gbts_calls/SNP_wsfilt/calls_common_schema.csv"  # target-seq real counts, wsfilt, r=2
-  mb_counts:  "results/sim_calibration/gbts_calls/SNP_wsfilt/counts"                    # wsfilt marker grid (9,157)
+  mb_calls:   "results/sim_calibration/molb_calls/SNP_wsfilt/calls_common_schema.csv"  # target-seq real counts, wsfilt, r=2
+  mb_counts:  "results/sim_calibration/molb_calls/SNP_wsfilt/counts"                    # wsfilt marker grid (9,157)
   skim_calls: "data/rtiger_50K/calls_taxa_r5.csv"                                       # skim, per-taxon r=5
   brb_calls:  "results/sim_calibration/brbseq_calls/calls_common_schema.csv"            # BRB-seq RNA, calibrated r=5 (no wsfilt)
   brb_sweep:  "results/sim_calibration/brbseq_rigidity_sweep.csv"                        # BRB-seq FP+FN rigidity sweep
@@ -40,7 +40,7 @@ simulated truth; methodology `docs/15-rigidity-and-scoring.md`), because the two
 coverage regimes have different physical resolution (`docs/14`). The **Null** is the
 **n=1500 BC2S3 simulation** (consensus map, no selection) — a modeled expectation,
 **not ground truth**: divergence from it is an observation. The per-platform
-calibration is done in `skim_sim_calibration.qmd` and `gbts_sim_calibration.qmd`.
+calibration is done in `skim_sim_calibration.qmd` and `molb_sim_calibration.qmd`.
 
 **BRB-seq layer (source #6), calibrated.** A third real-count platform — **BRB-seq
 3′ bulk RNA-seq** — is layered in. GATK `CollectAllelicCounts` over the brbseq SNP
@@ -137,32 +137,32 @@ no external truth.
 dosage <- function(seg) seg %>% mutate(len = end_bp - start_bp + 1) %>%
   group_by(name) %>% summarise(dosage = sum(len * state/2) / sum(len), .groups = "drop")
 checks <- c("PN4_SID326", "PN6_SID576")
-dose <- dosage(mb) %>% dplyr::rename(gbts_r2 = dosage) %>%
+dose <- dosage(mb) %>% dplyr::rename(molb_r2 = dosage) %>%
   left_join(dosage(skim) %>% dplyr::rename(skim_r5 = dosage), by = "name") %>%
   left_join(dosage(brb)  %>% dplyr::rename(brbseq_r5 = dosage), by = "name") %>%
-  mutate(is_B73_check = name %in% checks) %>% arrange(gbts_r2)
+  mutate(is_B73_check = name %in% checks) %>% arrange(molb_r2)
 dose
 cat(sprintf("mean donor dosage — MolB-RTI (r=2) %.3f | Skim-RTI (r=5, shared) %.3f | BrB-RTI (r=5, shared) %.3f | neutral p0 %.3f\n",
-            mean(dose$gbts_r2[!dose$is_B73_check]),
+            mean(dose$molb_r2[!dose$is_B73_check]),
             mean(dose$skim_r5[!is.na(dose$skim_r5)]),
             mean(dose$brbseq_r5[!is.na(dose$brbseq_r5)]), p0["ALT"] + 0.5*p0["Het"]))
 cat(sprintf("B73-bulk checks dosage (MolB-RTI): %s — expect ≈ 0\n",
             paste(sprintf("%s=%.3f", checks,
-                          dose$gbts_r2[match(checks, dose$name)]), collapse = ", ")))
+                          dose$molb_r2[match(checks, dose$name)]), collapse = ", ")))
 ```
 
 **Read:** polarity is correct (dosage far below the ~0.875 of a flipped panel) and
 the B73-bulk checks read ≈ 0 — the built-in control passes. Both platforms read
 donor dosage **well below** the neutral 0.125, the donor-homozygote deficit the
 calibrated three-`f_i` analysis attributes to biology (`skim_sim_calibration.qmd`,
-`gbts_sim_calibration.qmd`).
+`molb_sim_calibration.qmd`).
 
 ## State on the common grid
 
 ```{r state-grid}
 paired <- map_dfr(samples, function(s) {
   a <- state_at(mb, s); k <- state_at(skim, s); ok <- !is.na(a) & !is.na(k)
-  tibble(name = s, gbts = a[ok], skim = k[ok])
+  tibble(name = s, molb = a[ok], skim = k[ok])
 })
 ```
 
@@ -172,7 +172,7 @@ Rows = MolB-RTI state (wideseq-filtered, r=2), cols = Skim-RTI (per-taxon r=5); 
 count (row %). Common wsfilt grid (`r nrow(grid)` sites).
 
 ```{r confusion}
-cm <- table(gbts = factor(paired$gbts, 0:2), skim = factor(paired$skim, 0:2))
+cm <- table(molb = factor(paired$molb, 0:2), skim = factor(paired$skim, 0:2))
 overall <- sum(diag(cm)) / sum(cm)
 prop <- sweep(cm, 1, rowSums(cm), "/")
 disp <- matrix(sprintf("%d (%.1f%%)", cm, 100*prop), nrow = 3,
@@ -180,11 +180,11 @@ disp <- matrix(sprintf("%d (%.1f%%)", cm, 100*prop), nrow = 3,
                                c("0 recurrent","1 het","2 donor")))
 knitr::kable(disp, align = "r",
              caption = sprintf("MolB-RTI (r=2, rows) vs Skim-RTI (r=5, cols): count (row %%). Overall concordance %.3f.", overall))
-dp <- paired$gbts %in% c(1, 2)
+dp <- paired$molb %in% c(1, 2)
 cat(sprintf("MolB-RTI donor-present markers: %d | Skim-RTI also donor-present: %.1f%%\n",
             sum(dp), 100*mean(paired$skim[dp] %in% c(1,2))))
 cat(sprintf("MolB-RTI homozygous-donor markers: %d | Skim-RTI also hom-donor: %.1f%%\n",
-            sum(paired$gbts == 2), 100*mean(paired$skim[paired$gbts == 2] == 2)))
+            sum(paired$molb == 2), 100*mean(paired$skim[paired$molb == 2] == 2)))
 ```
 
 **Read:** marker-level concordance is high; the disagreements concentrate where
@@ -214,15 +214,15 @@ donor presence, not a segment-resolution caller.
 paired_b <- map_dfr(brb_samples, function(s) {
   g <- state_at(mb, s); rr <- state_at(brb, s); k <- state_at(skim, s)
   ok <- !is.na(g) & !is.na(rr)
-  tibble(name = s, gbts = g[ok], brbseq = rr[ok],
+  tibble(name = s, molb = g[ok], brbseq = rr[ok],
          skim = if (s %in% samples) k[ok] else NA_integer_)
 })
 ```
 
 Rows = BrB-RTI state (r=5), cols = MolB-RTI (wsfilt, r=2); cell = count (row %).
 
-```{r brb-vs-gbts}
-cm_bg <- table(brbseq = factor(paired_b$brbseq, 0:2), gbts = factor(paired_b$gbts, 0:2))
+```{r brb-vs-molb}
+cm_bg <- table(brbseq = factor(paired_b$brbseq, 0:2), molb = factor(paired_b$molb, 0:2))
 prop  <- sweep(cm_bg, 1, rowSums(cm_bg), "/")
 disp  <- matrix(sprintf("%d (%.1f%%)", cm_bg, 100*prop), nrow = 3,
                 dimnames = list(`BrB-RTI \\ MolB-RTI` = c("0 recurrent","1 het","2 donor"),
@@ -230,12 +230,12 @@ disp  <- matrix(sprintf("%d (%.1f%%)", cm_bg, 100*prop), nrow = 3,
 knitr::kable(disp, align = "r",
              caption = sprintf("BrB-RTI (r=5, rows) vs MolB-RTI (r=2, cols): count (row %%). Overall concordance %.3f.",
                                sum(diag(cm_bg))/sum(cm_bg)))
-dp <- paired_b$gbts %in% c(1, 2)
+dp <- paired_b$molb %in% c(1, 2)
 cat(sprintf("MolB-RTI donor-present markers: %d | BrB-RTI also donor-present: %.1f%%\n",
             sum(dp), 100*mean(paired_b$brbseq[dp] %in% c(1,2))))
 cat(sprintf("BrB-RTI donor-present markers: %d | MolB-RTI also donor-present: %.1f%%\n",
             sum(paired_b$brbseq %in% c(1,2)),
-            100*mean(paired_b$gbts[paired_b$brbseq %in% c(1,2)] %in% c(1,2))))
+            100*mean(paired_b$molb[paired_b$brbseq %in% c(1,2)] %in% c(1,2))))
 ```
 
 Rows = BrB-RTI state, cols = Skim-RTI (r=5); restricted to samples on all three
@@ -295,11 +295,11 @@ expectation, not truth.
 ## Introgression-size distribution
 
 ```{r intro-sizes}
-gbts_b <- donor_blocks(mb_s)   %>% mutate(src = "MolB-RTI (r=2)")
+molb_b <- donor_blocks(mb_s)   %>% mutate(src = "MolB-RTI (r=2)")
 skim_b <- donor_blocks(skim_s) %>% mutate(src = "Skim-RTI (r=5)")
 brb_b  <- donor_blocks(brb_s)  %>% mutate(src = "BrB-RTI (r=5, PN4)")
 null_b <- nil_seg %>% transmute(size_mb = mb)
-ggplot(bind_rows(gbts_b, skim_b, brb_b), aes(x = size_mb, fill = src)) +
+ggplot(bind_rows(molb_b, skim_b, brb_b), aes(x = size_mb, fill = src)) +
   geom_histogram(aes(y = after_stat(density)), position = "identity", alpha = 0.5, bins = 30) +
   geom_freqpoly(data = null_b, aes(x = size_mb, y = after_stat(density)),
                 bins = 30, colour = "grey20", linewidth = 0.9, inherit.aes = FALSE) +
@@ -325,7 +325,7 @@ The top reference row is the **neutral breeding-scheme p₀**
 tot_gs <- count(paired,   name, name = "tot")
 tot_b  <- count(paired_b, name, name = "tot")
 comp <- bind_rows(
-  paired   %>% transmute(name, platform = "MolB-RTI (r=2)", state = gbts) %>%
+  paired   %>% transmute(name, platform = "MolB-RTI (r=2)", state = molb) %>%
     filter(state %in% c(1,2)) %>% count(name, platform, state) %>% left_join(tot_gs, by = "name"),
   paired   %>% transmute(name, platform = "Skim-RTI (r=5)",     state = skim) %>%
     filter(state %in% c(1,2)) %>% count(name, platform, state) %>% left_join(tot_gs, by = "name"),
@@ -341,7 +341,7 @@ p0_ref <- expand_grid(platform = platforms,
                              pct = c(p0["Het"], p0["ALT"]))) %>%
   mutate(name = "p0 (breeding scheme)")
 
-ord <- paired %>% group_by(name) %>% summarise(d = mean(gbts)/2) %>% arrange(d) %>% pull(name)
+ord <- paired %>% group_by(name) %>% summarise(d = mean(molb)/2) %>% arrange(d) %>% pull(name)
 comp_all <- bind_rows(comp, p0_ref) %>%
   mutate(name = factor(name, levels = c(ord, "p0 (breeding scheme)")),
          platform = factor(platform, platforms))
@@ -359,7 +359,7 @@ ggplot(comp_all, aes(y = name, x = pct, fill = state)) +
 homozygous donor — the heterozygote-excess / donor-homozygote-deficit signal,
 visible on both platforms and **stronger on MolB-RTI** (which resolves het Skim-RTI
 under-calls). The calibrated three-`f_i` decomposition
-(`skim_sim_calibration.qmd`, `gbts_sim_calibration.qmd`) attributes this to real
+(`skim_sim_calibration.qmd`, `molb_sim_calibration.qmd`) attributes this to real
 biology, not method bias.
 
 ## Chromosome painting — all 16 lines, MolB-RTI vs Skim-RTI vs BrB-RTI
@@ -381,7 +381,7 @@ shared PN4 samples (blank bottom track otherwise). NIL names in **bold** are fla
 ```{r chr-painting, fig.width=12, fig.height=16}
 pal <- c(REF = "gold", HET = "springgreen4", ALT = "purple4")
 # B73-bulk checks pinned at the top, then NILs by increasing target-seq introgression
-ord <- c(checks, dose %>% filter(!name %in% checks) %>% arrange(gbts_r2) %>% pull(name))
+ord <- c(checks, dose %>% filter(!name %in% checks) %>% arrange(molb_r2) %>% pull(name))
 
 # LowQuality samples (sample_map QC flag) get a bold facet-strip label (markdown)
 lowq <- smap$sample_id[smap$quality == "LowQuality" & !is.na(smap$quality)]
@@ -461,7 +461,7 @@ jaccard_vs_gmm <- function(df, s) {
   length(intersect(a, b)) / u
 }
 # row order: B73 checks first, then NILs by increasing target-seq donor dosage
-jac_ord <- c(checks, dose %>% filter(!name %in% checks) %>% arrange(gbts_r2) %>% pull(name))
+jac_ord <- c(checks, dose %>% filter(!name %in% checks) %>% arrange(molb_r2) %>% pull(name))
 jac <- tibble(sample = jac_ord) %>%
   mutate(`MolB-RTI` = map_dbl(sample, ~ jaccard_vs_gmm(mb,   .x)),
          `Skim-RTI` = map_dbl(sample, ~ jaccard_vs_gmm(skim, .x)),

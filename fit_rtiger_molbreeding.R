@@ -1,8 +1,8 @@
 #!/usr/bin/env Rscript
-# Fit RTIGER on the MolBreeding GBTS data using REAL allele counts (replaces the
+# Fit RTIGER on the MolBreeding target sequencing data using REAL allele counts (replaces the
 # old molbreeding_to_rtiger.R, which faked 0/1/2 pseudo-counts at fixed depth).
 #
-# GBTS is target-capture SEQUENCING (~110x), so ref_depth/alt_depth are real read
+# target sequencing is target-capture SEQUENCING (~110x), so ref_depth/alt_depth are real read
 # counts — fed to RTIGER like the SNP50K skim (Source 2). RTIGER's BetaBinomial EM
 # cost scales with the number of distinct (k,n) count pairs, i.e. with coverage.
 #
@@ -19,8 +19,8 @@
 #
 # Input : data/molbreeding_45k/gatk_table_<set>_v5.tsv  (GATK table, v5)
 #         data/molbreeding_45k_sample_map.tsv, data/rtiger_50K/seqlengths.csv
-# Output: data/molbreeding_gbts/<set>/{counts/,expDesign.csv,fit/,calls_common_schema.csv}
-#           source = MolBreeding_GBTS_<set>_r<r>_<METHOD>[_cap<N>]
+# Output: data/molbreeding_targetseq/<set>/{counts/,expDesign.csv,fit/,calls_common_schema.csv}
+#           source = MolBreeding_<set>_r<r>_<METHOD>[_cap<N>]
 #
 # Usage:  Rscript fit_rtiger_molbreeding.R [set ...] [--estimator=mle|mom] [--cap=N] [--r=N]
 
@@ -82,7 +82,7 @@ seqv <- setNames(sl$len, sl$chr_label)
 fit_set <- function(setname) {
   cat(sprintf("\n=============== %s (rigidity=%d) ===============\n", setname, r))
   gt_path  <- sprintf("data/molbreeding_45k/gatk_table_%s_v5.tsv", setname)
-  out_root <- file.path(getopt("--outdir", "data/molbreeding_gbts"), setname)
+  out_root <- file.path(getopt("--outdir", "data/molbreeding_targetseq"), setname)
   cnt_dir  <- file.path(out_root, "counts"); fit_dir <- file.path(out_root, "fit")
   dir.create(cnt_dir, recursive = TRUE, showWarnings = FALSE)
   dir.create(fit_dir, recursive = TRUE, showWarnings = FALSE)
@@ -133,7 +133,7 @@ fit_set <- function(setname) {
               as.numeric(difftime(Sys.time(), t0, units = "mins")), length(res@Viterbi), toupper(method)))
 
   ## ---- common schema -------------------------------------------------------
-  tag <- sprintf("MolBreeding_GBTS_%s_r%d_%s%s", setname, r, toupper(method),
+  tag <- sprintf("MolBreeding_%s_r%d_%s%s", setname, r, toupper(method),
                  if (capped) paste0("_cap", capv) else "")
   seg <- segments_from_rtiger_object(res)
   seg$donor  <- ed$donor[match(seg$name, ed$name)]

@@ -18,14 +18,14 @@ params:
   skim_checks: "data/rtiger_50K/calls_checks_common_schema.csv"                          # Skim-RTI checks (B73, Purple)
   nilhmm_chk:  "results/sim_calibration/nilhmm_calls/calls_checks_common_schema.csv"     # Skim-nilHMM checks (B73, Purple) — same skim reads as Skim-RTI
   brbnil_chk:  "results/sim_calibration/nilhmm_brbseq/calls_checks_common_schema.csv"    # BrB-nilHMM checks (B73, Purple) — same BRB reads as BrB-RTI
-  molb_calls:  "results/sim_calibration/gbts_calls/SNP_wsfilt/calls_common_schema.csv"   # MolB-RTI (B73-bulk)
+  molb_calls:  "results/sim_calibration/molb_calls/SNP_wsfilt/calls_common_schema.csv"   # MolB-RTI (B73-bulk)
 ---
 
 **Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
 
 A **B73 control** must be a *pure recurrent-parent* rep — **no introgression** (≈ 0 donor
 genome-wide). This doc tracks **every B73 rep across the three experiments** (BrB-seq,
-SNP50K skim, MolBreeding GBTS) — scored by each experiment's caller, plus two count-HMM
+SNP50K skim, MolBreeding target sequencing) — scored by each experiment's caller, plus two count-HMM
 second callers: **Skim-nilHMM** on the *same skim reads* as Skim-RTI and **BrB-nilHMM** on the
 *same BRB reads* as BrB-RTI — and
 flags reps that are **not actually clean B73** (localized donor on a chromosome →

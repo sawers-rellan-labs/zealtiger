@@ -13,8 +13,8 @@ execute:
   warning: false
   message: false
 params:
-  mb_calls:   "results/sim_calibration/gbts_calls/SNP_wsfilt/calls_common_schema.csv"  # target-seq real counts, wsfilt, r=2
-  mb_counts:  "results/sim_calibration/gbts_calls/SNP_wsfilt/counts"                    # wsfilt marker grid (9,157)
+  mb_calls:   "results/sim_calibration/molb_calls/SNP_wsfilt/calls_common_schema.csv"  # target-seq real counts, wsfilt, r=2
+  mb_counts:  "results/sim_calibration/molb_calls/SNP_wsfilt/counts"                    # wsfilt marker grid (9,157)
   skim_calls: "data/rtiger_50K/calls_taxa_r5.csv"                                       # skim RTIGER, per-taxon r=5
   gmm_calls:  "data/bzeaseq_ancestry/gmm_hmm_segments_16lines.tsv"                      # BzeaSeq Gaussian-mixture HMM (skim)
   sample_map: "data/molbreeding_45k_sample_map.tsv"
@@ -65,8 +65,8 @@ checks <- c("PN4_SID326", "PN6_SID576")
 # per-sample donor dosage (bp-weighted state/2), used to order the lines
 dosage <- function(seg) seg %>% mutate(len = end_bp - start_bp + 1) %>%
   group_by(name) %>% summarise(d = sum(len * state/2) / sum(len), .groups = "drop")
-gbts_d <- dosage(mb)
-ord <- c(checks, gbts_d %>% filter(!name %in% checks) %>% arrange(d) %>% pull(name))
+molb_d <- dosage(mb)
+ord <- c(checks, molb_d %>% filter(!name %in% checks) %>% arrange(d) %>% pull(name))
 
 # NIL identifier = the pedigree string (sample_map `genotype`). The two B73-bulk
 # checks share the pedigree "B73-bulk", so disambiguate them by their SID.

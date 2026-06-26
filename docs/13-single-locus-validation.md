@@ -182,7 +182,7 @@ Two SEPARATE checks — do not collapse them:
   preserves it. For bp→cM the cold-region cM range per gap is tiny, so spline≈
   linear there; the spline earns its keep in cM→bp.
 - Starting **m = 10** (Broman/simcross default). Data-driven m estimable later
-  from **GBTS** crossover spacing — NOT from the consensus cM map. See
+  from **target sequencing** crossover spacing — NOT from the consensus cM map. See
   `14-interference-and-rigidity.md`.
 
 Implemented in `check_broman_single_locus.R`.
@@ -241,7 +241,7 @@ Decomposition:
 **So the correct reference for real f̂_i is (2), the degraded-sim — NOT p₀.**
 Example: the 0.4× skim under-calls het (one read makes a het look homozygous), so
 skim f̂_Het < 0.031 *even when the caller works perfectly*. Comparing skim to p₀
-directly would wrongly flag a correct method. For high-coverage GBTS, (2) ≈ (1),
+directly would wrongly flag a correct method. For high-coverage target sequencing, (2) ≈ (1),
 so real-vs-p₀ is fine there; for the skim it is not.
 
 This is the operational meaning of **"is the simulation a realistic baseline?"**:
@@ -260,7 +260,7 @@ actually wanted, and only the simulation supplies the bias term.
 ```
 breeding scheme (BC2S3) + map + m  ─►  TRUTH (continuous mosaic per NIL)
          ├─ skim panel + λ,π,k + error + RTIGER(r) ─► observed segments
-         ├─ GBTS panel + λ,π,k        + RTIGER(r) ─► observed segments
+         ├─ target sequencing panel + λ,π,k        + RTIGER(r) ─► observed segments
          └─ wideseq / BRBseq / ...                 ─► observed segments
 ```
 
@@ -381,7 +381,7 @@ validation). Summary: median ~11 Mb, heavily right-skewed (90th ~94 Mb), dosage 
   `make_45k_array_benchmark.R`, `make_wideseq_benchmark.R`, `make_joint_benchmark.R`;
   coverage/missingness ``snp50k-coverage-model``.
 - Recovery scoring (layer 3): `R/06_score_rtiger.R`.
-- Real marker panels: skim `data/rtiger_50K/...`; GBTS
+- Real marker panels: skim `data/rtiger_50K/...`; target sequencing
   `data/molbreeding_45k/sites_v5_SNP.tsv` (44,455 sites, v5 bp).
 - CO counts: `results/nil_crossovers.csv`, `docs/05-crossovers.md` (median 33).
 - Existing ergodicity treatment (coverage model): `docs/wideseq-coverage-ergodicity.md`.

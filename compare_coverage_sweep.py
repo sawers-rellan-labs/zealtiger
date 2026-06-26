@@ -12,7 +12,7 @@ import csv
 from bisect import bisect_right
 from pathlib import Path
 
-GBTS = Path("data/molbreeding_gbts")
+GBTS = Path("data/molbreeding_targetseq")
 GOLD = GBTS / "SNP_wsfilt" / "calls_common_schema.csv"          # 110x MLE
 GRID = Path("data/molbreeding_45k/wideseq_keep_v5.tsv")
 DEPTHS = [3, 5, 10, 15, 20, 30]

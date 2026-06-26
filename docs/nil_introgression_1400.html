@@ -7,7 +7,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
 
 <meta name="author" content="Fausto Rodríguez-Zapata">
-<meta name="dcterms.date" content="2026-06-17">
+<meta name="dcterms.date" content="2026-06-26">
 
 <title>BC2S3 NIL Introgression-Size Distribution</title>
 <style>
@@ -3532,7 +3532,7 @@ window.onload = function() {
     <div>
     <div class="quarto-title-meta-heading">Published</div>
     <div class="quarto-title-meta-contents">
-      <p class="date">June 17, 2026</p>
+      <p class="date">June 26, 2026</p>
     </div>
   </div>
   
@@ -4150,7 +4150,7 @@ Per-chromosome conservative CO/Mb vector (max over samples):</code></pre>
 <p><strong>Approach</strong>: <code>make_rtiger_benchmark.R</code> writes 100 NILs as RTIGER allele-count files with known truth; <code>fit_rtiger.R</code> fits RTIGER (Julia backend, fork <code>faustovrz/RTIGER@optimize-julia-core</code>) at a fixed rigidity; <code>score_rtiger.R</code> scores the calls against truth. We report <strong>two rigidities</strong> so the choice is not ad hoc:</p>
 <ul>
 <li><strong>r = 3</strong> — the <em>minimum-CO-bias</em> point of the rigidity sweep (<code>docs/09</code>): of all rigidities tested it recovers the most crossovers. Reproduce with <code>Rscript fit_rtiger.R 0 3 0 4</code> then <code>Rscript score_rtiger.R --rtiger results/rtiger_benchmark/rtiger_out_r3/rtiger_result.rds</code>.</li>
-<li><strong>r = 8</strong> — chosen <em>objectively</em> by RTIGER’s autotune (<code>optimize_R</code>, initial r₀ = 50, minimizing the expected number of erroneous segments) on the SNP50K skim, and applied consistently to the MolBreeding GBTS calls so all sources share one rigidity (<code>molbreeding_vs_skim.qmd</code>). Reproduce with <code>Rscript agent/autotune_rtiger_benchmark.R 0 50 &quot;&quot; 4</code> (writes <code>rtiger_out_auto/</code>, records the pick in <code>autotune_selected.txt</code>).</li>
+<li><strong>r = 8</strong> — chosen <em>objectively</em> by RTIGER’s autotune (<code>optimize_R</code>, initial r₀ = 50, minimizing the expected number of erroneous segments) on the SNP50K skim, and applied consistently to the MolBreeding target sequencing calls so all sources share one rigidity (<code>molbreeding_vs_skim.qmd</code>). Reproduce with <code>Rscript agent/autotune_rtiger_benchmark.R 0 50 &quot;&quot; 4</code> (writes <code>rtiger_out_auto/</code>, records the pick in <code>autotune_selected.txt</code>).</li>
 </ul>
 <p>The trailing <code>4</code> is the Julia EM thread count: <code>threads = 4</code> cuts benchmark walltime <strong>~35%</strong> on this machine versus single-threaded; fits are deterministic in the thread count, so the tables below are identical regardless.</p>
 <p>How r = 8 is obtained — the objective autotune call itself (kept <code>eval=FALSE</code> because it needs Julia + the RTIGER fork, like the rest of this section; the tables above are its scored outputs). The full script is <code>agent/autotune_rtiger_benchmark.R</code>:</p>

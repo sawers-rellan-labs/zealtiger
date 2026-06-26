@@ -47,7 +47,7 @@ its length is. Proof m is not additive: m=10 and m=0 give the same CO count
 (map sets that); only spacing differs.
 
 m IS estimable from **raw multipoint crossover spacing** (adjacent-interval
-coincidence) — e.g. from the **GBTS NILs** (100×, ~50K sites, near-complete
+coincidence) — e.g. from the **target sequencing NILs** (100×, ~50K sites, near-complete
 calls). NOT from the published consensus cM map.
 
 ---
@@ -87,7 +87,7 @@ Which floor binds depends on the platform — and the binding variable is
 - **Skim (Source 2):** ~50K sites, 0.4×, ~70% missing → ~**6.6** informative
   markers/Mb (`docs/09`). Detection floor (~0.5–1.5 Mb) is coarse; r tracks
   density, m barely matters. Sweep optimum r=2–3.
-- **GBTS / MolBreeding (Source 5):** *target capture*, **same ~50K grid**, 100×,
+- **target sequencing / MolBreeding (Source 5):** *target capture*, **same ~50K grid**, 100×,
   ~0% missing → ~**23** informative markers/Mb (~3.5× the skim). NOT WGS, NOT a
   finer grid — just no missingness + confident het.
 
@@ -97,20 +97,20 @@ an r**:
 | platform | inf. density | r=8 ⇒ physical floor | r for a 1.21 Mb floor |
 |---|---|---|---|
 | skim | ~6.6 /Mb | 8/6.6 = **1.21 Mb** | 8 |
-| GBTS | ~23 /Mb | 8/23 = **0.34 Mb** | ~28 |
+| target sequencing | ~23 /Mb | 8/23 = **0.34 Mb** | ~28 |
 
 **`r=8 for both platforms` (current `molbreeding_vs_skim.qmd:46`) does not give a
-matched physical floor.** At r=8 GBTS resolves to ~0.34 Mb — ~3.5× finer than the
-skim. If `L_floor(m=10)` ≈ 1 Mb, **GBTS at r=8 resolves below the interference
+matched physical floor.** At r=8 target sequencing resolves to ~0.34 Mb — ~3.5× finer than the
+skim. If `L_floor(m=10)` ≈ 1 Mb, **target sequencing at r=8 resolves below the interference
 floor → manufactures spurious short segments.** This is very likely part of the
-"GBTS reads more het / apparent over-fragmentation" observed — not all real fine
+"target sequencing reads more het / apparent over-fragmentation" observed — not all real fine
 structure.
 
 **Principled fix:** set r per platform to match a common physical floor:
 1. Measure `L_floor(m=10)` from the n=1500 sim (small-segment quantile of the
    true donor-segment-size distribution); m=0 gives the conservative bound.
 2. `true_r(platform) = L_floor × informative_density(platform)`.
-3. Optionally replace default m with m estimated from GBTS crossover spacing
+3. Optionally replace default m with m estimated from target sequencing crossover spacing
    (§2), then recompute.
 
 ---
