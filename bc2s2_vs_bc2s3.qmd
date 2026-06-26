@@ -17,6 +17,7 @@ params:
   map:        "results/maize_map_v5_clean.rds"             # consensus Marey map: (chr, bp, cm) anchors, B73 NAM v5
   brb_taxa:   "results/sim_calibration/brbseq_taxa_r7_wideseq/calls_common_schema.csv"   # BrB-RTI r=7, wideseq-filtered
   skimbin:    "results/sim_calibration/skimbin_calls/calls_common_schema.csv"            # Skim-BIN 1 Mb-bin GMM-HMM
+  nilhmm:     "results/sim_calibration/nilhmm_calls/calls_common_schema.csv"             # nilHMM count-HMM, per-taxon r calibrated to BC2S2 (same skim reads)
   corr:       "results/sample_correspondence/skim_brbseq_correspondence.csv"             # pedigree-matched skim<->BRB NILs
 ---
 
@@ -203,6 +204,7 @@ knitr::kable(ks_tbl, caption = sprintf(
 # --- the 3 genotyping methods (cM segments) on the both-platforms NIL set (cf. fragment_size_cm_validation) ---
 brb     <- read_csv(params$brb_taxa, show_col_types = FALSE)
 skimbin <- read_csv(params$skimbin,  show_col_types = FALSE)
+nilhmm  <- read_csv(params$nilhmm,   show_col_types = FALSE)   # count-HMM, same skim reads
 corr    <- read_csv(params$corr, show_col_types = FALSE) %>% filter(type == "NIL")
 brb_in  <- corr %>% separate_rows(brbseq_prefix, sep = ";") %>% transmute(name = brbseq_prefix, nil = pedigree) %>% filter(name %in% brb$name)
 skim_in <- corr %>% separate_rows(skim_prefix,  sep = ";") %>% transmute(name = skim_prefix,  nil = pedigree) %>% filter(name %in% sk$name)
@@ -214,7 +216,8 @@ blocks_cm <- function(seg) seg %>% arrange(name, chr, start_bp) %>% group_by(nam
 callers <- bind_rows(
   blocks_cm(sk      %>% filter(name %in% skim_in$name[skim_in$nil %in% both_nils])) %>% mutate(src = "Skim-RTI (r=5)"),
   blocks_cm(brb     %>% filter(name %in% brb_in$name [brb_in$nil  %in% both_nils])) %>% mutate(src = "BrB-RTI (r=7, ws)"),
-  blocks_cm(skimbin %>% filter(name %in% skim_in$name[skim_in$nil %in% both_nils])) %>% mutate(src = "Skim-BIN (1 Mb)"))
+  blocks_cm(skimbin %>% filter(name %in% skim_in$name[skim_in$nil %in% both_nils])) %>% mutate(src = "Skim-BIN (1 Mb)"),
+  blocks_cm(nilhmm  %>% filter(name %in% skim_in$name[skim_in$nil %in% both_nils])) %>% mutate(src = "nilHMM (counts)"))
 
 # --- fitted gamma over each simulation = the BC2S2 / BC2S3 expectations (dotted) ---
 f2 <- suppressWarnings(MASS::fitdistr(sim_s2$cm/100, "gamma")$estimate)
@@ -225,14 +228,15 @@ xs <- seq(0, quantile(callers$cm, 0.98), length.out = 400)
 gammas <- bind_rows(
   tibble(cm = xs, F = pgamma(xs/100, f2["shape"], f2["rate"]), expectation = lab2),
   tibble(cm = xs, F = pgamma(xs/100, f3["shape"], f3["rate"]), expectation = lab3))
-pal <- c("Skim-RTI (r=5)" = "purple4", "BrB-RTI (r=7, ws)" = "orange3", "Skim-BIN (1 Mb)" = "seagreen4")
+pal <- c("Skim-RTI (r=5)" = "purple4", "BrB-RTI (r=7, ws)" = "orange3", "Skim-BIN (1 Mb)" = "seagreen4",
+         "nilHMM (counts)" = "steelblue")
 pal[lab2] <- "firebrick"; pal[lab3] <- "royalblue3"
 
 ggplot() +
   stat_ecdf(data = callers, aes(cm, colour = src), linewidth = 0.9) +
   geom_line(data = gammas, aes(cm, F, colour = expectation), linetype = "dotted", linewidth = 1) +
   scale_colour_manual(values = pal, name = NULL,
-                      breaks = c("Skim-RTI (r=5)", "BrB-RTI (r=7, ws)", "Skim-BIN (1 Mb)", lab2, lab3)) +
+                      breaks = c("Skim-RTI (r=5)", "BrB-RTI (r=7, ws)", "Skim-BIN (1 Mb)", "nilHMM (counts)", lab2, lab3)) +
   coord_cartesian(xlim = c(0, quantile(callers$cm, 0.98))) +
   labs(x = "donor-segment size (cM)", y = "ECDF",
        title = "Caller fragment-size distributions vs the BC2S2 and BC2S3 expectations",
@@ -253,12 +257,13 @@ LIM <- 120
 qq_panel <- function(k, l, xlab, ttl) ggplot(bind_rows(
     qq_df(cm_of("Skim-RTI (r=5)"),    k, l, "Skim-RTI (r=5)"),
     qq_df(cm_of("BrB-RTI (r=7, ws)"), k, l, "BrB-RTI (r=7, ws)"),
-    qq_df(cm_of("Skim-BIN (1 Mb)"),   k, l, "Skim-BIN (1 Mb)")),
+    qq_df(cm_of("Skim-BIN (1 Mb)"),   k, l, "Skim-BIN (1 Mb)"),
+    qq_df(cm_of("nilHMM (counts)"),   k, l, "nilHMM (counts)")),
     aes(theo, samp, colour = series)) +
   geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey40") +
   geom_point(size = 0.8, alpha = 0.7) +
   scale_colour_manual(values = c("Skim-RTI (r=5)" = "purple4", "BrB-RTI (r=7, ws)" = "orange3",
-                                 "Skim-BIN (1 Mb)" = "seagreen4"), name = NULL) +
+                                 "Skim-BIN (1 Mb)" = "seagreen4", "nilHMM (counts)" = "steelblue"), name = NULL) +
   coord_equal(xlim = c(0, LIM), ylim = c(0, LIM)) +
   labs(x = xlab, y = "observed quantile (cM)", title = ttl)
 
@@ -266,13 +271,14 @@ p_qq1 <- qq_panel(f2["shape"], f2["rate"], "BC2S2 expectation quantile (cM)", "v
 p_qq2 <- qq_panel(f3["shape"], f3["rate"], "BC2S3 expectation quantile (cM)", "vs BC2S3 expectation")
 
 (p_qq1 | p_qq2) + plot_layout(guides = "collect") +
-  plot_annotation(subtitle = "All three methods vs each fitted-gamma expectation; dashed = 1:1. Points above the line = observed blocks longer than expected (axes capped at 120 cM).") &
+  plot_annotation(subtitle = "All four methods vs each fitted-gamma expectation; dashed = 1:1. Points above the line = observed blocks longer than expected (axes capped at 120 cM).") &
   theme(legend.position = "bottom")
 ```
 
-**Read.** All three methods are shown against both expectations. The two **skim** methods track the
-**BC2S2** line most closely — **Skim-RTI** nearly on it (it *is* BC2S2), **Skim-BIN** slightly above
-from 1 Mb-bin merging. **BrB-RTI** rides well above *both* lines: its heavy tail of merged blocks
+**Read.** All four methods are shown against both expectations. The three **skim** methods track the
+**BC2S2** line most closely — **Skim-RTI** nearly on it (it *is* BC2S2), **nilHMM** likewise on BC2S2
+(though here that is partly *by construction*: its per-taxon `r` was KS-calibrated to the BC2S2 sim),
+and **Skim-BIN** slightly above from 1 Mb-bin merging. **BrB-RTI** rides well above *both* lines: its heavy tail of merged blocks
 runs far longer than either neutral expectation, and it is no closer to BC2S3 (its true generation)
 than to BC2S2 — the over-merge dwarfs the one-meiosis difference. So block size places skim at BC2S2
 but cannot resolve BRB's generation; that signal is in heterozygosity, not block length (next).
