@@ -1,5 +1,5 @@
 ---
-title: "Skim-RTI / BrB-RTI / Skim-BIN — ancestry concordance on pedigree-matched NILs"
+title: "Skim-RTI / BrB-RTI / Skim-BIN / nilHMM — ancestry concordance on pedigree-matched NILs"
 author: "Fausto Rodríguez-Zapata"
 date: "`r Sys.Date()`"
 format:
@@ -27,13 +27,15 @@ params:
   brb_taxa:   "results/sim_calibration/brbseq_taxa_r7_wideseq/calls_common_schema.csv"   # BrB-RTI r=7, wideseq-filtered, per teosinte species (full 379)
   nil_seg:    "results/nil_segments.csv"                                                # n=1500 BC2S3 simulation introgression segments (NULL reference)
   skimbin:    "results/sim_calibration/skimbin_calls/calls_common_schema.csv"           # Skim-BIN: BzeaSeq 1 Mb-bin GMM-HMM, SAME skim reads as Skim-RTI (keyed on skim name)
+  nilhmm:     "results/sim_calibration/nilhmm_calls/calls_common_schema.csv"            # nilHMM: count-based BetaBinomial HMM, per-taxon r, SAME skim reads (keyed on skim name)
+  nilhmm_chk: "results/sim_calibration/nilhmm_calls/calls_checks_common_schema.csv"     # nilHMM B73/Purple checks (for the B73 control lane)
   broman_frac: "results/single_locus_check/fractions.csv"                               # per-NIL REF/Het/ALT fractions, Broman/simcross BC2S3 sim (n=1500)
 ---
 
 **Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
 
-Ancestry concordance across **three callers** — **Skim-RTI**, **BrB-RTI**, and
-**Skim-BIN** — matched **by NIL pedigree string**, not by the `PN#_SID#` plate index,
+Ancestry concordance across **four callers** — **Skim-RTI**, **BrB-RTI**,
+**Skim-BIN**, and **nilHMM** — matched **by NIL pedigree string**, not by the `PN#_SID#` plate index,
 which is mislabeled in the BRB-seq run (`docs/brbseq-sample-mislabeling.md`,
 `docs/brbseq_sample_identity.html`). The BRB-seq plate id does not track the NIL; the
 **pedigree string is the cross-experiment identifier**. The only formatting difference
@@ -49,6 +51,13 @@ appends and the BRB metadata omits, so we **drop `.B`** before joining.
   shares the reads with Skim-RTI, so it is **keyed on the same skim sample name** — no
   pedigree join between the two skim callers; the pedigree join only relates the skim
   side to BRB.
+- **nilHMM** — the **same SNP50K skim reads as Skim-RTI**, called by the nNIL
+  **count-based BetaBinomial HMM** (`nilhmm`, FORMAT/AD; per-taxon recombination `r`
+  calibrated to the BC2S2 sim). Like Skim-BIN it is **keyed on the skim sample name**.
+  As a per-marker count HMM it is the closest method to Skim-RTI, so the Skim-RTI×nilHMM
+  comparison is largely a *two-implementations on identical reads* check. Caveat: at ~0.4×
+  the het/hom split is depth-limited (nilHMM is het-biased), so its donor **footprint** is
+  the reliable quantity, not the HET-vs-ALT partition.
 
 The pedigree-matched **pairs are sourced from the curated correspondence**
 (`results/sample_correspondence/skim_brbseq_correspondence.csv`, built by
@@ -72,6 +81,8 @@ chop <- function(x) sub("\\.B$", "", x)
 brb     <- read_csv(params$brb_taxa,   show_col_types = FALSE)   # BrB-RTI, per-species fit (carries the real BRB sample names)
 skim    <- read_csv(params$skim_calls, show_col_types = FALSE)
 skimbin <- read_csv(params$skimbin,    show_col_types = FALSE)   # Skim-BIN, keyed on skim sample name
+nilhmm  <- read_csv(params$nilhmm,     show_col_types = FALSE)   # nilHMM (counts), keyed on skim sample name
+nilhmm_chk <- read_csv(params$nilhmm_chk, show_col_types = FALSE)  # nilHMM B73/Purple checks
 brbmeta <- read_csv(params$brb_meta, show_col_types = FALSE) %>%
   transmute(sid = sample_id, nil = chop(genotype))
 skimped <- read_csv(params$skim_ped, show_col_types = FALSE)   # sample, pedigree (.B-dropped)
@@ -97,7 +108,7 @@ state_on_grid <- function(seg, nm) {
   d$state[findOverlaps(gg, GRanges(d$chr, IRanges(d$start_bp, d$end_bp)), select = "first")]
 }
 
-cat(sprintf("3-caller per-NIL scope — MolBreeding NILs that also have BRB-seq (pedigree-matched): %d\n  %s\n",
+cat(sprintf("per-NIL scope — MolBreeding NILs that also have BRB-seq (pedigree-matched): %d\n  %s\n",
             nrow(matched), paste(matched$nil, collapse = ", ")))
 ```
 
@@ -215,8 +226,8 @@ as a confounder.
 
 Ancestry calls for the two 10-NIL coverage sweeps, painted as the coverage of the
 *varying* platform climbs (rows ordered low→high; the row label prefixes the varying
-λ). Three tracks per NIL — **top = Skim-BIN (1 Mb-bin), middle = Skim-RTI (r=5), bottom =
-BrB-RTI (r=7, ws)** — and a
+λ). Four tracks per NIL — **top→bottom = Skim-BIN (1 Mb-bin), Skim-RTI (r=5), nilHMM
+(counts), BrB-RTI (r=7, ws)** — and a
 **B73 control** row pinned at top (forced, not pedigree-matched: skim `PN10_SID893`,
 BRB `PN3_SID213` — clean reps; the old `PN1_SID15` is an introgressed impostor,
 `docs/b73_checks_qc.html`). Each B73 control comes from its platform's **B73 check group**,
@@ -258,17 +269,21 @@ sweep_paint <- function(which) {
     mutate(rowlab = sprintf("%.2f×<br>%s", vary_cov, gsub("_", "<br>", nil)))
   nil_rows <- pmap_dfr(list(m$skim_name, m$brb_name, m$rowlab), function(sk, br, rl)
     bind_rows(lane2(skim_sw, sk, "Skim-RTI", rl), lane2(brb_sw, br, "BrB-RTI", rl),
-              lane2(skimbin, sk, "Skim-BIN", rl)))   # Skim-BIN keyed on the skim sample name
+              lane2(skimbin, sk, "Skim-BIN", rl),       # Skim-BIN keyed on the skim sample name
+              lane2(nilhmm,  sk, "nilHMM",   rl)))      # nilHMM keyed on the skim sample name
   b73 <- bind_rows(lane2(skim_sw, SKIM_B73, "Skim-RTI", "**B73 control**"),
                    lane2(brb_sw,  BRB_B73,  "BrB-RTI",  "**B73 control**"),
-                   lane2(skimbin, SKIM_B73, "Skim-BIN", "**B73 control**"))
+                   lane2(skimbin, SKIM_B73, "Skim-BIN", "**B73 control**"),
+                   lane2(nilhmm_chk, SKIM_B73, "nilHMM", "**B73 control**"))  # nilHMM B73 from its check group
   # B73 control pinned at the TOP; coverage rows keep their current descending order below
   bind_rows(b73, nil_rows) %>%
     mutate(chr = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)),
            row = factor(row, levels = c("**B73 control**", rev(m$rowlab))),
-           method = factor(method, c("Skim-BIN","Skim-RTI","BrB-RTI")),
-           ylo = case_when(method == "Skim-BIN" ~ 0.68, method == "Skim-RTI" ~ 0.34, TRUE ~ 0.00),
-           yhi = case_when(method == "Skim-BIN" ~ 1.00, method == "Skim-RTI" ~ 0.66, TRUE ~ 0.32))
+           method = factor(method, c("Skim-BIN","Skim-RTI","nilHMM","BrB-RTI")),
+           ylo = case_when(method == "Skim-BIN" ~ 0.75, method == "Skim-RTI" ~ 0.50,
+                           method == "nilHMM"  ~ 0.25, TRUE ~ 0.00),
+           yhi = case_when(method == "Skim-BIN" ~ 1.00, method == "Skim-RTI" ~ 0.74,
+                           method == "nilHMM"  ~ 0.49, TRUE ~ 0.24))
 }
 paint_plot <- function(df, title, sub) {
   ggplot(df, aes(xmin = start_bp/1e6, xmax = end_bp/1e6, ymin = ylo, ymax = yhi, fill = state)) +
@@ -276,7 +291,8 @@ paint_plot <- function(df, title, sub) {
     facet_grid(row ~ chr, scales = "free_x", space = "free_x", switch = "y") +
     scale_fill_manual(values = pal, drop = FALSE) +
     scale_x_continuous(labels = scales::unit_format(unit = "", scale = 1)) +
-    scale_y_continuous(breaks = c(0.16, 0.50, 0.84), labels = c("BrB-RTI","Skim-RTI","Skim-BIN"),
+    scale_y_continuous(breaks = c(0.12, 0.37, 0.62, 0.875),
+                       labels = c("BrB-RTI","nilHMM","Skim-RTI","Skim-BIN"),
                        expand = expansion(mult = 0.02), position = "right") +
     labs(title = title, subtitle = sub, x = "Position (Mb)", fill = "Genotype") +
     ggpubr::theme_classic2(base_size = 9) +
@@ -295,7 +311,7 @@ paint_plot <- function(df, title, sub) {
 ```{r sweep-vary-brb, fig.width=12, fig.height=12}
 paint_plot(sweep_paint("vary_brb"),
            "Coverage sweep — vary BRB-seq depth, skim held ≈ mean",
-           "rows: B73 control then 10 NILs by increasing BRB-seq λ | Skim-BIN / Skim-RTI / BrB-RTI | gold REF, green HET, purple ALT")
+           "rows: B73 control then 10 NILs by increasing BRB-seq λ | Skim-BIN / Skim-RTI / nilHMM / BrB-RTI | gold REF, green HET, purple ALT")
 ```
 
 ### Vary skim coverage (BRB-seq ≈ mean)
@@ -303,7 +319,7 @@ paint_plot(sweep_paint("vary_brb"),
 ```{r sweep-vary-skim, fig.width=12, fig.height=12}
 paint_plot(sweep_paint("vary_skim"),
            "Coverage sweep — vary skim depth, BRB-seq held ≈ mean",
-           "rows: B73 control then 10 NILs by increasing skim λ | Skim-BIN / Skim-RTI / BrB-RTI")
+           "rows: B73 control then 10 NILs by increasing skim λ | Skim-BIN / Skim-RTI / nilHMM / BrB-RTI")
 ```
 
 **Read:** the **B73 control** anchors both panels — Skim-RTI paints it ~all-REF
@@ -324,17 +340,20 @@ jac_one <- function(s_nil) {
   k <- state_on_grid(skim,    p$skim_name)   # Skim-RTI
   b <- state_on_grid(brb,     p$brb_name)    # BrB-RTI
   n <- state_on_grid(skimbin, p$skim_name)   # Skim-BIN (same skim sample)
-  tibble(J_RTI_BrB = jac(k, b), J_RTI_BIN = jac(k, n), J_BrB_BIN = jac(b, n),
+  h <- state_on_grid(nilhmm,  p$skim_name)   # nilHMM (same skim sample)
+  tibble(J_RTI_BrB = jac(k, b), J_RTI_BIN = jac(k, n), J_RTI_nil = jac(k, h), J_BrB_BIN = jac(b, n),
          skim_donor = mean(k > 0, na.rm = TRUE), brb_donor = mean(b > 0, na.rm = TRUE),
-         bin_donor = mean(n > 0, na.rm = TRUE))
+         bin_donor = mean(n > 0, na.rm = TRUE), nil_donor = mean(h > 0, na.rm = TRUE))
 }
 pair_tab <- matched %>% mutate(m = map(nil, jac_one)) %>% unnest(m) %>%
   transmute(NIL = nil, brb_label = brb_name, skim_sample = skim_name,
-            J_RTI_BrB = round(J_RTI_BrB, 2), J_RTI_BIN = round(J_RTI_BIN, 2), J_BrB_BIN = round(J_BrB_BIN, 2),
-            skim_donor = round(skim_donor, 3), brb_donor = round(brb_donor, 3), bin_donor = round(bin_donor, 3)) %>%
+            J_RTI_BrB = round(J_RTI_BrB, 2), J_RTI_BIN = round(J_RTI_BIN, 2),
+            J_RTI_nil = round(J_RTI_nil, 2), J_BrB_BIN = round(J_BrB_BIN, 2),
+            skim_donor = round(skim_donor, 3), brb_donor = round(brb_donor, 3),
+            bin_donor = round(bin_donor, 3), nil_donor = round(nil_donor, 3)) %>%
   arrange(desc(J_RTI_BrB))
 knitr::kable(pair_tab,
-             caption = "Per pedigree-matched NIL: pairwise donor Jaccard across the three callers (RTI=Skim-RTI, BrB=BrB-RTI, BIN=Skim-BIN) and per-caller donor fraction. (PN#_SID# plate labels for provenance only.)")
+             caption = "Per pedigree-matched NIL: pairwise donor Jaccard across the four callers (RTI=Skim-RTI, BrB=BrB-RTI, BIN=Skim-BIN, nil=nilHMM; J_RTI_nil = same-reads two-implementations check) and per-caller donor fraction. (PN#_SID# plate labels for provenance only.)")
 ```
 
 **Read:** `J_RTI_BIN` is the cleanest check — Skim-RTI vs Skim-BIN on the **same reads**,
@@ -352,7 +371,8 @@ paired <- map_dfr(matched$nil, function(s_nil) {
   tibble(nil  = s_nil,
          skim = state_on_grid(skim,    p$skim_name),
          brb  = state_on_grid(brb,     p$brb_name),
-         bin  = state_on_grid(skimbin, p$skim_name))
+         bin  = state_on_grid(skimbin, p$skim_name),
+         nilh = state_on_grid(nilhmm,  p$skim_name))
 })
 cats <- c("0 recurrent", "1 het", "2 donor")
 cm_kable <- function(rows, cols, rlab, clab) {
@@ -378,6 +398,12 @@ cm_kable(paired$skim, paired$brb, "Skim-RTI", "BrB-RTI")
 cm_kable(paired$skim, paired$bin, "Skim-RTI", "Skim-BIN")
 ```
 
+### Skim-RTI vs nilHMM — same reads, two count-HMM implementations
+
+```{r cm-rti-nil}
+cm_kable(paired$skim, paired$nilh, "Skim-RTI", "nilHMM")
+```
+
 ### BrB-RTI vs Skim-BIN
 
 ```{r cm-brb-bin}
@@ -388,8 +414,8 @@ cm_kable(paired$brb, paired$bin, "BrB-RTI", "Skim-BIN")
 
 Donor-block sizes (runs of donor state — HET or ALT — collapsed per chromosome) pooled
 across the **full set of NILs called on *both* platforms** (pedigree-matched via the
-correspondence; BrB-RTI from the per-species fit). All three callers: **Skim-RTI** and
-**Skim-BIN** on the same skim reads, **BrB-RTI** on BRB-seq. Grey curve is the **Null**
+correspondence; BrB-RTI from the per-species fit). All four callers: **Skim-RTI**,
+**Skim-BIN**, and **nilHMM** on the same skim reads, **BrB-RTI** on BRB-seq. Grey curve is the **Null**
 n=1500 BC2S3 simulation — the modeled expectation under no selection.
 
 ```{r intro-sizes, fig.width=8, fig.height=5}
@@ -415,19 +441,22 @@ brb_b  <- donor_blocks(brb_taxa %>% filter(name %in% brb_in$name[brb_in$nil  %in
 # Skim-BIN on the SAME skim samples as Skim-RTI (keyed on skim name)
 bin_b  <- donor_blocks(skimbin  %>% filter(name %in% skim_in$name[skim_in$nil %in% both_nils])) %>%
   mutate(src = "Skim-BIN (1 Mb)")
+# nilHMM on the SAME skim samples (keyed on skim name)
+nil_b  <- donor_blocks(nilhmm   %>% filter(name %in% skim_in$name[skim_in$nil %in% both_nils])) %>%
+  mutate(src = "nilHMM (counts)")
 null_b <- nil_seg %>% transmute(size_mb = mb)
-cat(sprintf("NILs on both platforms: %d | Skim-RTI %d blocks | BrB-RTI %d blocks | Skim-BIN %d blocks\n",
-            length(both_nils), nrow(skim_b), nrow(brb_b), nrow(bin_b)))
+cat(sprintf("NILs on both platforms: %d | Skim-RTI %d | BrB-RTI %d | Skim-BIN %d | nilHMM %d blocks\n",
+            length(both_nils), nrow(skim_b), nrow(brb_b), nrow(bin_b), nrow(nil_b)))
 
-ggplot(bind_rows(skim_b, brb_b, bin_b), aes(x = size_mb, fill = src)) +
-  geom_histogram(aes(y = after_stat(density)), position = "identity", alpha = 0.45, bins = 30) +
+ggplot(bind_rows(skim_b, brb_b, bin_b, nil_b), aes(x = size_mb, fill = src)) +
+  geom_histogram(aes(y = after_stat(density)), position = "identity", alpha = 0.4, bins = 30) +
   geom_freqpoly(data = null_b, aes(x = size_mb, y = after_stat(density)),
                 bins = 30, colour = "grey20", linewidth = 0.9, inherit.aes = FALSE) +
   scale_fill_manual(values = c("Skim-RTI (r=5)" = "purple4", "BrB-RTI (r=7, ws)" = "orange3",
-                               "Skim-BIN (1 Mb)" = "seagreen4")) +
+                               "Skim-BIN (1 Mb)" = "seagreen4", "nilHMM (counts)" = "steelblue")) +
   scale_x_log10() +
   labs(x = "introgression size (Mb, log scale)", y = "density", fill = NULL,
-       title = "Introgression-size distribution — Skim-RTI / BrB-RTI / Skim-BIN",
+       title = "Introgression-size distribution — Skim-RTI / BrB-RTI / Skim-BIN / nilHMM",
        subtitle = sprintf("%d NILs called on both platforms (pedigree-matched, full set) | grey = Null (n=1500 sim)",
                           length(both_nils))) +
   theme_bw()
@@ -460,10 +489,11 @@ freq <- bind_rows(
   state_freq(skim,    sk_names,  "Skim-RTI (r=5)"),
   state_freq(brb,     brb_names, "BrB-RTI (r=7, ws)"),
   state_freq(skimbin, sk_names,  "Skim-BIN (1 Mb)"),
+  state_freq(nilhmm,  sk_names,  "nilHMM (counts)"),
   read_csv(params$broman_frac, show_col_types = FALSE) %>%       # n=1500 simcross BC2S3 simulation
     transmute(name = as.character(nil_id), Het, ALT, method = "Broman sim (n=1500)")) %>%
   pivot_longer(c(Het, ALT), names_to = "state", values_to = "freq") %>%
-  mutate(method = factor(method, c("Skim-RTI (r=5)", "BrB-RTI (r=7, ws)", "Skim-BIN (1 Mb)", "Broman sim (n=1500)")),
+  mutate(method = factor(method, c("Skim-RTI (r=5)", "BrB-RTI (r=7, ws)", "Skim-BIN (1 Mb)", "nilHMM (counts)", "Broman sim (n=1500)")),
          state  = factor(state, c("Het", "ALT"), c("HET", "homozygous ALT (donor)")))
 expd <- tibble(state = factor(c("HET", "homozygous ALT (donor)"),
                               c("HET", "homozygous ALT (donor)")),
@@ -475,7 +505,8 @@ ggplot(freq, aes(method, freq, fill = method)) +
   geom_hline(data = expd, aes(yintercept = expected), linetype = "dashed", colour = "grey20") +
   facet_wrap(~ state, scales = "free_y") +
   scale_fill_manual(values = c("Skim-RTI (r=5)" = "purple4", "BrB-RTI (r=7, ws)" = "orange3",
-                               "Skim-BIN (1 Mb)" = "seagreen4", "Broman sim (n=1500)" = "grey60"), guide = "none") +
+                               "Skim-BIN (1 Mb)" = "seagreen4", "nilHMM (counts)" = "steelblue",
+                               "Broman sim (n=1500)" = "grey60"), guide = "none") +
   labs(x = NULL, y = "per-NIL genome fraction",
        title = "HET and homozygous-ALT genome fraction: callers vs the BC2S3 simulation & one-locus p0",
        subtitle = sprintf("grey = Broman/simcross sim (n=1500) | dashed = single-locus p0 (HET %.3f, ALT %.3f) = the sim's mean | %d NILs on both platforms",
@@ -488,9 +519,9 @@ ggplot(freq, aes(method, freq, fill = method)) +
 after S3). A caller sitting above the dashed HET line / below the ALT line is over-calling
 heterozygosity — the RNA-noise failure mode BrB-RTI is most prone to.
 
-## Chromosome painting — Skim-RTI / BrB-RTI / Skim-BIN per NIL
+## Chromosome painting — Skim-RTI / BrB-RTI / Skim-BIN / nilHMM per NIL
 
-Three tracks per NIL (**top = Skim-BIN 1 Mb, middle = Skim-RTI r=5, bottom = BrB-RTI
+Four tracks per NIL (**top→bottom = Skim-BIN 1 Mb, Skim-RTI r=5, nilHMM counts, BrB-RTI
 r=7 wideseq**), grouped and labelled by the `.B`-dropped **pedigree** (wrapped at the left); the
 method label is at the right. NILs ordered by Skim-RTI vs BrB-RTI donor Jaccard (best first).
 
@@ -505,23 +536,27 @@ paint <- map_dfr(matched$nil, function(s_nil) {
   p <- matched[matched$nil == s_nil, ]
   bind_rows(lane(skim,    p$skim_name, "Skim-RTI", s_nil),
             lane(brb,     p$brb_name,  "BrB-RTI",  s_nil),
-            lane(skimbin, p$skim_name, "Skim-BIN", s_nil))   # same skim sample
+            lane(skimbin, p$skim_name, "Skim-BIN", s_nil),    # same skim sample
+            lane(nilhmm,  p$skim_name, "nilHMM",   s_nil))    # same skim sample
 }) %>%
   mutate(chr  = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)),
          nil  = factor(gsub("_", "<br>", nil), levels = gsub("_", "<br>", nil_ord)),
-         method = factor(method, c("Skim-BIN","Skim-RTI","BrB-RTI")),
-         ylo = case_when(method == "Skim-BIN" ~ 0.68, method == "Skim-RTI" ~ 0.34, TRUE ~ 0.00),
-         yhi = case_when(method == "Skim-BIN" ~ 1.00, method == "Skim-RTI" ~ 0.66, TRUE ~ 0.32))
+         method = factor(method, c("Skim-BIN","Skim-RTI","nilHMM","BrB-RTI")),
+         ylo = case_when(method == "Skim-BIN" ~ 0.75, method == "Skim-RTI" ~ 0.50,
+                         method == "nilHMM"  ~ 0.25, TRUE ~ 0.00),
+         yhi = case_when(method == "Skim-BIN" ~ 1.00, method == "Skim-RTI" ~ 0.74,
+                         method == "nilHMM"  ~ 0.49, TRUE ~ 0.24))
 
 ggplot(paint, aes(xmin = start_bp/1e6, xmax = end_bp/1e6, ymin = ylo, ymax = yhi, fill = state)) +
   geom_rect() +
   facet_grid(nil ~ chr, scales = "free_x", space = "free_x", switch = "y") +
   scale_fill_manual(values = pal, drop = FALSE) +
   scale_x_continuous(labels = scales::unit_format(unit = "", scale = 1)) +
-  scale_y_continuous(breaks = c(0.16, 0.50, 0.84), labels = c("BrB-RTI","Skim-RTI","Skim-BIN"),
+  scale_y_continuous(breaks = c(0.12, 0.37, 0.62, 0.875),
+                     labels = c("BrB-RTI","nilHMM","Skim-RTI","Skim-BIN"),
                      expand = expansion(mult = 0.02), position = "right") +
-  labs(title = "Skim-RTI / BrB-RTI / Skim-BIN — pedigree-matched NILs",
-       subtitle = "per NIL: top Skim-BIN (1 Mb) / middle Skim-RTI (r=5) / bottom BrB-RTI (r=7, ws) | gold REF, green HET, purple ALT",
+  labs(title = "Skim-RTI / BrB-RTI / Skim-BIN / nilHMM — pedigree-matched NILs",
+       subtitle = "per NIL, top→bottom: Skim-BIN (1 Mb) / Skim-RTI (r=5) / nilHMM (counts) / BrB-RTI (r=7, ws) | gold REF, green HET, purple ALT",
        x = "Position (Mb)", fill = "Genotype") +
   ggpubr::theme_classic2(base_size = 9) +
   theme(legend.position = "bottom", strip.background = element_blank(),
@@ -544,6 +579,11 @@ ggplot(paint, aes(xmin = start_bp/1e6, xmax = end_bp/1e6, ymin = ylo, ymax = yhi
 - **Skim-BIN** (same skim reads, 1 Mb-bin GMM-HMM) tracks Skim-RTI's donor footprint —
   the `J_RTI_BIN` column isolates the *caller* difference on identical reads — but is
   coarser, so it blurs sub-Mb structure the per-marker Skim-RTI HMM resolves.
+- **nilHMM** (same skim reads, count-based BetaBinomial HMM, per-taxon `r`) is the closest
+  method to Skim-RTI — `J_RTI_nil` and the Skim-RTI×nilHMM confusion isolate a
+  *two-implementations* difference on identical reads. At ~0.4× it is **het-biased** (the
+  het/hom split is depth-limited), so its donor **footprint** is the reliable quantity, not
+  the HET-vs-ALT partition.
 - Any matched NIL with low Jaccard (e.g. `Zx.0370`) is a sample whose BRB-seq genotype
   disagrees with its stated pedigree — a residual identity issue the `.B` fix does not
   resolve, to be confirmed by the Hazel rerun (`docs/brbseq-sample-mislabeling.md`).
