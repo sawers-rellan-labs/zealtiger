@@ -186,7 +186,7 @@ with a rate a little under $g=5$ (shrinking het territory). It fits the simulati
 xs <- seq(0, quantile(sim_cm$cm, 0.995), length.out = 400)
 curves <- bind_rows(
   tibble(cm = xs, d = dgamma(xs/100, shape = k, rate = lam)/100,
-         curve = sprintf("derived Gamma(k=%.2f, λ=%.1f)", k, lam)),
+         curve = sprintf("BC2S3 expectation: Gamma(k=%.2f, λ=%.1f)", k, lam)),
   tibble(cm = xs, d = dexp(xs/100, rate = g)/100,           curve = "Exp(5)  [lower bracket]"),
   tibble(cm = xs, d = dgamma(xs/100, shape = 2, rate = 2/mean(sim_cm$M))/100,
          curve = "Gamma(2)  [upper bracket]"))
@@ -198,8 +198,8 @@ ggplot() +
   scale_colour_manual(values = c("black", "firebrick", "royalblue3")) +
   scale_linetype_manual(values = c("solid", "dashed", "dashed")) +
   labs(x = "donor-segment size (cM)", y = "density", colour = NULL, linetype = NULL,
-       title = "Simulated cM segment lengths vs the derived gamma law",
-       subtitle = sprintf("n=%d segments from the n=1500 BC2S3 sim | derived Gamma KS D=%.3f",
+       title = "Simulated cM segment lengths vs the fitted BC2S3 gamma",
+       subtitle = sprintf("n=%d segments from the n=1500 BC2S3 sim | fitted gamma KS D=%.3f",
                           nrow(sim_cm), ks_gamma)) +
   theme(legend.position = c(0.72, 0.8), legend.background = element_rect(fill = "white", colour = NA))
 ```
@@ -210,7 +210,8 @@ Convert each caller's **called Mb segments back to cM** by evaluating the consen
 map at the segment endpoints and differencing,
 $\Delta\text{cM}=M(\text{end\_bp})-M(\text{start\_bp})$ — a *forward* map lookup (per-chromosome
 monotone linear interpolation), no inversion. Then compare each caller's cM distribution to the
-**map-free reference**: the derived $\text{Gamma}(k,\lambda)$ and, equivalently, the
+**map-free reference**: the **BC2S3 expectation** — the fitted $\text{Gamma}(k,\lambda)$
+whose *family* (not its $k,\lambda$) the Part 1 derivation fixes — and, equivalently, the
 simulation's own cM lengths.
 
 ```{r load-calls}
@@ -266,7 +267,7 @@ ks_vs <- function(x) tibble(
 
 ks_summary <- called %>% group_by(src) %>% group_modify(~ ks_vs(.x$cm)) %>%
   mutate(across(c(median_cM, mean_cM), ~round(.,2)), across(starts_with("D_"), ~round(.,3)))
-knitr::kable(ks_summary, caption = "Caller cM segment distributions vs the derived Gamma and the n=1500 sim (KS D).")
+knitr::kable(ks_summary, caption = "Caller cM segment distributions vs the BC2S3 expectation (fitted gamma) and the n=1500 sim (KS D).")
 ```
 
 ```{r plot-ecdf, fig.width=8, fig.height=5}
@@ -281,8 +282,8 @@ ggplot(called, aes(cm, colour = src)) +
                                  "Skim-BIN (1 Mb)" = "seagreen4", "nilHMM (counts)" = "steelblue")) +
   coord_cartesian(xlim = c(0, quantile(called$cm, 0.99))) +
   labs(x = "donor-segment size (cM)", y = "ECDF", colour = NULL,
-       title = "Caller cM segment distributions vs the derived analytic law",
-       subtitle = sprintf("dashed black = derived Gamma(k=%.2f, λ=%.1f) | %d NILs on both platforms",
+       title = "Caller cM segment distributions vs the BC2S3 expectation",
+       subtitle = sprintf("dashed black = BC2S3 expectation (fitted Gamma k=%.2f, λ=%.1f) | %d NILs on both platforms",
                           k, lam, length(both_nils))) +
   theme(legend.position = c(0.78, 0.3), legend.background = element_rect(fill = "white", colour = NA))
 ```
@@ -295,14 +296,14 @@ ggplot(called, aes(cm, fill = src)) +
   geom_histogram(aes(y = after_stat(density)), position = "identity", alpha = 0.45, bins = 30) +
   geom_freqpoly(data = sim_cm, aes(cm, after_stat(density)), bins = 30,
                 colour = "grey25", linewidth = 0.8, inherit.aes = FALSE) +
-  geom_line(data = curves %>% filter(grepl("derived", curve)),
+  geom_line(data = curves %>% filter(grepl("BC2S3 expectation", curve)),
             aes(cm, d * cm * log(10)), colour = "black", linewidth = 0.9, inherit.aes = FALSE) +
   scale_fill_manual(values = c("Skim-RTI (r=5)" = "purple4", "BrB-RTI (r=7, ws)" = "orange3",
                                "Skim-BIN (1 Mb)" = "seagreen4", "nilHMM (counts)" = "steelblue")) +
   scale_x_log10() +
   labs(x = "donor-segment size (cM, log scale)", y = "density (per unit log10 cM)", fill = NULL,
-       title = "Caller cM segment-size distributions vs the derived law",
-       subtitle = "black = derived Gamma (Jacobian-corrected for the log axis) | grey = n=1500 sim cM lengths") +
+       title = "Caller cM segment-size distributions vs the BC2S3 expectation",
+       subtitle = "black = BC2S3 expectation (fitted Gamma, Jacobian-corrected for the log axis) | grey = n=1500 sim cM lengths") +
   theme(legend.position = c(0.01, 0.99), legend.justification = c("left", "top"),
         legend.background = element_rect(fill = "white", colour = NA))
 ```
@@ -415,10 +416,12 @@ against the same reference.
 
 - **The derivation is validated:** the BC2S3 recombination model predicts a near-exponential
   gamma ($k\gtrsim1$, $\lambda\lesssim5$/Morgan), and the simulation's own cM lengths match it to
-  KS $D\approx`r round(ks_gamma,3)`$ — so the analytic law is a faithful, map-free stand-in for
-  the n=1500 reference, now available in closed form.
-- **Caller comparison in cM** (table above) mirrors the Mb panel but against the analytic
-  reference. Deviations read the same way: a caller that over-fragments donor blocks shifts mass
+  KS $D\approx`r round(ks_gamma,3)`$ — so the **BC2S3 expectation** (the gamma *family* fixed by
+  the derivation, with $k,\lambda$ fitted to the sim) is a faithful, map-free stand-in for the
+  n=1500 reference. (The derivation fixes the family + brackets + direction; $k,\lambda$ are
+  estimated, not closed-form.)
+- **Caller comparison in cM** (table above) mirrors the Mb panel but against the BC2S3
+  expectation. Deviations read the same way: a caller that over-fragments donor blocks shifts mass
   to short cM; one that under-resolves (Skim-BIN's 1 Mb bins) loses the short tail.
 - **Conserved marker order is load-bearing.** The cM conversion uses the consensus $\rho(x)$;
   for any introgression with local rearrangement the map is wrong and $\Delta$cM is biased. This
