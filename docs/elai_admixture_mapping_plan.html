@@ -2447,7 +2447,131 @@ p\!\left(s,k\mid s&#39;,k&#39;\right)=
 D_m^{(i)}(s)=\sum_{c\in\{1,2\}}\Pr\!\left(X_m^{(i,c)}=s \;\middle|\; g^{(i)},\xi^\ast\right)\in[0,2],
 \]</span></p>
 <p>the expected number of chromosomes of ancestry <span class="math inline">\(s\)</span> at marker <span class="math inline">\(m\)</span> (Yang’s mexicana dosage; “ELAI score <span class="math inline">\(&gt;1.8\)</span>” <span class="math inline">\(\equiv\)</span> dosage <span class="math inline">\(&gt;0.9\)</span> per chromosome).</p>
-<p><strong>Symbol key:</strong> <span class="math inline">\(S\)</span> upper clusters (sources), <span class="math inline">\(K\)</span> lower clusters (haplotype clusters), <span class="math inline">\(\theta_{mk}\)</span> cluster allele frequencies, <span class="math inline">\(\alpha_s^{(i)}\)</span> admixture proportions, <span class="math inline">\(\beta_{msk}\)</span> lower-given-upper probabilities, <span class="math inline">\(j_m\)</span> upper no-switch / <span class="math inline">\(r_m\)</span> lower switch probabilities, <span class="math inline">\(\gamma\)</span> admixture generations, <span class="math inline">\(\lambda\)</span> mean tract length (cM), <span class="math inline">\(\mu\)</span> error term, <span class="math inline">\(c_m\)</span> inter-marker genetic distance.</p>
+<p><strong>Parameters and symbols</strong> (verified against Guan 2014):</p>
+<p><em>Indices and quantities in the dosage:</em></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 50%">
+<col style="width: 50%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Symbol</th>
+<th>Meaning</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><span class="math inline">\(D_m^{(i)}(s)\)</span></td>
+<td>local-ancestry dosage (the “ELAI score”) of source <span class="math inline">\(s\)</span>, individual <span class="math inline">\(i\)</span>, marker <span class="math inline">\(m\)</span>; range <span class="math inline">\([0,2]\)</span></td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(i\)</span></td>
+<td>individual (NIL)</td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\(m\)</span></td>
+<td>marker (SNP / genome position)</td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(s\)</span></td>
+<td>source population / ancestry, <span class="math inline">\(s\in\{1,\dots,S\}\)</span></td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\(c\)</span></td>
+<td>chromosome copy (homolog), <span class="math inline">\(c\in\{1,2\}\)</span> — summing over the two copies is what makes the range <span class="math inline">\([0,2]\)</span></td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(X_m^{(i,c)}\)</span></td>
+<td>upper-layer (ancestry) hidden state of homolog <span class="math inline">\(c\)</span></td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\(g^{(i)}\)</span></td>
+<td>individual <span class="math inline">\(i\)</span>’s <strong>full</strong> genotype vector across <strong>all</strong> markers (not just marker <span class="math inline">\(m\)</span>)</td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(\xi^{\ast}\)</span></td>
+<td>the <strong>fitted</strong> parameter set (EM estimates); “<span class="math inline">\(\mid\xi^\ast\)</span>” = “using the trained model”</td>
+</tr>
+</tbody>
+</table>
+<p><em>Model parameters that make up <span class="math inline">\(\xi\)</span>:</em></p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 33%">
+<col style="width: 33%">
+<col style="width: 33%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>Symbol</th>
+<th>Meaning</th>
+<th>How set</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><span class="math inline">\(\theta_{mk}\)</span></td>
+<td>allele frequency of lower cluster <span class="math inline">\(k\)</span> at marker <span class="math inline">\(m\)</span></td>
+<td><strong>EM-fit</strong> (Newton–Raphson)</td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(\alpha_s^{(i)}\)</span></td>
+<td>admixture proportion of <span class="math inline">\(i\)</span> in source <span class="math inline">\(s\)</span> (<span class="math inline">\(\sum_s\alpha_s^{(i)}=1\)</span>)</td>
+<td><strong>EM-fit</strong> (closed form)</td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\(\beta_{msk}\)</span></td>
+<td>prob. of lower cluster <span class="math inline">\(k\)</span> given upper <span class="math inline">\(s\)</span> at marker <span class="math inline">\(m\)</span> (<span class="math inline">\(\sum_k\beta_{msk}=1\)</span>)</td>
+<td><strong>EM-fit</strong> (closed form)</td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(j_m\)</span></td>
+<td>upper-layer <strong>no-switch</strong> prob., <span class="math inline">\(j_m=\exp(-t_m^{(u)})\)</span></td>
+<td>derived from <span class="math inline">\(\gamma,N_e,c_m\)</span></td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\(r_m\)</span></td>
+<td>lower-layer <strong>switch</strong> prob., <span class="math inline">\(r_m=1-\exp(-t_m^{(l)})\)</span></td>
+<td>derived from <span class="math inline">\(N_e,c_m,K\)</span></td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(S\)</span></td>
+<td>number of upper clusters (source populations)</td>
+<td>user-set</td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\(K\)</span></td>
+<td>number of lower clusters (haplotype clusters); <span class="math inline">\(K=5S\)</span> in Guan</td>
+<td>user-set</td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(\gamma\)</span></td>
+<td>admixture generations</td>
+<td><strong>user-set, NOT estimated</strong> (sensitivity by averaging over <span class="math inline">\(\gamma\)</span>)</td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\(\lambda\)</span></td>
+<td>mean ancestry tract length (cM); <span class="math inline">\(\gamma\lambda=100\)</span></td>
+<td>derived from <span class="math inline">\(\gamma\)</span></td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(c_m\)</span></td>
+<td>genetic distance between markers <span class="math inline">\(m-1\)</span> and <span class="math inline">\(m\)</span></td>
+<td>from the map</td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\(N_e\)</span></td>
+<td>effective population size</td>
+<td>fixed (<span class="math inline">\(10{,}000\)</span>)</td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(\mu\)</span></td>
+<td>scaled mutation/error rate, <span class="math inline">\(\mu=4N\nu\)</span></td>
+<td>fixed (<span class="math inline">\(0.001\)</span>)</td>
+</tr>
+</tbody>
+</table>
 <hr>
 </section>
 </section>

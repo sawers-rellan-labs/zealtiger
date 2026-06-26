@@ -146,11 +146,37 @@ $$
 the expected number of chromosomes of ancestry $s$ at marker $m$ (Yang's mexicana dosage;
 "ELAI score $>1.8$" $\equiv$ dosage $>0.9$ per chromosome).
 
-**Symbol key:** $S$ upper clusters (sources), $K$ lower clusters (haplotype clusters),
-$\theta_{mk}$ cluster allele frequencies, $\alpha_s^{(i)}$ admixture proportions,
-$\beta_{msk}$ lower-given-upper probabilities, $j_m$ upper no-switch / $r_m$ lower switch
-probabilities, $\gamma$ admixture generations, $\lambda$ mean tract length (cM), $\mu$ error
-term, $c_m$ inter-marker genetic distance.
+**Parameters and symbols** (verified against Guan 2014):
+
+*Indices and quantities in the dosage:*
+
+| Symbol | Meaning |
+|---|---|
+| $D_m^{(i)}(s)$ | local-ancestry dosage (the "ELAI score") of source $s$, individual $i$, marker $m$; range $[0,2]$ |
+| $i$ | individual (NIL) |
+| $m$ | marker (SNP / genome position) |
+| $s$ | source population / ancestry, $s\in\{1,\dots,S\}$ |
+| $c$ | chromosome copy (homolog), $c\in\{1,2\}$ — summing over the two copies is what makes the range $[0,2]$ |
+| $X_m^{(i,c)}$ | upper-layer (ancestry) hidden state of homolog $c$ |
+| $g^{(i)}$ | individual $i$'s **full** genotype vector across **all** markers (not just marker $m$) |
+| $\xi^{\ast}$ | the **fitted** parameter set (EM estimates); "$\mid\xi^\ast$" = "using the trained model" |
+
+*Model parameters that make up $\xi$:*
+
+| Symbol | Meaning | How set |
+|---|---|---|
+| $\theta_{mk}$ | allele frequency of lower cluster $k$ at marker $m$ | **EM-fit** (Newton–Raphson) |
+| $\alpha_s^{(i)}$ | admixture proportion of $i$ in source $s$ ($\sum_s\alpha_s^{(i)}=1$) | **EM-fit** (closed form) |
+| $\beta_{msk}$ | prob. of lower cluster $k$ given upper $s$ at marker $m$ ($\sum_k\beta_{msk}=1$) | **EM-fit** (closed form) |
+| $j_m$ | upper-layer **no-switch** prob., $j_m=\exp(-t_m^{(u)})$ | derived from $\gamma,N_e,c_m$ |
+| $r_m$ | lower-layer **switch** prob., $r_m=1-\exp(-t_m^{(l)})$ | derived from $N_e,c_m,K$ |
+| $S$ | number of upper clusters (source populations) | user-set |
+| $K$ | number of lower clusters (haplotype clusters); $K=5S$ in Guan | user-set |
+| $\gamma$ | admixture generations | **user-set, NOT estimated** (sensitivity by averaging over $\gamma$) |
+| $\lambda$ | mean ancestry tract length (cM); $\gamma\lambda=100$ | derived from $\gamma$ |
+| $c_m$ | genetic distance between markers $m-1$ and $m$ | from the map |
+| $N_e$ | effective population size | fixed ($10{,}000$) |
+| $\mu$ | scaled mutation/error rate, $\mu=4N\nu$ | fixed ($0.001$) |
 
 ---
 
