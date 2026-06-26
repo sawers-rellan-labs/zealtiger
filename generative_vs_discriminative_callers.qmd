@@ -1,0 +1,145 @@
+---
+title: "Where the generation enters: generative vs. discriminative ancestry callers"
+subtitle: "Why RTIGER ignores the breeding generation while ELAI and nilHMM assume it — and why a gamma beats the exponential tract law"
+author: "Fausto Rodríguez-Zapata"
+date: "2026-06-26"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    embed-resources: true
+execute:
+  warning: false
+  message: false
+---
+
+**Context.** Three ancestry callers in this project treat the breeding generation completely
+differently: **ELAI** assumes it, **nilHMM** (Holland) assumes it, **RTIGER** ignores it — and
+for RTIGER we instead postulate a simulation and retrofit a gamma to recover something like an
+effective generation. This note explains *why* that asymmetry exists, *why* a gamma is the
+right tract law where the exponential (ELAI's) is not, and *where* each caller injects the
+generation. Conceptual glue between `docs/16-parameter-search-and-rigidity-mle.md` (why `r`
+is not an MLE), `fragment_size_cm_validation` (the gamma derivation), and
+`elai_admixture_mapping_plan` (ELAI's model). Memory: `rigidity-not-mle`,
+`bc2s3-fragment-size-expectation`, `bzea-skim-bulked-bc2s2`,
+`optimize-R-overrigidifies-nil-sim`.
+
+---
+
+# 1. The split: generative vs. discriminative
+
+The callers fall on two sides of a modelling choice.
+
+- **Generative / model-based — ELAI, nilHMM.** They posit a *process* for how the genome came
+  to look the way it does, **parametrized by the generation**. The generation is a structural
+  input because the whole model is built around a specific history. You know the pedigree → you
+  type the generation in.
+- **Discriminative / segmentation — RTIGER.** It models **nothing** about how the tracts arose.
+  It detects change-points in the marker sequence; its rigidity `r` is a **resolution** knob,
+  not a generation. There is **no slot** for the generation. The only way to inject "this is a
+  BC2S2 cross" is **externally**: simulate the generation-specific tract distribution and tune
+  `r` to reproduce it.
+
+That is the entire answer to "why does RTIGER ignore the generation": **by design.** RTIGER was
+built to work on *any* cross without being told its structure (it even autotunes `r` from a
+generation-agnostic iid error model — which over-rigidifies, see
+`optimize-R-overrigidifies-nil-sim`). The price of that generality is that, for a *known*
+pedigree, it discards information that ELAI and nilHMM use directly — so you have to put the
+generation back in through calibration.
+
+# 2. The generation is the same information — injected at different points
+
+| Caller | Type | Takes the generation? | Where the generation enters | Tract-law assumption | What is fit vs. fixed |
+|---|---|---|---|---|---|
+| **ELAI** (Guan 2014) | generative | yes — `γ` (`-mg`) | the ancestry-switch **rate** in the transition (`γλ=100`) | **exponential** tracts, mean `1/γ` | fits `θ,α,β` by EM; `γ,N_e,μ,S,K` fixed/user-set |
+| **nilHMM** (Holland) | generative | yes — via BC2S2 | **genotype-frequency prior** `f_1,f_2` (+ transition `r`) | per-marker freqs from the breeding scheme | fits emissions; `f_1,f_2` from generation, `r` calibrated |
+| **RTIGER** | discriminative | **no** | **nowhere internally** — only via external `r`-calibration against a generation-specific simulated truth | none (generic change-point) | `r` is a resolution knob set by KS-vs-sim; emissions EM-fit |
+
+The crucial reading of this table: **generation is the same fact in all three callers; they
+just inject it in different places.** ELAI puts it in the tract-rate prior, nilHMM in the
+frequency prior, RTIGER nowhere — so for RTIGER it re-enters as the *calibration target*. The
+"convoluted" simulate→gamma→calibrate-`r` workflow is **the cost of RTIGER's agnosticism, not
+an intrinsic requirement of the problem.**
+
+# 3. Two parameters that get conflated: the generative `λ` vs. the caller knob `r`
+
+The frustration "I retrofit a gamma to find a parameter that is approximately `g_eff`" comes
+from collapsing two distinct things:
+
+- **The generative parameter** is the gamma's **rate `λ`** (∝ generation): it *is* the
+  tract-length law of the population. This is what the simulation gives you and what `g_eff`
+  refers to.
+- **The caller knob** is RTIGER's **`r`**: a *resolution* setting you tune so the caller's
+  output *reproduces* that law. `r` is **not** the generation, and it cannot be MLE'd — it is a
+  regularization hyperparameter, and the caller's own likelihood runs monotone toward minimum
+  rigidity (`docs/16`, `rigidity-not-mle`).
+
+ELAI and nilHMM **fuse** these into one generation input (the law parameter *is* the model
+knob). RTIGER **splits** them: you establish the law from the simulation (`λ`), then separately
+tune the resolution (`r`) to match it. That split is exactly why the RTIGER route feels like
+extra machinery — you are doing two jobs the generative callers do in one.
+
+# 4. Why a gamma, not the exponential (ELAI's tract law)
+
+The exponential **is** the gamma with shape `k=1`. So the question is only: *let the shape
+float, or pin it at 1?*
+
+- **The exponential is correct in ELAI's regime.** Old, single-pulse, random-mating admixture →
+  over thousands of generations the junction process superposes to Poisson and, on one lineage,
+  the tract length is **memoryless → exponential**, mean `1/γ`. One parameter; `CV=1`, `skew=2`
+  are forced.
+- **A few-generation designed pedigree breaks those assumptions** → shape `k` just above 1
+  (≈1.15): crossover **interference** (spacing more regular than memoryless), the **union of the
+  two homologs** (a tract is donor if *either* chromosome is — merges/absorbs the shortest), and
+  a **finite, small number of meioses** (the superposition-to-Poisson limit is not reached). The
+  exponential **cannot** represent `k≠1`; the gamma's second parameter matches the **shape**
+  (the mode, the short-tract deficit, the tail), not just the mean. The derivation
+  (`fragment_size_cm_validation`) brackets it **Exp(5) ≤ · ≤ Gamma(2)** and the simulation lands
+  at **Gamma(k≈1.15, λ≈4.72/Morgan)**, KS `D≈0.028`, with both brackets rejected.
+
+```{r tract-laws, fig.width=8, fig.height=4.5}
+library(ggplot2)
+xs  <- seq(0, 120, length.out = 400)            # donor tract length, cM
+k   <- 1.15; lam <- 4.72                         # fitted BC2S3 gamma (per Morgan)
+m_cM <- k / lam * 100                            # its mean in cM
+df <- rbind(
+  data.frame(cm = xs, d = dexp(xs/100, rate = 5)/100,
+             law = "Exp(5) = Gamma(1)  [ELAI / memoryless regime]"),
+  data.frame(cm = xs, d = dgamma(xs/100, shape = k, rate = lam)/100,
+             law = sprintf("Gamma(k=%.2f, lambda=%.1f)  [BC2S3 pedigree]", k, lam)),
+  data.frame(cm = xs, d = dgamma(xs/100, shape = 2, rate = 2/(m_cM/100))/100,
+             law = "Gamma(2)  [size-biased upper bracket]"))
+ggplot(df, aes(cm, d, colour = law)) +
+  geom_line(linewidth = 1) +
+  labs(x = "donor tract length (cM)", y = "density", colour = NULL,
+       title = "The shape parameter is the whole difference",
+       subtitle = "Exponential forces k=1 (monotone, mode at 0); the pedigree gamma has k>1 (mild mode, fewer tiny tracts)") +
+  theme_bw() + theme(legend.position = "top")
+```
+
+**But keep the magnitude honest.** In cM the gap is modest (`k≈1.15` is close to 1), so as a
+*model's internal prior* the exponential is a fine approximation — HMMs are robust to the exact
+prior shape. The gamma's correctness matters where the distribution is used **quantitatively**:
+as the **Null / expectation** in size plots and as a **calibration target**, and especially in
+**Mb**, where the cM→Mb pushforward (recombination-rate heterogeneity) makes the law
+**LogNormal** and the naive scaled exponential is badly wrong (KS `0.22`;
+`bc2s3-fragment-size-expectation`).
+
+# 5. Practical consequence / the call
+
+- **If you want the generation handled directly** — exactly as ELAI and Holland do — **do not
+  use the RTIGER route.** Use **nilHMM**: it is already pedigree-aware and ingests the BC2S2
+  prior. The simulate→gamma→calibrate-`r` dance is *specific to RTIGER*, a generation-agnostic
+  tool. For a *known* pedigree, a generative model that takes the generation is the natural fit.
+- **The simulation + gamma is still worth keeping regardless of caller** — as the quantitative
+  **Null** for size plots and as the **cross-caller calibration target** — because it gives the
+  correctly-shaped (pedigree) reference that neither ELAI's exponential nor an assumed-`g` prior
+  provides.
+- **Do not try to MLE `r` or read it as `g_eff`.** The generative parameter is the gamma's `λ`
+  (from the sim); `r` is a resolution knob tuned to it (`docs/16`).
+
+**One-line picture:** generation is one fact; ELAI puts it in the *tract-rate prior*
+(exponential), nilHMM in the *frequency prior* (BC2S2), RTIGER *nowhere* (so you calibrate `r`
+against a simulated truth). The gamma beats the exponential as a *reference law* because a
+few-generation pedigree is not memoryless — and that matters most for the Null and in Mb, less
+for a caller's internal prior.
