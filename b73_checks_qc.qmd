@@ -16,7 +16,8 @@ params:
   brb_calls:   "results/sim_calibration/brbseq_taxa_r7_wideseq/calls_common_schema.csv"  # BrB-RTI, per-species, wideseq-thinned r=7
   brb_map:     "agent/brb_species_map.csv"                                               # BRB name -> accession (B73 flag)
   skim_checks: "data/rtiger_50K/calls_checks_common_schema.csv"                          # Skim-RTI checks (B73, Purple)
-  nilhmm_chk:  "results/sim_calibration/nilhmm_calls/calls_checks_common_schema.csv"     # nilHMM checks (B73, Purple) — same skim reads as Skim-RTI
+  nilhmm_chk:  "results/sim_calibration/nilhmm_calls/calls_checks_common_schema.csv"     # Skim-nilHMM checks (B73, Purple) — same skim reads as Skim-RTI
+  brbnil_chk:  "results/sim_calibration/nilhmm_brbseq/calls_checks_common_schema.csv"    # BrB-nilHMM checks (B73, Purple) — same BRB reads as BrB-RTI
   molb_calls:  "results/sim_calibration/gbts_calls/SNP_wsfilt/calls_common_schema.csv"   # MolB-RTI (B73-bulk)
 ---
 
@@ -24,8 +25,9 @@ params:
 
 A **B73 control** must be a *pure recurrent-parent* rep — **no introgression** (≈ 0 donor
 genome-wide). This doc tracks **every B73 rep across the three experiments** (BrB-seq,
-SNP50K skim, MolBreeding GBTS) — scored by each experiment's caller, plus **nilHMM** as a
-second caller on the *same skim reads* as Skim-RTI — and
+SNP50K skim, MolBreeding GBTS) — scored by each experiment's caller, plus two count-HMM
+second callers: **Skim-nilHMM** on the *same skim reads* as Skim-RTI and **BrB-nilHMM** on the
+*same BRB reads* as BrB-RTI — and
 flags reps that are **not actually clean B73** (localized donor on a chromosome →
 mislabel / contamination / real introgression). It exists because the BrB-seq B73 control
 `PN1_SID15` turned out to be an impostor (a chromosome arm reads ~50% donor).
@@ -46,7 +48,9 @@ calls <- bind_rows(
   read_csv(params$skim_checks, show_col_types = FALSE) %>% filter(donor == "B73") %>%
     mutate(exp = "Skim-RTI (r=5)"),
   read_csv(params$nilhmm_chk,  show_col_types = FALSE) %>% filter(donor == "B73") %>%
-    mutate(exp = "nilHMM (counts)"),   # same skim reads as Skim-RTI, count-based caller
+    mutate(exp = "Skim-nilHMM (counts)"),   # same skim reads as Skim-RTI, count-based caller
+  read_csv(params$brbnil_chk,  show_col_types = FALSE) %>% filter(donor == "B73") %>%
+    mutate(exp = "BrB-nilHMM (counts)"),    # same BRB reads as BrB-RTI, count-based caller
   read_csv(params$molb_calls,  show_col_types = FALSE) %>% filter(donor == "B73-bulk") %>%
     mutate(exp = "MolB-RTI (r=2)")
 ) %>% select(exp, name, chr, start_bp, end_bp, state)
@@ -59,10 +63,13 @@ qc <- calls %>% mutate(l = end_bp - start_bp + 1) %>%
             .groups = "drop") %>%
   mutate(flag = case_when(dosage > 0.10 ~ "impostor", dosage > 0.02 ~ "borderline", TRUE ~ "clean")) %>%
   arrange(desc(dosage))
-cat(sprintf("B73 reps: %d (BrB %d, Skim %d, nilHMM %d, MolB %d) | clean %d | borderline %d | impostor %d\n",
+cat(sprintf("B73 reps: %d (BrB-RTI %d, Skim-RTI %d, Skim-nilHMM %d, BrB-nilHMM %d, MolB %d) | clean %d | borderline %d | impostor %d\n",
             nrow(qc), sum(qc$exp == "BrB-RTI (r=7, wideseq)"), sum(qc$exp == "Skim-RTI (r=5)"),
-            sum(qc$exp == "nilHMM (counts)"), sum(qc$exp == "MolB-RTI (r=2)"),
+            sum(qc$exp == "Skim-nilHMM (counts)"), sum(qc$exp == "BrB-nilHMM (counts)"),
+            sum(qc$exp == "MolB-RTI (r=2)"),
             sum(qc$flag == "clean"), sum(qc$flag == "borderline"), sum(qc$flag == "impostor")))
+cat(sprintf("BrB-nilHMM B73 control PN3_SID213 dosage = %.4f\n",
+            qc$dosage[qc$exp == "BrB-nilHMM (counts)" & qc$name == "PN3_SID213"]))
 ```
 
 ## Per-rep donor content (all experiments, worst → best)
@@ -79,15 +86,21 @@ contaminated samples, not B73. The BrB-seq impostors cluster on plate PN1.
 
 ## Chromosome painting — worst & clean B73 within each experiment
 
-The **5 worst + 5 cleanest B73 reps within each caller** — BrB-seq, Skim, nilHMM, and MolB
-(only 2 reps, both clean) — **ordered by donor content (ascending)**, caller labelled on
-the right. Shows BrB-seq carries both real impostors *and* clean reps, while Skim/nilHMM/MolB B73
-are clean throughout (Skim and nilHMM are the same reads, two callers).
+The **5 worst + 5 cleanest B73 reps within each caller** — BrB-RTI, BrB-nilHMM, Skim-RTI,
+Skim-nilHMM, and MolB (only 2 reps, both clean) — **ordered by donor content (ascending)**,
+caller labelled on the right. Shows BrB-seq carries both real impostors *and* clean reps, while
+Skim/MolB B73 are clean throughout. Each platform's two callers (RTI + nilHMM) score the *same
+reads*. **BrB-nilHMM is conservative** — it under-calls donor and collapses ALT→HET on BRB
+(`agent/nilhmm/BRB_run_findings.md`), so its B73 reps read *even cleaner* than BrB-RTI's; that
+makes it good at confirming a clean control but it will also under-flag a true impostor's HET
+arm, so read BrB-RTI for impostor detection.
 
-```{r painting, fig.width=12, fig.height=13}
-exps  <- c("BrB-RTI (r=7, wideseq)", "Skim-RTI (r=5)", "nilHMM (counts)", "MolB-RTI (r=2)")
-short <- function(e) case_when(grepl("BrB", e) ~ "BrB-seq", grepl("Skim", e) ~ "Skim",
-                               grepl("nilHMM", e) ~ "nilHMM", TRUE ~ "MolB")
+```{r painting, fig.width=12, fig.height=16}
+exps  <- c("BrB-RTI (r=7, wideseq)", "BrB-nilHMM (counts)", "Skim-RTI (r=5)",
+           "Skim-nilHMM (counts)", "MolB-RTI (r=2)")
+short <- function(e) case_when(grepl("BrB-nilHMM", e) ~ "BrB-nilHMM", grepl("BrB-RTI", e) ~ "BrB-seq",
+                               grepl("Skim-nilHMM", e) ~ "Skim-nilHMM", grepl("Skim-RTI", e) ~ "Skim",
+                               TRUE ~ "MolB")
 # 5 worst + 5 cleanest within each experiment (MolB has only 2 reps -> both); order by donor dosage
 # non-REF content = fraction of genome called HET or ALT (state > 0); the sort key
 nonref <- calls %>% mutate(l = end_bp - start_bp + 1) %>% group_by(exp, name) %>%
@@ -97,7 +110,7 @@ sel <- qc %>% filter(exp %in% exps) %>% group_by(exp) %>%
   left_join(nonref, by = c("exp", "name")) %>%
   mutate(eo = match(exp, exps)) %>% arrange(eo, desc(nonref)) %>%   # cleanest (lowest non-REF) at TOP of each panel
   mutate(yidx = row_number(), ylab = sprintf("%s · %.3f", name, nonref),
-         exp_lab = factor(short(exp), c("BrB-seq", "Skim", "nilHMM", "MolB")))
+         exp_lab = factor(short(exp), c("BrB-seq", "BrB-nilHMM", "Skim", "Skim-nilHMM", "MolB")))
 paint <- calls %>% inner_join(sel %>% select(exp, name, yidx, exp_lab), by = c("exp", "name")) %>%
   mutate(state = factor(state, 0:2, c("REF", "HET", "ALT")),
          chr = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)))

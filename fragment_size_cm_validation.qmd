@@ -16,7 +16,8 @@ params:
   skim_calls: "data/rtiger_50K/calls_taxa_r5.csv"                                       # Skim-RTI, per-taxon r=5
   brb_taxa:   "results/sim_calibration/brbseq_taxa_r7_wideseq/calls_common_schema.csv"   # BrB-RTI r=7, wideseq-filtered, per teosinte species
   skimbin:    "results/sim_calibration/skimbin_calls/calls_common_schema.csv"           # Skim-BIN: BzeaSeq 1 Mb-bin GMM-HMM (same skim reads as Skim-RTI)
-  nilhmm:     "results/sim_calibration/nilhmm_calls/calls_common_schema.csv"            # nilHMM: count-based BetaBinomial HMM, per-taxon r (same skim reads as Skim-RTI)
+  nilhmm:     "results/sim_calibration/nilhmm_calls/calls_common_schema.csv"            # Skim-nilHMM: count-based BetaBinomial HMM, per-taxon r (same skim reads as Skim-RTI)
+  brbnil:     "results/sim_calibration/nilhmm_brbseq/calls_common_schema.csv"           # BrB-nilHMM: count HMM on the SAME BRB reads as BrB-RTI (keyed on BRB name); agent/nilhmm/BRB_run_findings.md
   corr:       "results/sample_correspondence/skim_brbseq_correspondence.csv"            # curated NIL pairs (pedigree-matched)
   nil_seg:    "results/nil_segments.csv"                                                # n=1500 BC2S3 simulation segments — carries BOTH cM and Mb endpoints
   map:        "results/maize_map_v5_clean.rds"                                          # consensus Marey map: (chr, bp, cm) anchors, B73 NAM v5
@@ -24,8 +25,8 @@ params:
 
 **Repo:** [sawers-rellan-labs/zealtiger](https://github.com/sawers-rellan-labs/zealtiger)
 
-The [introgression-size panel](skim_brbseq_skimbin.html) compares the four callers
-(Skim-RTI / BrB-RTI / Skim-BIN / nilHMM) against the n=1500 BC2S3 simulation **in megabases**. The
+The [introgression-size panel](skim_brbseq_skimbin.html) compares the five callers
+(Skim-RTI / BrB-RTI / Skim-BIN / Skim-nilHMM / BrB-nilHMM) against the n=1500 BC2S3 simulation **in megabases**. The
 Mb fragment-size law has **no closed form**: it is the genetic-distance (cM) law pushed
 through the cM→Mb change of variables $x_{\text{Mb}}=\int dx_{\text{cM}}/\rho(x)$, and the
 local recombination rate $\rho(x)=d\text{cM}/d\text{Mb}$ is an *empirical, position-dependent*
@@ -35,7 +36,7 @@ integration over the map. **In cM the segment-length law is analytic.** This doc
 1. **derives** the theoretical donor-segment-size distribution in cM from the BC2S3
    recombination model,
 2. confirms the derived law reproduces the simcross output (its own cM segment lengths), and
-3. uses it as a **map-free reference** to validate the four callers, after converting their
+3. uses it as a **map-free reference** to validate the five callers, after converting their
    called Mb segments back to cM through the consensus map.
 
 > **Why this is a *validation* panel, not the calibration metric.** A caller's resolution
@@ -204,7 +205,7 @@ ggplot() +
   theme(legend.position = c(0.72, 0.8), legend.background = element_rect(fill = "white", colour = NA))
 ```
 
-# Part 3 — cM-space validation of the four callers
+# Part 3 — cM-space validation of the five callers
 
 Convert each caller's **called Mb segments back to cM** by evaluating the consensus cumulative
 map at the segment endpoints and differencing,
@@ -214,11 +215,20 @@ monotone linear interpolation), no inversion. Then compare each caller's cM dist
 whose *family* (not its $k,\lambda$) the Part 1 derivation fixes — and, equivalently, the
 simulation's own cM lengths.
 
+> **⚠ BrB-nilHMM caveat.** BrB-nilHMM (the count HMM on the same BRB reads as BrB-RTI, BC2S3
+> freqs) is wired in as a co-equal caller, but on BRB it **under-calls donor** (genome fraction
+> ~0.04 vs BrB-RTI's ~0.17) and its KS-vs-sim rigidity **rails to the grid edge**, so its donor
+> blocks are short/fragmented and its cM distribution sits **well short of the BC2S3 Gamma** by
+> construction — expected, not a failure of the law. It also collapses ALT→HET (read its donor
+> *footprint*, not its rates). Full diagnosis: `agent/nilhmm/BRB_run_findings.md`. Its segments
+> are bp on B73 v5, so the **same `mb2cm` consensus-map conversion** applies as for every caller.
+
 ```{r load-calls}
 skim    <- read_csv(params$skim_calls, show_col_types = FALSE)
 brb     <- read_csv(params$brb_taxa,   show_col_types = FALSE)
 skimbin <- read_csv(params$skimbin,    show_col_types = FALSE)
-nilhmm  <- read_csv(params$nilhmm,     show_col_types = FALSE)   # count-based caller, same skim reads
+nilhmm  <- read_csv(params$nilhmm,     show_col_types = FALSE)   # Skim-nilHMM, count-based caller, same skim reads
+brbnil  <- read_csv(params$brbnil,     show_col_types = FALSE)   # BrB-nilHMM, count HMM on the SAME BRB reads as BrB-RTI (keyed on BRB name)
 corr    <- read_csv(params$corr, show_col_types = FALSE) %>% filter(type == "NIL")
 
 # scope = full set of NILs called on BOTH platforms (mirrors the Mb intro-size panel)
@@ -249,12 +259,14 @@ donor_blocks_cm <- function(seg) seg %>% arrange(name, chr, start_bp) %>% group_
 skim_b <- donor_blocks_cm(skim    %>% filter(name %in% skim_in$name[skim_in$nil %in% both_nils])) %>% mutate(src = "Skim-RTI (r=5)")
 brb_b  <- donor_blocks_cm(brb     %>% filter(name %in% brb_in$name [brb_in$nil  %in% both_nils])) %>% mutate(src = "BrB-RTI (r=7, ws)")
 bin_b  <- donor_blocks_cm(skimbin %>% filter(name %in% skim_in$name[skim_in$nil %in% both_nils])) %>% mutate(src = "Skim-BIN (1 Mb)")
-# nilHMM keyed on the skim sample name (same reads as Skim-RTI/Skim-BIN)
-nil_b  <- donor_blocks_cm(nilhmm  %>% filter(name %in% skim_in$name[skim_in$nil %in% both_nils])) %>% mutate(src = "nilHMM (counts)")
-called <- bind_rows(skim_b, brb_b, bin_b, nil_b)
+# Skim-nilHMM keyed on the skim sample name (same reads as Skim-RTI/Skim-BIN)
+nil_b  <- donor_blocks_cm(nilhmm  %>% filter(name %in% skim_in$name[skim_in$nil %in% both_nils])) %>% mutate(src = "Skim-nilHMM (counts)")
+# BrB-nilHMM keyed on the BRB sample name (same reads as BrB-RTI); same mb2cm conversion
+brbnil_b <- donor_blocks_cm(brbnil %>% filter(name %in% brb_in$name[brb_in$nil %in% both_nils])) %>% mutate(src = "BrB-nilHMM (counts)")
+called <- bind_rows(skim_b, brb_b, bin_b, nil_b, brbnil_b)
 
-cat(sprintf("NILs on both platforms: %d | Skim-RTI %d | BrB-RTI %d | Skim-BIN %d | nilHMM %d blocks\n",
-            length(both_nils), nrow(skim_b), nrow(brb_b), nrow(bin_b), nrow(nil_b)))
+cat(sprintf("NILs on both platforms: %d | Skim-RTI %d | BrB-RTI %d | Skim-BIN %d | Skim-nilHMM %d | BrB-nilHMM %d blocks\n",
+            length(both_nils), nrow(skim_b), nrow(brb_b), nrow(bin_b), nrow(nil_b), nrow(brbnil_b)))
 ```
 
 ```{r ks-table}
@@ -279,7 +291,8 @@ ggplot(called, aes(cm, colour = src)) +
   geom_line(data = ref, aes(cm, F), colour = "black", linewidth = 1.0, linetype = "dashed",
             inherit.aes = FALSE) +
   scale_colour_manual(values = c("Skim-RTI (r=5)" = "purple4", "BrB-RTI (r=7, ws)" = "orange3",
-                                 "Skim-BIN (1 Mb)" = "seagreen4", "nilHMM (counts)" = "steelblue")) +
+                                 "Skim-BIN (1 Mb)" = "seagreen4", "Skim-nilHMM (counts)" = "steelblue",
+                                 "BrB-nilHMM (counts)" = "navy")) +
   coord_cartesian(xlim = c(0, quantile(called$cm, 0.99))) +
   labs(x = "donor-segment size (cM)", y = "ECDF", colour = NULL,
        title = "Caller cM segment distributions vs the BC2S3 expectation",
@@ -299,7 +312,8 @@ ggplot(called, aes(cm, fill = src)) +
   geom_line(data = curves %>% filter(grepl("BC2S3 expectation", curve)),
             aes(cm, d * cm * log(10)), colour = "black", linewidth = 0.9, inherit.aes = FALSE) +
   scale_fill_manual(values = c("Skim-RTI (r=5)" = "purple4", "BrB-RTI (r=7, ws)" = "orange3",
-                               "Skim-BIN (1 Mb)" = "seagreen4", "nilHMM (counts)" = "steelblue")) +
+                               "Skim-BIN (1 Mb)" = "seagreen4", "Skim-nilHMM (counts)" = "steelblue",
+                               "BrB-nilHMM (counts)" = "navy")) +
   scale_x_log10() +
   labs(x = "donor-segment size (cM, log scale)", y = "density (per unit log10 cM)", fill = NULL,
        title = "Caller cM segment-size distributions vs the BC2S3 expectation",
@@ -329,7 +343,8 @@ mle_curves <- fits %>% group_by(src, lab) %>%
   reframe(cm = seq(0, xmax, length.out = 300), d = dgamma(cm / 100, k, lam) / 100)
 
 src_col <- c("Skim-RTI (r=5)" = "purple4", "BrB-RTI (r=7, ws)" = "orange3",
-             "Skim-BIN (1 Mb)" = "seagreen4", "nilHMM (counts)" = "steelblue")
+             "Skim-BIN (1 Mb)" = "seagreen4", "Skim-nilHMM (counts)" = "steelblue",
+             "BrB-nilHMM (counts)" = "navy")
 pal_lab <- setNames(src_col[fits$src], fits$lab)
 
 ggplot(called, aes(cm)) +

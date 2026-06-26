@@ -17,7 +17,8 @@ params:
   map:        "results/maize_map_v5_clean.rds"             # consensus Marey map: (chr, bp, cm) anchors, B73 NAM v5
   brb_taxa:   "results/sim_calibration/brbseq_taxa_r7_wideseq/calls_common_schema.csv"   # BrB-RTI r=7, wideseq-filtered
   skimbin:    "results/sim_calibration/skimbin_calls/calls_common_schema.csv"            # Skim-BIN 1 Mb-bin GMM-HMM
-  nilhmm:     "results/sim_calibration/nilhmm_calls/calls_common_schema.csv"             # nilHMM count-HMM, per-taxon r calibrated to BC2S2 (same skim reads)
+  nilhmm:     "results/sim_calibration/nilhmm_calls/calls_common_schema.csv"             # Skim-nilHMM count-HMM, per-taxon r calibrated to BC2S2 (same skim reads)
+  brbnil:     "results/sim_calibration/nilhmm_brbseq/calls_common_schema.csv"            # BrB-nilHMM: count HMM on the SAME BRB reads as BrB-RTI (BC2S3 freqs); keyed on BRB name; agent/nilhmm/BRB_run_findings.md
   corr:       "results/sample_correspondence/skim_brbseq_correspondence.csv"             # pedigree-matched skim<->BRB NILs
 ---
 
@@ -204,7 +205,8 @@ knitr::kable(ks_tbl, caption = sprintf(
 # --- the 3 genotyping methods (cM segments) on the both-platforms NIL set (cf. fragment_size_cm_validation) ---
 brb     <- read_csv(params$brb_taxa, show_col_types = FALSE)
 skimbin <- read_csv(params$skimbin,  show_col_types = FALSE)
-nilhmm  <- read_csv(params$nilhmm,   show_col_types = FALSE)   # count-HMM, same skim reads
+nilhmm  <- read_csv(params$nilhmm,   show_col_types = FALSE)   # Skim-nilHMM count-HMM, same skim reads
+brbnil  <- read_csv(params$brbnil,   show_col_types = FALSE)   # BrB-nilHMM count-HMM, same BRB reads as BrB-RTI (keyed on BRB name)
 corr    <- read_csv(params$corr, show_col_types = FALSE) %>% filter(type == "NIL")
 brb_in  <- corr %>% separate_rows(brbseq_prefix, sep = ";") %>% transmute(name = brbseq_prefix, nil = pedigree) %>% filter(name %in% brb$name)
 skim_in <- corr %>% separate_rows(skim_prefix,  sep = ";") %>% transmute(name = skim_prefix,  nil = pedigree) %>% filter(name %in% sk$name)
@@ -217,7 +219,8 @@ callers <- bind_rows(
   blocks_cm(sk      %>% filter(name %in% skim_in$name[skim_in$nil %in% both_nils])) %>% mutate(src = "Skim-RTI (r=5)"),
   blocks_cm(brb     %>% filter(name %in% brb_in$name [brb_in$nil  %in% both_nils])) %>% mutate(src = "BrB-RTI (r=7, ws)"),
   blocks_cm(skimbin %>% filter(name %in% skim_in$name[skim_in$nil %in% both_nils])) %>% mutate(src = "Skim-BIN (1 Mb)"),
-  blocks_cm(nilhmm  %>% filter(name %in% skim_in$name[skim_in$nil %in% both_nils])) %>% mutate(src = "nilHMM (counts)"))
+  blocks_cm(nilhmm  %>% filter(name %in% skim_in$name[skim_in$nil %in% both_nils])) %>% mutate(src = "Skim-nilHMM (counts)"),
+  blocks_cm(brbnil  %>% filter(name %in% brb_in$name [brb_in$nil  %in% both_nils])) %>% mutate(src = "BrB-nilHMM (counts)"))
 
 # --- fitted gamma over each simulation = the BC2S2 / BC2S3 expectations (dotted) ---
 f2 <- suppressWarnings(MASS::fitdistr(sim_s2$cm/100, "gamma")$estimate)
@@ -229,14 +232,14 @@ gammas <- bind_rows(
   tibble(cm = xs, F = pgamma(xs/100, f2["shape"], f2["rate"]), expectation = lab2),
   tibble(cm = xs, F = pgamma(xs/100, f3["shape"], f3["rate"]), expectation = lab3))
 pal <- c("Skim-RTI (r=5)" = "purple4", "BrB-RTI (r=7, ws)" = "orange3", "Skim-BIN (1 Mb)" = "seagreen4",
-         "nilHMM (counts)" = "steelblue")
+         "Skim-nilHMM (counts)" = "steelblue", "BrB-nilHMM (counts)" = "navy")
 pal[lab2] <- "firebrick"; pal[lab3] <- "royalblue3"
 
 ggplot() +
   stat_ecdf(data = callers, aes(cm, colour = src), linewidth = 0.9) +
   geom_line(data = gammas, aes(cm, F, colour = expectation), linetype = "dotted", linewidth = 1) +
   scale_colour_manual(values = pal, name = NULL,
-                      breaks = c("Skim-RTI (r=5)", "BrB-RTI (r=7, ws)", "Skim-BIN (1 Mb)", "nilHMM (counts)", lab2, lab3)) +
+                      breaks = c("Skim-RTI (r=5)", "BrB-RTI (r=7, ws)", "Skim-BIN (1 Mb)", "Skim-nilHMM (counts)", "BrB-nilHMM (counts)", lab2, lab3)) +
   coord_cartesian(xlim = c(0, quantile(callers$cm, 0.98))) +
   labs(x = "donor-segment size (cM)", y = "ECDF",
        title = "Caller fragment-size distributions vs the BC2S2 and BC2S3 expectations",
@@ -255,15 +258,17 @@ cm_of <- function(s) callers$cm[callers$src == s]
 LIM <- 120
 
 qq_panel <- function(k, l, xlab, ttl) ggplot(bind_rows(
-    qq_df(cm_of("Skim-RTI (r=5)"),    k, l, "Skim-RTI (r=5)"),
-    qq_df(cm_of("BrB-RTI (r=7, ws)"), k, l, "BrB-RTI (r=7, ws)"),
-    qq_df(cm_of("Skim-BIN (1 Mb)"),   k, l, "Skim-BIN (1 Mb)"),
-    qq_df(cm_of("nilHMM (counts)"),   k, l, "nilHMM (counts)")),
+    qq_df(cm_of("Skim-RTI (r=5)"),       k, l, "Skim-RTI (r=5)"),
+    qq_df(cm_of("BrB-RTI (r=7, ws)"),    k, l, "BrB-RTI (r=7, ws)"),
+    qq_df(cm_of("Skim-BIN (1 Mb)"),      k, l, "Skim-BIN (1 Mb)"),
+    qq_df(cm_of("Skim-nilHMM (counts)"), k, l, "Skim-nilHMM (counts)"),
+    qq_df(cm_of("BrB-nilHMM (counts)"),  k, l, "BrB-nilHMM (counts)")),
     aes(theo, samp, colour = series)) +
   geom_abline(slope = 1, intercept = 0, linetype = "dashed", colour = "grey40") +
   geom_point(size = 0.8, alpha = 0.7) +
   scale_colour_manual(values = c("Skim-RTI (r=5)" = "purple4", "BrB-RTI (r=7, ws)" = "orange3",
-                                 "Skim-BIN (1 Mb)" = "seagreen4", "nilHMM (counts)" = "steelblue"), name = NULL) +
+                                 "Skim-BIN (1 Mb)" = "seagreen4", "Skim-nilHMM (counts)" = "steelblue",
+                                 "BrB-nilHMM (counts)" = "navy"), name = NULL) +
   coord_equal(xlim = c(0, LIM), ylim = c(0, LIM)) +
   labs(x = xlab, y = "observed quantile (cM)", title = ttl)
 
@@ -271,17 +276,19 @@ p_qq1 <- qq_panel(f2["shape"], f2["rate"], "BC2S2 expectation quantile (cM)", "v
 p_qq2 <- qq_panel(f3["shape"], f3["rate"], "BC2S3 expectation quantile (cM)", "vs BC2S3 expectation")
 
 (p_qq1 | p_qq2) + plot_layout(guides = "collect") +
-  plot_annotation(subtitle = "All four methods vs each fitted-gamma expectation; dashed = 1:1. Points above the line = observed blocks longer than expected (axes capped at 120 cM).") &
+  plot_annotation(subtitle = "All five methods vs each fitted-gamma expectation; dashed = 1:1. Points above the line = observed blocks longer than expected (axes capped at 120 cM).") &
   theme(legend.position = "bottom")
 ```
 
-**Read.** All four methods are shown against both expectations. The three **skim** methods track the
-**BC2S2** line most closely — **Skim-RTI** nearly on it (it *is* BC2S2), **nilHMM** likewise on BC2S2
+**Read.** All five methods are shown against both expectations. The three **skim** methods track the
+**BC2S2** line most closely — **Skim-RTI** nearly on it (it *is* BC2S2), **Skim-nilHMM** likewise on BC2S2
 (though here that is partly *by construction*: its per-taxon `r` was KS-calibrated to the BC2S2 sim),
-and **Skim-BIN** slightly above from 1 Mb-bin merging. **BrB-RTI** rides well above *both* lines: its heavy tail of merged blocks
-runs far longer than either neutral expectation, and it is no closer to BC2S3 (its true generation)
-than to BC2S2 — the over-merge dwarfs the one-meiosis difference. So block size places skim at BC2S2
-but cannot resolve BRB's generation; that signal is in heterozygosity, not block length (next).
+and **Skim-BIN** slightly above from 1 Mb-bin merging. The two **BRB** methods diverge in opposite
+directions: **BrB-RTI** rides well above *both* lines (its heavy tail of merged blocks runs far longer
+than either neutral expectation, no closer to BC2S3 than BC2S2 — the over-merge dwarfs the one-meiosis
+difference), while **BrB-nilHMM** sits *short* of both (being deliberately conservative it under-calls
+donor on BRB → fewer, shorter blocks; ⚠ note below). So block size places skim at BC2S2 but cannot
+resolve BRB's generation from either BRB caller; that signal is in heterozygosity, not block length (next).
 
 ## BRB-seq is a different generation (BC2S3 or later)
 
@@ -300,31 +307,49 @@ generation, not the S2 parent. Two consequences:
 But the BRB calls **cannot pin the generation**, because RNA-seq genotyping artifacts dominate the
 composition:
 
-```{r brb-het, fig.width=7.5, fig.height=4}
-brb_sf <- brb %>% mutate(len = end_bp - start_bp) %>% group_by(name) %>%
+Two callers on the **same BRB reads** make this explicit — **BrB-RTI** (r=7) and **BrB-nilHMM**
+(count HMM, BC2S3 freqs):
+
+```{r brb-het, fig.width=9, fig.height=4.2}
+het_sf <- function(seg, lab) seg %>% mutate(len = end_bp - start_bp) %>% group_by(name) %>%
   summarise(HET = sum(len[state == 1]) / sum(len),
-            ALT = sum(len[state == 2]) / sum(len), .groups = "drop") %>% mutate(dosage = HET/2 + ALT)
-cat(sprintf("BRB (n=%d): HET median %.3f mean %.3f | %.0f%% of samples HET=0 | HET 90th pctile %.2f | dosage median %.3f\n",
-  nrow(brb_sf), median(brb_sf$HET), mean(brb_sf$HET), 100*mean(brb_sf$HET == 0),
-  quantile(brb_sf$HET, 0.9), median(brb_sf$dosage)))
-ggplot(brb_sf, aes(HET)) +
+            ALT = sum(len[state == 2]) / sum(len), .groups = "drop") %>%
+  mutate(dosage = HET/2 + ALT, caller = lab)
+brb_sf    <- het_sf(brb,    "BrB-RTI (r=7)")
+brbnil_sf <- het_sf(brbnil, "BrB-nilHMM (counts)")
+for (d in list(brb_sf, brbnil_sf))
+  cat(sprintf("%-20s (n=%d): HET median %.3f mean %.3f | %2.0f%% HET=0 | HET p90 %.2f | HET>0.20 %.1f%% | dosage median %.3f\n",
+      d$caller[1], nrow(d), median(d$HET), mean(d$HET), 100*mean(d$HET == 0),
+      quantile(d$HET, 0.9), 100*mean(d$HET > 0.20), median(d$dosage)))
+ggplot(bind_rows(brb_sf, brbnil_sf), aes(HET)) +
   geom_histogram(bins = 50, fill = "grey82", colour = "grey55", linewidth = 0.2) +
   geom_vline(xintercept = exp_bc2s2$HET, colour = "firebrick", linewidth = 1) +
   geom_vline(xintercept = exp_bc2s3$HET, colour = "royalblue3", linewidth = 1, linetype = "dashed") +
-  annotate("text", x = exp_bc2s2$HET, y = Inf, label = "BC2S2", colour = "firebrick", hjust = -0.1, vjust = 1.5) +
-  annotate("text", x = exp_bc2s3$HET, y = Inf, label = "BC2S3", colour = "royalblue3", hjust = -0.1, vjust = 3) +
+  facet_wrap(~ caller, scales = "free_y") +
   labs(x = "per-sample genome HET fraction (BRB-seq)", y = "samples",
-       title = "BRB-seq heterozygosity is bimodal — generation signal swamped by RNA artifacts",
-       subtitle = "mode at HET ≈ 0 (advanced single plants) + an artifactual high-HET tail")
+       title = "BRB heterozygosity: BrB-RTI's high-HET artifact tail vs BrB-nilHMM (same reads)",
+       subtitle = "red = BC2S2 (0.0625), blue dashed = BC2S3 (0.0312) | BrB-RTI bimodal + impossible high-HET tail; BrB-nilHMM suppresses the tail")
 ```
 
-- **~61% of BRB samples have zero called HET** — consistent with advanced-generation single plants
-  (little residual heterozygosity) compounded by the rigid RTIGER (r=7) calling homozygous.
-- **A tail has biologically impossible HET** (90th percentile ≈ 0.48) — contamination / mislabeling
-  / RNA allelic noise (the documented BRB-seq impostors; see `b73_checks_qc.html`).
+- **BrB-RTI: ~61% of samples have zero called HET** plus **a tail with biologically impossible HET**
+  (90th percentile ≈ 0.48) — advanced-generation single plants compounded by rigid RTIGER calling
+  homozygous, plus contamination / mislabeling / RNA allelic noise (documented BRB-seq impostors;
+  `b73_checks_qc.html`).
+- **BrB-nilHMM (same reads) suppresses that artifact tail** — HET p90 drops 0.44 → 0.09 and the
+  fraction of samples with HET>0.20 falls 12.9% → 0.9%. Its low BC2S3 HET prior + explicit error
+  model refuse the noisy high-HET signal RTIGER chases.
 
-So BRB is consistent with **BC2S3 or later**, but the generation is not identifiable from these
-calls the way it is for skim.
+> **⚠ BrB-nilHMM trims the tail by being conservative, not by clean noise/signal separation.** On
+> BRB it **under-calls donor** (genome fraction ~0.04 vs BrB-RTI's ~0.17 / BC2S3's ~0.14) and
+> **collapses ALT → HET** (ALT ≈ 0): BRB donor signal reads at alt-fraction ~0.5 (reference-mapping
+> bias / het), which the *fixed* emission mean θ_ALT=0.99 cannot represent, so donor-hom lands on the
+> HET state (RTIGER's EM-fit emissions recover ALT). So its HET here is a depressed,
+> ALT-merged-in HET, not a generation read-out. Read its donor **footprint**, not its rates.
+> Full diagnosis: `agent/nilhmm/BRB_run_findings.md`.
+
+So BRB is consistent with **BC2S3 or later**, but the generation is not identifiable from either
+BRB caller the way it is for skim — BrB-RTI's composition is swamped by RNA artifacts, and
+BrB-nilHMM's is dominated by its conservative prior + the ALT collapse.
 
 **Implications for the cross-platform comparison.**
 
