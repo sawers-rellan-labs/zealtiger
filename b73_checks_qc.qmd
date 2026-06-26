@@ -86,8 +86,8 @@ contaminated samples, not B73. The BrB-seq impostors cluster on plate PN1.
 
 ## Chromosome painting — worst & clean B73 within each experiment
 
-The **5 worst + 5 cleanest B73 reps within each caller** — BrB-RTI, BrB-nilHMM, Skim-RTI,
-Skim-nilHMM, and MolB (only 2 reps, both clean) — **ordered by donor content (ascending)**,
+The **5 worst + 5 cleanest B73 reps within each caller** — MolB-RTI (only 2 reps, both clean),
+Skim-nilHMM, Skim-RTI, BrB-nilHMM, and BrB-RTI — **ordered by donor content (ascending)**,
 caller labelled on the right. Shows BrB-seq carries both real impostors *and* clean reps, while
 Skim/MolB B73 are clean throughout. Each platform's two callers (RTI + nilHMM) score the *same
 reads*. **BrB-nilHMM is conservative** — it under-calls donor and collapses ALT→HET on BRB
@@ -98,9 +98,9 @@ arm, so read BrB-RTI for impostor detection.
 ```{r painting, fig.width=12, fig.height=16}
 exps  <- c("BrB-RTI (r=7, wideseq)", "BrB-nilHMM (counts)", "Skim-RTI (r=5)",
            "Skim-nilHMM (counts)", "MolB-RTI (r=2)")
-short <- function(e) case_when(grepl("BrB-nilHMM", e) ~ "BrB-nilHMM", grepl("BrB-RTI", e) ~ "BrB-seq",
-                               grepl("Skim-nilHMM", e) ~ "Skim-nilHMM", grepl("Skim-RTI", e) ~ "Skim",
-                               TRUE ~ "MolB")
+short <- function(e) case_when(grepl("BrB-nilHMM", e) ~ "BrB-nilHMM", grepl("BrB-RTI", e) ~ "BrB-RTI",
+                               grepl("Skim-nilHMM", e) ~ "Skim-nilHMM", grepl("Skim-RTI", e) ~ "Skim-RTI",
+                               TRUE ~ "MolB-\nRTI")   # MolB-RTI wrapped: only 2 reps -> short panel
 # 5 worst + 5 cleanest within each experiment (MolB has only 2 reps -> both); order by donor dosage
 # non-REF content = fraction of genome called HET or ALT (state > 0); the sort key
 nonref <- calls %>% mutate(l = end_bp - start_bp + 1) %>% group_by(exp, name) %>%
@@ -110,7 +110,7 @@ sel <- qc %>% filter(exp %in% exps) %>% group_by(exp) %>%
   left_join(nonref, by = c("exp", "name")) %>%
   mutate(eo = match(exp, exps)) %>% arrange(eo, desc(nonref)) %>%   # cleanest (lowest non-REF) at TOP of each panel
   mutate(yidx = row_number(), ylab = sprintf("%s · %.3f", name, nonref),
-         exp_lab = factor(short(exp), c("BrB-seq", "BrB-nilHMM", "Skim", "Skim-nilHMM", "MolB")))
+         exp_lab = factor(short(exp), c("MolB-\nRTI", "Skim-nilHMM", "Skim-RTI", "BrB-nilHMM", "BrB-RTI")))
 paint <- calls %>% inner_join(sel %>% select(exp, name, yidx, exp_lab), by = c("exp", "name")) %>%
   mutate(state = factor(state, 0:2, c("REF", "HET", "ALT")),
          chr = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)))
