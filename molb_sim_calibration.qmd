@@ -65,7 +65,7 @@ cat(sprintf("p0  REF %.3f  Het %.3f  ALT %.3f\n", p0["REF"], p0["Het"], p0["ALT"
 
 ---
 
-# target sequencing (Source 5, ~110× target-capture, wideseq-filtered)
+# MolBreeding target sequencing (Source 5, ~110× capture, wideseq-filtered)
 
 The wideseq-filtered (`SNP_wsfilt`) **high-confidence** set: 9,157 sites validated
 in prior genotyping and selected for clean Poisson coverage in the skim. ~100%
