@@ -86,8 +86,8 @@ contaminated samples, not B73. The BrB-seq impostors cluster on plate PN1.
 
 ## Chromosome painting — worst & clean B73 within each experiment
 
-The **5 worst + 5 cleanest B73 reps within each caller** — MolB-RTI (only 2 reps, both clean),
-Skim-nilHMM, Skim-RTI, BrB-nilHMM, and BrB-RTI — **ordered by donor content (ascending)**,
+The **5 worst + 5 cleanest B73 reps within each caller** — BrB-RTI, BrB-nilHMM, Skim-RTI,
+Skim-nilHMM, and MolB-RTI (only 2 reps, both clean) — **ordered by donor content (ascending)**,
 caller labelled on the right. Shows BrB-seq carries both real impostors *and* clean reps, while
 Skim/MolB B73 are clean throughout. Each platform's two callers (RTI + nilHMM) score the *same
 reads*. **BrB-nilHMM is conservative** — it under-calls donor and collapses ALT→HET on BRB
@@ -110,7 +110,7 @@ sel <- qc %>% filter(exp %in% exps) %>% group_by(exp) %>%
   left_join(nonref, by = c("exp", "name")) %>%
   mutate(eo = match(exp, exps)) %>% arrange(eo, desc(nonref)) %>%   # cleanest (lowest non-REF) at TOP of each panel
   mutate(yidx = row_number(), ylab = sprintf("%s · %.3f", name, nonref),
-         exp_lab = factor(short(exp), c("MolB-\nRTI", "Skim-nilHMM", "Skim-RTI", "BrB-nilHMM", "BrB-RTI")))
+         exp_lab = factor(short(exp), c("BrB-RTI", "BrB-nilHMM", "Skim-RTI", "Skim-nilHMM", "MolB-\nRTI")))
 paint <- calls %>% inner_join(sel %>% select(exp, name, yidx, exp_lab), by = c("exp", "name")) %>%
   mutate(state = factor(state, 0:2, c("REF", "HET", "ALT")),
          chr = factor(chr, levels = 1:10, labels = paste0("chr", 1:10)))
