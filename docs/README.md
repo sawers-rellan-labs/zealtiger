@@ -81,6 +81,9 @@ data/maizegdb_consensus_map/   (input)
   See [02](02-pedigree-and-simulation.md).
 - **SNP50K coverage model** (Fausto's fit): λ=0.43×, missingness
   `π + (1−π)e^(−kλ)` with π=0.161, k=1.042. See [06](06-rtiger-benchmark-dataset.md).
+- **SNP50K is raw pileup, not imputed**; hard `GT` is 70% missing / 0% ALT-hom
+  at ~0.4×, so callers run on allele **counts**. Provenance + genotype-content
+  analysis in [snp50k-cohort-provenance.md](snp50k-cohort-provenance.md).
 - **RTIGER rigidity is in *informative* markers**; recommended **r ≈ 8–10**.
   See [09](09-rigidity-selection.md).
 - **Reproducibility**: global seed `20260609`, recorded in `run_metadata.json`.
