@@ -90,6 +90,11 @@ data/maizegdb_consensus_map/   (input)
   $\approx\{0,0.15,0.30\}$ not $\{0,\tfrac12,1\}$ (transmitted donor dose
   $d\approx0.3$). Math + data in
   [snp50k-genotype-identifiability.md](snp50k-genotype-identifiability.md).
+- **Genotype likelihoods won't rescue site calls; the count emission already *is*
+  the GL.** Single-site GL/PL/GQ for GATK/ANGSD/bcftools, the HWE-vs-breeding
+  prior swap (which *flips* a 1-read call het↔donor-hom), and why accumulating GLs
+  in an HMM helps the *segment* not the *site* (and GATK's PairHMM is a different
+  HMM): [genotype-likelihoods-and-hmm.md](genotype-likelihoods-and-hmm.md).
 - **RTIGER rigidity is in *informative* markers**; recommended **r ≈ 8–10**.
   See [09](09-rigidity-selection.md).
 - **Reproducibility**: global seed `20260609`, recorded in `run_metadata.json`.

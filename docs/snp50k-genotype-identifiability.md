@@ -202,6 +202,12 @@ alt-fraction space, **not** $\{0,\;0.5,\;1.0\}$:
 - HET-vs-HOM separation is $\approx 0.15$ ($0.15$ vs $0.30$) — barely resolvable,
   which is why the caller is het-biased and rarely finds donor-hom.
 
+Note the label "donor HET" above is the state the caller *reports* most, not the
+one the design expects most: by the BC2S3 single-locus frequencies donor-**hom** is
+actually the more common introgression genotype ($f_{BB}=0.109 > f_{AB}=0.031$) —
+the caller under-reports it purely because it is undetectable at $0.4\times$. See
+[genotype-likelihoods-and-hmm.md](genotype-likelihoods-and-hmm.md) §2.
+
 ### 2.5 Empirical validation — $d$ from the real read fractions
 
 We can estimate $d$ directly from the cohort AD, independent of the panel, by
