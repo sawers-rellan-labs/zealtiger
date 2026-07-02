@@ -1,6 +1,6 @@
 ---
-title: "nilHMM sanity paint: six ancestry callers, one engine, no Julia"
-subtitle: "Chromosome painting of the vary-skim sweep NILs (+B73 control) — Skim & BRB sources × binhmm / nNIL / RTIGER / ATLAS, all through the nilHMM package"
+title: "nilHMM sanity paint: source × caller tracks, one engine, no Julia"
+subtitle: "Chromosome painting of the vary-skim sweep NILs (+B73 control) — 6 tracks = 2 data sources (Skim, BRB) crossed with nilHMM callers, all through the nilHMM package"
 author: "Fausto Rodríguez-Zapata"
 date: "2026-07-02"
 format:
@@ -14,31 +14,44 @@ execute:
   echo: true
 ---
 
-**Context.** This is the cross-caller sanity check for the unified `nilHMM`
-engine: every ancestry caller — the count/BetaBinomial HMM, the Julia-free
-RTIGER port, the Gaussian-emission `binhmm`, and the GOOGA-shadow **ATLAS**
-gene-level caller — runs through one duration-aware 3-state (REF/HET/ALT) HMM,
-with the emission as the only swappable piece. We paint the same **vary-skim
-coverage-sweep NILs** (plus a clean B73 control) with **six tracks** and eyeball
-whether the independent callers agree on where the donor blocks are, and whether
+**Context.** This is the cross-track sanity check for the unified `nilHMM`
+engine, where every caller runs through one duration-aware 3-state
+(REF/HET/ALT) HMM with the emission as the only swappable piece. We paint the
+same **vary-skim coverage-sweep NILs** (plus a clean B73 control) and eyeball
+whether the independent tracks agree on where the donor blocks are, and whether
 the control stays REF. Memory: `wideseq-chrpainting-code`,
 `generative_vs_discriminative_callers`, `cassini-googa-caller`,
 `method-naming-source-caller`, `skim-count-caller-calibration`,
 `rtiger-betabinomial-cost`.
 
-The six tracks (top → bottom within each sample block):
+**The six tracks are *not* six callers.** Each track is a combination of a
+**data source** and a **nilHMM caller method** (naming convention
+`<DataSource>-<Caller>`, source first — memory `method-naming-source-caller`).
+There are only **two data sources** and **four distinct callers**; Skim and BRB
+each run three tracks and *share* the nNIL and RTIGER callers:
 
-| Track | Source | Emission / method | Input |
-|---|---|---|---|
-| **Skim-binhmm** | low-cov WGS | 3-state Gaussian on per-bin `ALT_FREQ`, REF anchored at the floor | dense skim `bin_genotypes` (mount) |
-| **Skim-nNIL** | low-cov WGS | count / BetaBinomial HMM (`r=1e-4`, `err=0.01`) | 50K panel counts |
-| **Skim-rtiger** | low-cov WGS | nilHMM RTIGER port (`r=5`) | 50K panel counts |
-| **BrB-nNIL** | 3′ RNA-seq | count HMM, `fit_means` (`r=1e-8`) | wideseq-thinned BRB counts |
-| **BrB-rtiger** | 3′ RNA-seq | nilHMM RTIGER port (`r=7`) | wideseq BRB counts |
-| **BrB-atlas** | 3′ RNA-seq | GOOGA-shadow gene-level GT (`≥.95`/`≥.25`, min 5 reads) → geometric-duration HMM | cassini pangene counts, per donor species |
+- **Data sources (2):** `Skim` = low-coverage WGS; `BrB` = 3′ RNA-seq (BRB-seq).
+- **Callers (4 distinct):** `binhmm` (Gaussian on per-bin `ALT_FREQ`), `nNIL`
+  (count / BetaBinomial HMM), `RTIGER` (Julia-free port), `ATLAS`
+  (GOOGA-shadow gene-level GT).
+
+The tracks are ordered **first by data source, then by caller** (all three Skim
+tracks, then all three BRB tracks):
+
+| # | Track | Data source | nilHMM caller | Input |
+|---|---|---|---|---|
+| 1 | **Skim-binhmm** | Skim (low-cov WGS) | `binhmm` — 3-state Gaussian on per-bin `ALT_FREQ`, REF anchored at the floor | dense skim `bin_genotypes` (mount) |
+| 2 | **Skim-nNIL** | Skim (low-cov WGS) | `nNIL` — count / BetaBinomial HMM (`r=1e-4`, `err=0.01`) | 50K panel counts |
+| 3 | **Skim-rtiger** | Skim (low-cov WGS) | `RTIGER` port (`r=5`) | 50K panel counts |
+| 4 | **BrB-nNIL** | BrB (3′ RNA-seq) | `nNIL` — count HMM, `fit_means` (`r=1e-8`) | wideseq-thinned BRB counts |
+| 5 | **BrB-rtiger** | BrB (3′ RNA-seq) | `RTIGER` port (`r=7`) | wideseq BRB counts |
+| 6 | **BrB-atlas** | BrB (3′ RNA-seq) | `ATLAS` — GOOGA-shadow gene-level GT (`≥.95`/`≥.25`, min 5 reads) → geometric-duration HMM | cassini pangene counts, per donor species |
+
+So the grid is 2 sources × 3 caller-slots = 6 tracks, drawing on 4 unique
+callers (`binhmm` is Skim-only, `ATLAS` is BRB-only, `nNIL`/`RTIGER` run on both).
 
 > **Parameters are illustrative, not fully re-calibrated.** This note is a
-> coherence check across callers and sources, not a final call set.
+> coherence check across sources and callers, not a final call set.
 
 ---
 
@@ -187,7 +200,7 @@ p <- ggplot(df, aes(xmin = start_bp / 1e6, xmax = end_bp / 1e6, ymin = ylo, ymax
   scale_y_continuous(breaks = (5:0) / 6 + 1 / 12, labels = methods, position = "right",
                      expand = expansion(mult = 0.01)) +
   labs(title = "nilHMM sanity paint — vary-skim sweep (B73 control + 10 NILs)",
-       subtitle = "tracks (top->bottom): Skim-binhmm / Skim-nNIL / Skim-rtiger / BrB-nNIL / BrB-rtiger / BrB-atlas | all nilHMM (no Julia) | gold REF, green HET, purple ALT",
+       subtitle = "6 tracks = data source × nilHMM caller (2 sources: Skim, BrB | 4 callers: binhmm, nNIL, RTIGER, ATLAS) | ordered by source then caller | all nilHMM, no Julia",
        x = "Position (Mb)", fill = "Genotype") +
   ggpubr::theme_classic2(base_size = 8) +
   theme(plot.title = element_text(size = 12), plot.subtitle = element_text(size = 12), legend.position = "bottom",
