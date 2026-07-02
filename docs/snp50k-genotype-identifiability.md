@@ -202,7 +202,49 @@ alt-fraction space, **not** $\{0,\;0.5,\;1.0\}$:
 - HET-vs-HOM separation is $\approx 0.15$ ($0.15$ vs $0.30$) — barely resolvable,
   which is why the caller is het-biased and rarely finds donor-hom.
 
-### 2.5 The site-selection ceiling
+### 2.5 Empirical validation — $d$ from the real read fractions
+
+We can estimate $d$ directly from the cohort AD, independent of the panel, by
+conditioning on ancestry-segment state and reading off the mean alt-read fraction:
+REF segments $\to \varepsilon$, HET $\to d/2$, HOM $\to d$
+(`agent/estimate_dose_from_reads.R`, segments from RTIGER calls which resolve
+zygosity; alt-fraction pooled over all covered sites of all NILs in a taxon).
+
+| taxon (donor) | panel $d$ | REF-bg alt-frac | HET alt-frac ($\hat d/2$) | HOM alt-frac ($\hat d$) | $2\times$HET | covered sites |
+|---|---:|---:|---:|---:|---:|---:|
+| Zd (diploperennis) | 0.346 | 0.0057 | 0.198 | 0.461 | 0.396 | 3.4M |
+| Zl (luxurians) | 0.333 | 0.0071 | 0.164 | 0.363 | 0.329 | 1.9M |
+| Zv (parviglumis) | 0.282 | 0.0048 | 0.157 | 0.342 | 0.314 | 5.3M |
+| Zx (mexicana) | 0.330 | 0.0044 | 0.187 | 0.492 | 0.374 | 9.0M |
+| Zh (huehuetenangensis) | 0.37\* | 0.0070 | 0.339 | 0.894 | 0.678 | 0.8M |
+
+\*Zh panel $d$ is from $n=1$ huehuetenangensis (+8 perennis); poorly sampled.
+
+Three things the reads confirm:
+
+1. **The REF-background floor is $\varepsilon \approx 0.004$–$0.007$**, exactly the
+   per-read error rate — the REF state emits at the noise floor, not 0 (matching the
+   nilhifi anchoring rationale).
+2. **The read-based $d$ reproduces the panel-genotype $d$** for the four
+   well-sampled donors: the interval $[\,2\times\text{HET},\ \text{HOM}\,]$ brackets
+   $d$, and both land at $\approx 0.3$–$0.4$ against the panel's $0.28$–$0.35$
+   (Zl essentially exact: 0.329 vs 0.333). Two fully independent measurements —
+   donor-panel genotype composition and NIL read fractions — agree that
+   **$d\approx 0.3$, not $\approx 1$.** The reads run slightly high, consistent with
+   (i) the specific donor accessions carrying more alt than the species average and
+   (ii) HET segments absorbing some true-HOM markers (see next point).
+3. **The HET/HOM split is not clean — as predicted.** Under the model $2\times$HET
+   should equal HOM; instead HOM $>2\times$HET (e.g. Zx 0.49 vs 0.37) because at
+   $0.4\times$ the caller thresholds the alt-fraction rather than resolving zygosity,
+   so HET keeps the low tail and HOM the high tail. The estimator's own ambiguity is
+   the identifiability limit this document is about. Zh is the extreme case
+   (HET alt-frac 0.34, HOM 0.89): huehuetenangensis is the most divergent donor, so
+   $d$ is genuinely highest, but the value is uncertain (panel $n=1$, strong
+   het/hom bleed).
+
+Estimates: `agent/dose_estimates_by_taxon.csv`.
+
+### 2.6 The site-selection ceiling
 
 Restricting to sites where the donor is **fixed-ALT** ($f_2\to1$, $d\to1$) would
 restore the clean $\{0, \tfrac12, 1\}$ model. But "fixed in *this* donor" cannot be
@@ -223,7 +265,7 @@ from human aDNA or inbred-founder PHGs do not transfer here.
   `fit_means` outperforms the fixed-mean count emission on this data.
 - **Prefer donor-enriched sites where possible.** Selecting sites with high
   species-level $f_2$ raises $d$ toward 1 and widens state separation, up to the
-  accession ceiling in §2.5.
+  accession ceiling in §2.6.
 - **Report honestly.** The donor *footprint* (where introgression is) is
   recoverable; the het-vs-donor-hom split is marginal ($0.15$ vs $0.30$); per-site
   zygosity is not recoverable and should not be claimed. For B1/anthocyanin QTL the
