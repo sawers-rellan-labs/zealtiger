@@ -83,18 +83,56 @@ Where each tool applies $\pi$:
 
 ### HWE prior at the cohort frequency → forces HET
 
-With alt-allele frequency $p$ (measured cohort mean $\bar p = 0.015$), HWE gives
-$\pi(AA,AB,BB)=((1-p)^2, 2p(1-p), p^2)$. For one alt read:
+The genotype prior is Hardy–Weinberg at the cohort alt-allele frequency $p$
+(measured mean $\bar p = 0.015$): $\pi(AA,AB,BB)=((1-p)^2,\,2p(1-p),\,p^2)$.
+Multiplying the one-read likelihoods (from §1) by this prior and normalizing, at
+$p=\bar p=0.015$ and $\varepsilon=0.01$:
+
+| genotype | likelihood $P(\text{read}\mid G)$ | $L$ | HWE prior $\pi(G)$ | $\pi$ | posterior $\propto L\cdot\pi$ | $P(G\mid\text{read})$ |
+|---|---|---:|---|---:|---|---:|
+| $AA$ | $\varepsilon/3$ | 0.0033 | $(1-p)^2$ | 0.970 | $\tfrac{\varepsilon}{3}\cdot(1-p)^2$ | 0.178 |
+| $AB$ | $\tfrac12\!\cdot\!\tfrac{\varepsilon}{3} + \tfrac12(1-\varepsilon)$ | 0.498 | $2p(1-p)$ | 0.0296 | $p(1-p)$ | **0.810** |
+| $BB$ | $1-\varepsilon$ | 0.99 | $p^2$ | 0.000225 | $(1-\varepsilon)\cdot p^2$ | 0.012 |
+
+Taking the ratio of the two non-REF rows' posteriors ($\propto L\cdot\pi$), HET
+beats ALT-hom by
 
 $$
 \frac{P(AB\mid\text{read})}{P(BB\mid\text{read})}
-= \frac{\tfrac12\cdot 2p(1-p)}{(1-\varepsilon)\cdot p^2}
-= \frac{1-p}{(1-\varepsilon)\cdot p} \approx \frac1p \approx 66 .
+= \frac{p(1-p)}{(1-\varepsilon)\cdot p^2}
+= \frac{1-p}{(1-\varepsilon)\cdot p} \approx \frac1p \approx 66 ,
 $$
 
-The prior overturns the $2{:}1$ likelihood and forces the call to **HET** — this is
-the 97% REF / 0.00% ALT-hom pattern in the SNP50K matrix
+matching the table's $0.810/0.012 \approx 67$. The rare-allele prior overturns the
+$2{:}1$ likelihood — it collapses the ALT-hom posterior to ~1% and hands 81% to the
+heterozygote, even though the read's *likelihood* most favored $BB$. **The call is
+the prior's, not the read's.** This is the 97% REF / 0.00% ALT-hom pattern in the
+SNP50K matrix
 ([snp50k-cohort-provenance.md](https://github.com/sawers-rellan-labs/zealtiger/blob/main/docs/snp50k-cohort-provenance.md)).
+
+**Posterior callers inherit this, and most assume HWE.** bcftools `call -m`,
+freebayes, ANGSD `-doPost`, and the imputation tools Beagle and GLIMPSE are all
+**posterior callers**: each weights the genotype likelihood by a prior and reports
+the genotype that maximizes the product, the **maximum-a-posteriori (MAP)** estimate.
+
+$$
+\hat G = \arg\max_G P(G\mid\text{data}) = \arg\max_G P(\text{data}\mid G)\,\pi(G) .
+$$
+
+The maximum-likelihood choice, by contrast, keeps only the likelihood
+$P(\text{data}\mid G)$ and drops the prior $\pi$. The prior these callers assume is
+almost always Hardy–Weinberg: at the estimated allele frequency for bcftools,
+freebayes, and ANGSD `-doPost`, and at a reference panel's frequencies for Beagle
+and GLIMPSE. So at a rare site every one of them turns a lone ALT read into a HET
+call. The HWE prior, not the read, decides.
+
+GATK is the exception. It does not call genotypes on the posterior: its per-sample
+GT is the maximum-likelihood genotype, and the heterozygosity prior only gates
+whether the site is variant. There a lone ALT read is called hom-ALT, not HET. The
+companion note
+[*GATK does not call genotypes on posteriors*](https://github.com/sawers-rellan-labs/zealtiger/blob/main/docs/gatk-genotype-assignment.md)
+explains why, and why GATK's own heterozygote excess has a separate paralog and
+coverage cause.
 
 ### Breeding prior — the single-locus NIL genotype frequencies
 
@@ -115,14 +153,25 @@ introgression is "mostly het" — the *design* expects mostly donor-hom; the cal
 
 ### Swapping the prior flips the single-read call
 
-Same one alt read, breeding (BC2S3) prior:
+The same one alt read, now with the BC2S3 breeding prior (likelihood from §1
+$\times$ prior, at $\varepsilon=0.01$, posterior normalized to sum to 1):
+
+| genotype | likelihood $P(\text{read}\mid G)$ | $L$ | BC2S3 prior $\pi(G)$ | $\pi$ | posterior $\propto L\cdot\pi$ | $P(G\mid\text{read})$ |
+|---|---|---:|---|---:|---|---:|
+| $AA$ | $\varepsilon/3$ | 0.0033 | $f_{AA}$ | 0.859 | $\tfrac{\varepsilon}{3}\cdot f_{AA}$ | 0.023 |
+| $AB$ | $\tfrac12\!\cdot\!\tfrac{\varepsilon}{3} + \tfrac12(1-\varepsilon)$ | 0.498 | $f_{AB}$ | 0.0312 | $\tfrac12 f_{AB}$ | 0.123 |
+| $BB$ | $1-\varepsilon$ | 0.99 | $f_{BB}$ | 0.1094 | $(1-\varepsilon)\cdot f_{BB}$ | **0.855** |
+
+Taking the ratio of the two non-REF rows' posteriors, HET now loses to ALT-hom:
 
 $$
 \frac{P(AB\mid\text{read})}{P(BB\mid\text{read})}
-= \frac{\tfrac12 f_{AB}}{(1-\varepsilon) f_{BB}}
+= \frac{\tfrac12 f_{AB}}{(1-\varepsilon)\cdot f_{BB}}
 = \frac{0.5 \times 0.0312}{0.99 \times 0.1094} \approx 0.14
-\quad\Rightarrow\quad \textbf{DONOR-HOM} \ (\approx 7{:}1).
+\quad\Rightarrow\quad \textbf{DONOR-HOM} \ (\approx 7{:}1),
 $$
+
+matching the table's $0.123/0.855$.
 
 So the *identical read and likelihood* is called **HET under the HWE prior** and
 **DONOR-HOM under the breeding prior**. This is the crux for the "fix the prior"

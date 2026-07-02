@@ -2470,13 +2470,71 @@ P(G \mid \text{reads}) \;\propto\; \underbrace{P(\text{reads}\mid G)}_{\text{GL 
 </table>
 <section id="hwe-prior-at-the-cohort-frequency-forces-het" class="level3">
 <h3 class="anchored" data-anchor-id="hwe-prior-at-the-cohort-frequency-forces-het">HWE prior at the cohort frequency → forces HET</h3>
-<p>With alt-allele frequency <span class="math inline">\(p\)</span> (measured cohort mean <span class="math inline">\(\bar p = 0.015\)</span>), HWE gives <span class="math inline">\(\pi(AA,AB,BB)=((1-p)^2, 2p(1-p), p^2)\)</span>. For one alt read:</p>
+<p>The genotype prior is Hardy–Weinberg at the cohort alt-allele frequency <span class="math inline">\(p\)</span> (measured mean <span class="math inline">\(\bar p = 0.015\)</span>): <span class="math inline">\(\pi(AA,AB,BB)=((1-p)^2,\,2p(1-p),\,p^2)\)</span>. Multiplying the one-read likelihoods (from §1) by this prior and normalizing, at <span class="math inline">\(p=\bar p=0.015\)</span> and <span class="math inline">\(\varepsilon=0.01\)</span>:</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 12%">
+<col style="width: 12%">
+<col style="width: 16%">
+<col style="width: 12%">
+<col style="width: 16%">
+<col style="width: 12%">
+<col style="width: 16%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>genotype</th>
+<th>likelihood <span class="math inline">\(P(\text{read}\mid G)\)</span></th>
+<th style="text-align: right;"><span class="math inline">\(L\)</span></th>
+<th>HWE prior <span class="math inline">\(\pi(G)\)</span></th>
+<th style="text-align: right;"><span class="math inline">\(\pi\)</span></th>
+<th>posterior <span class="math inline">\(\propto L\cdot\pi\)</span></th>
+<th style="text-align: right;"><span class="math inline">\(P(G\mid\text{read})\)</span></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><span class="math inline">\(AA\)</span></td>
+<td><span class="math inline">\(\varepsilon/3\)</span></td>
+<td style="text-align: right;">0.0033</td>
+<td><span class="math inline">\((1-p)^2\)</span></td>
+<td style="text-align: right;">0.970</td>
+<td><span class="math inline">\(\tfrac{\varepsilon}{3}\cdot(1-p)^2\)</span></td>
+<td style="text-align: right;">0.178</td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(AB\)</span></td>
+<td><span class="math inline">\(\tfrac12\!\cdot\!\tfrac{\varepsilon}{3} + \tfrac12(1-\varepsilon)\)</span></td>
+<td style="text-align: right;">0.498</td>
+<td><span class="math inline">\(2p(1-p)\)</span></td>
+<td style="text-align: right;">0.0296</td>
+<td><span class="math inline">\(p(1-p)\)</span></td>
+<td style="text-align: right;"><strong>0.810</strong></td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\(BB\)</span></td>
+<td><span class="math inline">\(1-\varepsilon\)</span></td>
+<td style="text-align: right;">0.99</td>
+<td><span class="math inline">\(p^2\)</span></td>
+<td style="text-align: right;">0.000225</td>
+<td><span class="math inline">\((1-\varepsilon)\cdot p^2\)</span></td>
+<td style="text-align: right;">0.012</td>
+</tr>
+</tbody>
+</table>
+<p>Taking the ratio of the two non-REF rows’ posteriors (<span class="math inline">\(\propto L\cdot\pi\)</span>), HET beats ALT-hom by</p>
 <p><span class="math display">\[
 \frac{P(AB\mid\text{read})}{P(BB\mid\text{read})}
-= \frac{\tfrac12\cdot 2p(1-p)}{(1-\varepsilon)\cdot p^2}
-= \frac{1-p}{(1-\varepsilon)\cdot p} \approx \frac1p \approx 66 .
+= \frac{p(1-p)}{(1-\varepsilon)\cdot p^2}
+= \frac{1-p}{(1-\varepsilon)\cdot p} \approx \frac1p \approx 66 ,
 \]</span></p>
-<p>The prior overturns the <span class="math inline">\(2{:}1\)</span> likelihood and forces the call to <strong>HET</strong> — this is the 97% REF / 0.00% ALT-hom pattern in the SNP50K matrix (<a href="https://github.com/sawers-rellan-labs/zealtiger/blob/main/docs/snp50k-cohort-provenance.md">snp50k-cohort-provenance.md</a>).</p>
+<p>matching the table’s <span class="math inline">\(0.810/0.012 \approx 67\)</span>. The rare-allele prior overturns the <span class="math inline">\(2{:}1\)</span> likelihood — it collapses the ALT-hom posterior to ~1% and hands 81% to the heterozygote, even though the read’s <em>likelihood</em> most favored <span class="math inline">\(BB\)</span>. <strong>The call is the prior’s, not the read’s.</strong> This is the 97% REF / 0.00% ALT-hom pattern in the SNP50K matrix (<a href="https://github.com/sawers-rellan-labs/zealtiger/blob/main/docs/snp50k-cohort-provenance.md">snp50k-cohort-provenance.md</a>).</p>
+<p><strong>Posterior callers inherit this, and most assume HWE.</strong> bcftools <code>call -m</code>, freebayes, ANGSD <code>-doPost</code>, and the imputation tools Beagle and GLIMPSE are all <strong>posterior callers</strong>: each weights the genotype likelihood by a prior and reports the genotype that maximizes the product, the <strong>maximum-a-posteriori (MAP)</strong> estimate.</p>
+<p><span class="math display">\[
+\hat G = \arg\max_G P(G\mid\text{data}) = \arg\max_G P(\text{data}\mid G)\,\pi(G) .
+\]</span></p>
+<p>The maximum-likelihood choice, by contrast, keeps only the likelihood <span class="math inline">\(P(\text{data}\mid G)\)</span> and drops the prior <span class="math inline">\(\pi\)</span>. The prior these callers assume is almost always Hardy–Weinberg: at the estimated allele frequency for bcftools, freebayes, and ANGSD <code>-doPost</code>, and at a reference panel’s frequencies for Beagle and GLIMPSE. So at a rare site every one of them turns a lone ALT read into a HET call. The HWE prior, not the read, decides.</p>
+<p>GATK is the exception. It does not call genotypes on the posterior: its per-sample GT is the maximum-likelihood genotype, and the heterozygosity prior only gates whether the site is variant. There a lone ALT read is called hom-ALT, not HET. The companion note <a href="https://github.com/sawers-rellan-labs/zealtiger/blob/main/docs/gatk-genotype-assignment.md"><em>GATK does not call genotypes on posteriors</em></a> explains why, and why GATK’s own heterozygote excess has a separate paralog and coverage cause.</p>
 </section>
 <section id="breeding-prior-the-single-locus-nil-genotype-frequencies" class="level3">
 <h3 class="anchored" data-anchor-id="breeding-prior-the-single-locus-nil-genotype-frequencies">Breeding prior — the single-locus NIL genotype frequencies</h3>
@@ -2519,13 +2577,66 @@ P(G \mid \text{reads}) \;\propto\; \underbrace{P(\text{reads}\mid G)}_{\text{GL 
 </section>
 <section id="swapping-the-prior-flips-the-single-read-call" class="level3">
 <h3 class="anchored" data-anchor-id="swapping-the-prior-flips-the-single-read-call">Swapping the prior flips the single-read call</h3>
-<p>Same one alt read, breeding (BC2S3) prior:</p>
+<p>The same one alt read, now with the BC2S3 breeding prior (likelihood from §1 <span class="math inline">\(\times\)</span> prior, at <span class="math inline">\(\varepsilon=0.01\)</span>, posterior normalized to sum to 1):</p>
+<table class="caption-top table">
+<colgroup>
+<col style="width: 12%">
+<col style="width: 12%">
+<col style="width: 16%">
+<col style="width: 12%">
+<col style="width: 16%">
+<col style="width: 12%">
+<col style="width: 16%">
+</colgroup>
+<thead>
+<tr class="header">
+<th>genotype</th>
+<th>likelihood <span class="math inline">\(P(\text{read}\mid G)\)</span></th>
+<th style="text-align: right;"><span class="math inline">\(L\)</span></th>
+<th>BC2S3 prior <span class="math inline">\(\pi(G)\)</span></th>
+<th style="text-align: right;"><span class="math inline">\(\pi\)</span></th>
+<th>posterior <span class="math inline">\(\propto L\cdot\pi\)</span></th>
+<th style="text-align: right;"><span class="math inline">\(P(G\mid\text{read})\)</span></th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><span class="math inline">\(AA\)</span></td>
+<td><span class="math inline">\(\varepsilon/3\)</span></td>
+<td style="text-align: right;">0.0033</td>
+<td><span class="math inline">\(f_{AA}\)</span></td>
+<td style="text-align: right;">0.859</td>
+<td><span class="math inline">\(\tfrac{\varepsilon}{3}\cdot f_{AA}\)</span></td>
+<td style="text-align: right;">0.023</td>
+</tr>
+<tr class="even">
+<td><span class="math inline">\(AB\)</span></td>
+<td><span class="math inline">\(\tfrac12\!\cdot\!\tfrac{\varepsilon}{3} + \tfrac12(1-\varepsilon)\)</span></td>
+<td style="text-align: right;">0.498</td>
+<td><span class="math inline">\(f_{AB}\)</span></td>
+<td style="text-align: right;">0.0312</td>
+<td><span class="math inline">\(\tfrac12 f_{AB}\)</span></td>
+<td style="text-align: right;">0.123</td>
+</tr>
+<tr class="odd">
+<td><span class="math inline">\(BB\)</span></td>
+<td><span class="math inline">\(1-\varepsilon\)</span></td>
+<td style="text-align: right;">0.99</td>
+<td><span class="math inline">\(f_{BB}\)</span></td>
+<td style="text-align: right;">0.1094</td>
+<td><span class="math inline">\((1-\varepsilon)\cdot f_{BB}\)</span></td>
+<td style="text-align: right;"><strong>0.855</strong></td>
+</tr>
+</tbody>
+</table>
+<p>Taking the ratio of the two non-REF rows’ posteriors, HET now loses to ALT-hom:</p>
 <p><span class="math display">\[
 \frac{P(AB\mid\text{read})}{P(BB\mid\text{read})}
-= \frac{\tfrac12 f_{AB}}{(1-\varepsilon) f_{BB}}
+= \frac{\tfrac12 f_{AB}}{(1-\varepsilon)\cdot f_{BB}}
 = \frac{0.5 \times 0.0312}{0.99 \times 0.1094} \approx 0.14
-\quad\Rightarrow\quad \textbf{DONOR-HOM} \ (\approx 7{:}1).
+\quad\Rightarrow\quad \textbf{DONOR-HOM} \ (\approx 7{:}1),
 \]</span></p>
+<p>matching the table’s <span class="math inline">\(0.123/0.855\)</span>.</p>
 <p>So the <em>identical read and likelihood</em> is called <strong>HET under the HWE prior</strong> and <strong>DONOR-HOM under the breeding prior</strong>. This is the crux for the “fix the prior” argument: swapping HWE → breeding frequencies is correct and worthwhile (it counteracts the coverage-induced het-bias), <strong>but it only relabels the default — it adds no zygosity information.</strong> The data still speaks at only <span class="math inline">\(\approx 3\)</span> PL. One read cannot resolve het from hom under <em>any</em> prior; the prior decides the tie.</p>
 <hr>
 </section>
