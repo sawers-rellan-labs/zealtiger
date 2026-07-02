@@ -65,6 +65,11 @@ exactly those positions (`run_wideseq.sh`, `CollectAllelicCounts` — memory
 `gatk-table-readcount-standard`). So the **BRB count tracks (BrB-nNIL,
 BrB-rtiger) are also wideseq-thinned from the same larger source**; only
 Skim-binhmm keeps the full ~27.6 M density.
+
+The MAF ≥ 0.05 filter is an **identifiability lever**: keeping donor-informative
+(species-common) sites raises the donor dose and widens REF/HET/ALT separation —
+see [`genotype_likelihoods_and_hmm` §5](genotype_likelihoods_and_hmm.html#what-survives-the-information-ceiling)
+and [`snp50k_genotype_identifiability` §2.1/§2.6/§3](snp50k_genotype_identifiability.html#consequences).
 :::
 
 > **Parameters are illustrative, not fully re-calibrated.** This note is a
