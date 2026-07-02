@@ -45,11 +45,11 @@ why the heterozygote likelihood of any single read is pinned near $\tfrac12$.
 
 ### One ALT read ($b=B$, $\varepsilon=0.01$)
 
-| genotype | likelihood $P(\text{read}\mid G)$ | Phred $-10\log_{10}L$ | normalized PL |
-|---|---|---:|---:|
-| $AA$ | $\varepsilon/3 = 0.0033$ | 24.8 | **25** |
-| $AB$ | $\tfrac12\!\cdot\!\tfrac{\varepsilon}{3} + \tfrac12(1-\varepsilon) \approx 0.498$ | 3.0 | **3** |
-| $BB$ | $1-\varepsilon = 0.99$ | 0.04 | **0** |
+| genotype | likelihood $P(\text{read}\mid G)$ | value | Phred $-10\log_{10}L$ | normalized PL |
+|---|---|---:|---:|---:|
+| $AA$ | $\varepsilon/3$ | 0.0033 | 24.8 | **25** |
+| $AB$ | $\tfrac12\!\cdot\!\tfrac{\varepsilon}{3} + \tfrac12(1-\varepsilon)$ | ≈0.498 | 3.0 | **3** |
+| $BB$ | $1-\varepsilon$ | 0.99 | 0.04 | **0** |
 
 - **PL** $= -10\log_{10} L$, normalized by subtracting the smallest so the best
   genotype is 0 (the GATK worked example: probabilities $100\times$ apart give PLs

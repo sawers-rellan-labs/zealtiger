@@ -2383,15 +2383,17 @@ P(b\mid A) = \begin{cases} 1-\varepsilon &amp; b = A\\[2pt] \varepsilon/3 &amp; 
 <h3 class="anchored" data-anchor-id="one-alt-read-bb-varepsilon0.01">One ALT read (<span class="math inline">\(b=B\)</span>, <span class="math inline">\(\varepsilon=0.01\)</span>)</h3>
 <table class="caption-top table">
 <colgroup>
-<col style="width: 21%">
-<col style="width: 21%">
-<col style="width: 28%">
-<col style="width: 28%">
+<col style="width: 16%">
+<col style="width: 16%">
+<col style="width: 22%">
+<col style="width: 22%">
+<col style="width: 22%">
 </colgroup>
 <thead>
 <tr class="header">
 <th>genotype</th>
 <th>likelihood <span class="math inline">\(P(\text{read}\mid G)\)</span></th>
+<th style="text-align: right;">value</th>
 <th style="text-align: right;">Phred <span class="math inline">\(-10\log_{10}L\)</span></th>
 <th style="text-align: right;">normalized PL</th>
 </tr>
@@ -2399,19 +2401,22 @@ P(b\mid A) = \begin{cases} 1-\varepsilon &amp; b = A\\[2pt] \varepsilon/3 &amp; 
 <tbody>
 <tr class="odd">
 <td><span class="math inline">\(AA\)</span></td>
-<td><span class="math inline">\(\varepsilon/3 = 0.0033\)</span></td>
+<td><span class="math inline">\(\varepsilon/3\)</span></td>
+<td style="text-align: right;">0.0033</td>
 <td style="text-align: right;">24.8</td>
 <td style="text-align: right;"><strong>25</strong></td>
 </tr>
 <tr class="even">
 <td><span class="math inline">\(AB\)</span></td>
-<td><span class="math inline">\(\tfrac12\!\cdot\!\tfrac{\varepsilon}{3} + \tfrac12(1-\varepsilon) \approx 0.498\)</span></td>
+<td><span class="math inline">\(\tfrac12\!\cdot\!\tfrac{\varepsilon}{3} + \tfrac12(1-\varepsilon)\)</span></td>
+<td style="text-align: right;">≈0.498</td>
 <td style="text-align: right;">3.0</td>
 <td style="text-align: right;"><strong>3</strong></td>
 </tr>
 <tr class="odd">
 <td><span class="math inline">\(BB\)</span></td>
-<td><span class="math inline">\(1-\varepsilon = 0.99\)</span></td>
+<td><span class="math inline">\(1-\varepsilon\)</span></td>
+<td style="text-align: right;">0.99</td>
 <td style="text-align: right;">0.04</td>
 <td style="text-align: right;"><strong>0</strong></td>
 </tr>
