@@ -38,17 +38,34 @@ each run three tracks and *share* the nNIL and RTIGER callers:
 The tracks are ordered **first by data source, then by caller** (all three Skim
 tracks, then all three BRB tracks):
 
-| # | Track | Data source | nilHMM caller | Input |
+| # | Track | Data source | nilHMM caller | Input marker set |
 |---|---|---|---|---|
-| 1 | **Skim-binhmm** | Skim (low-cov WGS) | `binhmm` — 3-state Gaussian on per-bin `ALT_FREQ`, REF anchored at the floor | dense skim `bin_genotypes` (mount) |
-| 2 | **Skim-nNIL** | Skim (low-cov WGS) | `nNIL` — count / BetaBinomial HMM (`r=1e-4`, `err=0.01`) | 50K panel counts |
-| 3 | **Skim-rtiger** | Skim (low-cov WGS) | `RTIGER` port (`r=5`) | 50K panel counts |
-| 4 | **BrB-nNIL** | BrB (3′ RNA-seq) | `nNIL` — count HMM, `fit_means` (`r=1e-8`) | wideseq-thinned BRB counts |
-| 5 | **BrB-rtiger** | BrB (3′ RNA-seq) | `RTIGER` port (`r=7`) | wideseq BRB counts |
-| 6 | **BrB-atlas** | BrB (3′ RNA-seq) | `ATLAS` — GOOGA-shadow gene-level GT (`≥.95`/`≥.25`, min 5 reads) → geometric-duration HMM | cassini pangene counts, per donor species |
+| 1 | **Skim-binhmm** | Skim (low-cov WGS) | `binhmm` — 3-state Gaussian on per-bin `ALT_FREQ`, REF anchored at the floor | **dense ~27.6 M-SNP set** — per-1 Mb `ALT_FREQ` `bin_genotypes` from GATK `CollectAllelicCounts` at the full teosinte-informative wideseq positions (mount, `bzeaseq/ancestry`) |
+| 2 | **Skim-nNIL** | Skim (low-cov WGS) | `nNIL` — count / BetaBinomial HMM (`r=1e-4`, `err=0.01`) | **50K panel** counts (thinned SNP50K) |
+| 3 | **Skim-rtiger** | Skim (low-cov WGS) | `RTIGER` port (`r=5`) | **50K panel** counts (thinned SNP50K) |
+| 4 | **BrB-nNIL** | BrB (3′ RNA-seq) | `nNIL` — count HMM, `fit_means` (`r=1e-8`) | **wideseq-thinned** BRB counts |
+| 5 | **BrB-rtiger** | BrB (3′ RNA-seq) | `RTIGER` port (`r=7`) | **wideseq-thinned** BRB counts |
+| 6 | **BrB-atlas** | BrB (3′ RNA-seq) | `ATLAS` — GOOGA-shadow gene-level GT (`≥.95`/`≥.25`, min 5 reads) → geometric-duration HMM | cassini **pangene** counts, per donor species |
 
 So the grid is 2 sources × 3 caller-slots = 6 tracks, drawing on 4 unique
 callers (`binhmm` is Skim-only, `ATLAS` is BRB-only, `nNIL`/`RTIGER` run on both).
+
+::: {.callout-note title="Marker-set provenance — the tracks run at different SNP densities"}
+The three Skim tracks are **not** all on the same markers. **Skim-binhmm runs on
+the full dense set of ~27.6 M teosinte-informative SNPs** (2.0–4.0 M per
+chromosome; total 27,603,777), whereas **Skim-nNIL / Skim-rtiger run on the
+much coarser thinned 50K panel** — the SNP50K counts used for the 50K set.
+
+That ~27.6 M set is itself a **wideseq thinning of an even larger SNP dataset**:
+per `bzeaseq` (`get_variants_from_schnable2023.sh`), the **Schnable et al. 2023**
+teosinte / *Tripsacum* diversity VCF is filtered to the teosinte/*Tripsacum*
+samples, restricted to biallelic SNPs, and MAF-filtered at ≥ 0.05 to yield the
+`wideseq_ref` panel; GATK `CollectAllelicCounts` then tallies skim/BRB reads at
+exactly those positions (`run_wideseq.sh`, `CollectAllelicCounts` — memory
+`gatk-table-readcount-standard`). So the **BRB count tracks (BrB-nNIL,
+BrB-rtiger) are also wideseq-thinned from the same larger source**; only
+Skim-binhmm keeps the full ~27.6 M density.
+:::
 
 > **Parameters are illustrative, not fully re-calibrated.** This note is a
 > coherence check across sources and callers, not a final call set.

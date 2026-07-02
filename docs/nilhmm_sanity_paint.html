@@ -2274,7 +2274,7 @@ vertical-align: -.125em;
 <th>Track</th>
 <th>Data source</th>
 <th>nilHMM caller</th>
-<th>Input</th>
+<th>Input marker set</th>
 </tr>
 </thead>
 <tbody>
@@ -2283,46 +2283,60 @@ vertical-align: -.125em;
 <td><strong>Skim-binhmm</strong></td>
 <td>Skim (low-cov WGS)</td>
 <td><code>binhmm</code> — 3-state Gaussian on per-bin <code>ALT_FREQ</code>, REF anchored at the floor</td>
-<td>dense skim <code>bin_genotypes</code> (mount)</td>
+<td><strong>dense ~27.6 M-SNP set</strong> — per-1 Mb <code>ALT_FREQ</code> <code>bin_genotypes</code> from GATK <code>CollectAllelicCounts</code> at the full teosinte-informative wideseq positions (mount, <code>bzeaseq/ancestry</code>)</td>
 </tr>
 <tr class="even">
 <td>2</td>
 <td><strong>Skim-nNIL</strong></td>
 <td>Skim (low-cov WGS)</td>
 <td><code>nNIL</code> — count / BetaBinomial HMM (<code>r=1e-4</code>, <code>err=0.01</code>)</td>
-<td>50K panel counts</td>
+<td><strong>50K panel</strong> counts (thinned SNP50K)</td>
 </tr>
 <tr class="odd">
 <td>3</td>
 <td><strong>Skim-rtiger</strong></td>
 <td>Skim (low-cov WGS)</td>
 <td><code>RTIGER</code> port (<code>r=5</code>)</td>
-<td>50K panel counts</td>
+<td><strong>50K panel</strong> counts (thinned SNP50K)</td>
 </tr>
 <tr class="even">
 <td>4</td>
 <td><strong>BrB-nNIL</strong></td>
 <td>BrB (3′ RNA-seq)</td>
 <td><code>nNIL</code> — count HMM, <code>fit_means</code> (<code>r=1e-8</code>)</td>
-<td>wideseq-thinned BRB counts</td>
+<td><strong>wideseq-thinned</strong> BRB counts</td>
 </tr>
 <tr class="odd">
 <td>5</td>
 <td><strong>BrB-rtiger</strong></td>
 <td>BrB (3′ RNA-seq)</td>
 <td><code>RTIGER</code> port (<code>r=7</code>)</td>
-<td>wideseq BRB counts</td>
+<td><strong>wideseq-thinned</strong> BRB counts</td>
 </tr>
 <tr class="even">
 <td>6</td>
 <td><strong>BrB-atlas</strong></td>
 <td>BrB (3′ RNA-seq)</td>
 <td><code>ATLAS</code> — GOOGA-shadow gene-level GT (<code>≥.95</code>/<code>≥.25</code>, min 5 reads) → geometric-duration HMM</td>
-<td>cassini pangene counts, per donor species</td>
+<td>cassini <strong>pangene</strong> counts, per donor species</td>
 </tr>
 </tbody>
 </table>
 <p>So the grid is 2 sources × 3 caller-slots = 6 tracks, drawing on 4 unique callers (<code>binhmm</code> is Skim-only, <code>ATLAS</code> is BRB-only, <code>nNIL</code>/<code>RTIGER</code> run on both).</p>
+<div class="callout callout-style-default callout-note callout-titled" title="Marker-set provenance — the tracks run at different SNP densities">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Marker-set provenance — the tracks run at different SNP densities
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The three Skim tracks are <strong>not</strong> all on the same markers. <strong>Skim-binhmm runs on the full dense set of ~27.6 M teosinte-informative SNPs</strong> (2.0–4.0 M per chromosome; total 27,603,777), whereas <strong>Skim-nNIL / Skim-rtiger run on the much coarser thinned 50K panel</strong> — the SNP50K counts used for the 50K set.</p>
+<p>That ~27.6 M set is itself a <strong>wideseq thinning of an even larger SNP dataset</strong>: per <code>bzeaseq</code> (<code>get_variants_from_schnable2023.sh</code>), the <strong>Schnable et al. 2023</strong> teosinte / <em>Tripsacum</em> diversity VCF is filtered to the teosinte/<em>Tripsacum</em> samples, restricted to biallelic SNPs, and MAF-filtered at ≥ 0.05 to yield the <code>wideseq_ref</code> panel; GATK <code>CollectAllelicCounts</code> then tallies skim/BRB reads at exactly those positions (<code>run_wideseq.sh</code>, <code>CollectAllelicCounts</code> — memory <code>gatk-table-readcount-standard</code>). So the <strong>BRB count tracks (BrB-nNIL, BrB-rtiger) are also wideseq-thinned from the same larger source</strong>; only Skim-binhmm keeps the full ~27.6 M density.</p>
+</div>
+</div>
 <blockquote class="blockquote">
 <p><strong>Parameters are illustrative, not fully re-calibrated.</strong> This note is a coherence check across sources and callers, not a final call set.</p>
 </blockquote>
