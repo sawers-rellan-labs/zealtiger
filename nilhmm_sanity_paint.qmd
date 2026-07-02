@@ -108,9 +108,6 @@ rows <- rbind(
 # 2. ATLAS: competitive-mapping ancestry (GOOGA-shadow)
 
 **ATLAS** = **A**ncestry by **T**ranscript-**L**evel **A**lignment **S**cores.
-(The name is a mnemonic that also keeps the *Cassini* cartography lineage — an
-atlas is a book of maps; **`cassini`** is the Nextflow/Slurm pipeline that
-produces the counts ATLAS consumes.)
 
 **The basic principle is competitive mapping: count the reads that match each
 founder genome.** Where the SNP-panel callers read an *allele fraction* at
@@ -126,6 +123,17 @@ this is ~98 % of positions), so it carries no ancestry information: **AMBIGUOUS
 votes over a gene gives the two competitive-mapping counts, `n_recur`
 (B73-matching reads) and `n_donor` (donor-matching reads); ancestry is then just
 "which founder's genome captured the reads at this gene."
+
+**Caveat — the "donor" reference is a species-level stand-in, not the actual
+donor accession.** We do not have the genome/transcriptome of the specific
+teosinte accession used in each cross, so the donor side of the competitive
+alignment is a **representative reference for the donor's species** (per
+`tax2dir`: mexicana, luxurians, diploperennis, parviglumis, huehuetenangensis).
+A read is scored donor-vs-B73 against that proxy, not against the true parent —
+the same reference-data gap as the SNP-panel accession ceiling
+([`snp50k_genotype_identifiability` §2.6](snp50k_genotype_identifiability.html#the-site-selection-ceiling)):
+sequence the accession carries but the species proxy lacks (or vice versa) is
+mis-scored, so `n_donor` is only as good as the stand-in's match to the real donor.
 
 **GOOGA is the template.** GOOGA (Fishman lab, *PLoS Genet* 2024,
 [pgen.1011072](https://doi.org/10.1371/journal.pgen.1011072)) is a *Mimulus* F2
