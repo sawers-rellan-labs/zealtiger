@@ -333,6 +333,33 @@ bcftools view -S ref_Z__parviglumis.txt --force-samples "$D/bzea_50K_ref_panel.v
    END{c=r+h+a; printf "REF %.3f HET %.3f ALT %.3f  d=%.3f\n",r/c,h/c,a/c,(a+0.5*h)/c}'
 ```
 
+## References
+
+1. Grzybowski MW, Mural RV, Xu G, Turkus J, Yang J, Schnable JC (2023). A common
+   resequencing-based genetic marker data set for global maize diversity.
+   *The Plant Journal* **113**(6):1109–1121.
+   [doi:10.1111/tpj.16123](https://doi.org/10.1111/tpj.16123).
+   — the teosinte reference panel used to estimate the donor dose (§2).
+2. Li H (2011). A statistical framework for SNP calling, mutation discovery,
+   association mapping and population genetical parameter estimation from
+   sequencing data. *Bioinformatics* **27**(21):2987–2993.
+   [doi:10.1093/bioinformatics/btr509](https://doi.org/10.1093/bioinformatics/btr509).
+   — the samtools/bcftools caller and GL model behind the `call -mv` prior (§1).
+3. Hui R, D’Atanasio E, Cassidy LM, Scheib CL, Kivisild T (2020). Evaluating
+   genotype imputation pipeline for ultra-low coverage ancient genomes.
+   *Scientific Reports* **10**:18542.
+   [doi:10.1038/s41598-020-75387-w](https://doi.org/10.1038/s41598-020-75387-w).
+   — reference-panel (aDNA) imputation that does not transfer here (§2.6).
+4. Jensen SE, Charles JR, Muleta K, *et al.* (2020). A sorghum practical haplotype
+   graph facilitates genome-wide imputation and cost-effective genomic prediction.
+   *The Plant Genome* **13**(1):e20009.
+   [doi:10.1002/tpg2.20009](https://doi.org/10.1002/tpg2.20009).
+   — inbred-founder PHG imputation that does not transfer here (§2.6).
+
+Full caller / genotype-likelihood method-paper references (GATK HaplotypeCaller,
+ANGSD, Li–Stephens) are in the companion
+[genotype_likelihoods_and_hmm.html](genotype_likelihoods_and_hmm.html#references).
+
 ------
 *Analysis 2026-07-02, `cohort.vcf.gz` / `bzea_50K_ref_panel.vcf.gz` (read-only mount).
 Companion to [snp50k-cohort-provenance.md](https://github.com/sawers-rellan-labs/zealtiger/blob/main/docs/snp50k-cohort-provenance.md). Panel:
