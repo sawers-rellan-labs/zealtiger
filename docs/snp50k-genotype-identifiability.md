@@ -1,0 +1,254 @@
+# Why the SNP50K skim cannot resolve zygosity — two mechanisms, with the math
+
+This note derives, and backs with the cohort/panel data, *why* the SNP50K
+genotype matrix looks the way it does — 97% REF / **0.00% ALT-hom** / 70% missing
+among 73.4M cells (see [snp50k-cohort-provenance.md](snp50k-cohort-provenance.md))
+— and why that shape is **not** simply "coverage too low." There are two distinct
+causes, and both are calculable:
+
+1. a **caller-prior artifact** that forces every low-frequency non-REF call to
+   heterozygous and makes homozygous-ALT effectively impossible (§1); and
+2. an **outbred-donor dilution** that makes most panel "variant" sites
+   non-informative for the specific gamete captured in a cross, compressing the
+   ancestry-state signal from the assumed `{0, ½, 1}` to roughly `{0, 0.15, 0.30}`
+   (§2).
+
+The consequence (§3): per-site zygosity is not recoverable, the emission means
+must be **fit, not assumed**, and the useful unit is the segment, not the marker.
+
+Notation: at a biallelic panel site the reference allele is the **B73** allele
+(the sites are ascertained teosinte-vs-B73 on the B73 NAM5 reference, so B73 is
+`0` by construction). $\varepsilon$ = per-read error/mismap rate
+($\approx 0.003$–$0.01$ from B73 controls). $p$ = alternate-allele frequency at
+the site across the cohort.
+
+---
+
+## 1. The het-inflation is a prior effect, not a likelihood effect
+
+### 1.1 Single-read likelihood (necessary, not sufficient)
+
+For a diploid site covered by a single read, the genotype likelihoods are
+
+$$
+L(\text{read}=\text{ref}) : \begin{cases}
+P(\text{ref}\mid 0/0) = 1-\varepsilon\\
+P(\text{ref}\mid 0/1) = \tfrac12\\
+P(\text{ref}\mid 1/1) = \varepsilon
+\end{cases}
+\qquad
+L(\text{read}=\text{alt}) : \begin{cases}
+P(\text{alt}\mid 0/0) = \varepsilon\\
+P(\text{alt}\mid 0/1) = \tfrac12\\
+P(\text{alt}\mid 1/1) = 1-\varepsilon .
+\end{cases}
+$$
+
+By likelihood alone, an **alt** read favors $1/1$. If genotype calling used the
+maximum-likelihood genotype we would therefore see homozygous-ALT calls. We see
+**none** (1,001 in 73.4M). So the likelihood is not what determines the call.
+
+### 1.2 The posterior carries an allele-frequency prior
+
+`bcftools call -mv` (the multiallelic caller) reports the **maximum a posteriori**
+genotype. It places a Hardy–Weinberg prior at the site's estimated alternate
+allele frequency $p$ (with a mutation-rate hyper-prior, `-P`, default
+$1.1\times10^{-3}$):
+
+$$
+P(0/0)=(1-p)^2,\qquad P(0/1)=2p(1-p),\qquad P(1/1)=p^2 .
+$$
+
+The posterior is $\propto L\cdot P$. For a single **alt** read:
+
+| genotype | posterior $\propto$ |
+|---|---|
+| $0/0$ | $\varepsilon\,(1-p)^2$ |
+| $0/1$ | $\tfrac12\cdot 2p(1-p) = p(1-p)$ |
+| $1/1$ | $(1-\varepsilon)\,p^2$ |
+
+### 1.3 The decision boundaries
+
+**HET vs ALT-hom.** $0/1$ is called over $1/1$ whenever
+
+$$
+p(1-p) > (1-\varepsilon)\,p^2
+\;\Longleftrightarrow\;
+\frac{P(0/1)}{P(1/1)} = \frac{1-p}{(1-\varepsilon)\,p}\approx\frac1p > 1
+\;\Longleftrightarrow\; p < \frac{1}{2-\varepsilon}\approx \tfrac12 .
+$$
+
+So for **any allele rarer than ~50% cohort-wide, a single alt read is called
+heterozygous, never homozygous-ALT** — by a margin of $\approx 1/p$.
+
+**HET vs REF.** $0/1$ beats $0/0$ for an alt read when
+$p(1-p) > \varepsilon(1-p)^2 \Leftrightarrow p > \varepsilon/(1+\varepsilon)\approx\varepsilon$.
+
+Combining, the single-alt-read call as a function of $p$ is
+
+$$
+\widehat{g} =
+\begin{cases}
+0/0 & p < \varepsilon &(\text{alt read absorbed as error})\\[2pt]
+0/1 & \varepsilon < p \lesssim \tfrac12 &(\textbf{heterozygous})\\[2pt]
+1/1 & p \gtrsim \tfrac12 .
+\end{cases}
+$$
+
+### 1.4 Where the cohort actually sits
+
+Alternate-allele frequency spectrum over all 50,995 sites:
+
+| statistic | value |
+|---|---|
+| mean alt AF ($\bar p$) | **0.0152** |
+| sites with $p<0.01$ | 41.8% |
+| $0.01\le p<0.05$ | 56.7% |
+| $0.05\le p<0.1$ | 1.5% |
+| $p\ge 0.1$ | **0.0%** |
+
+Every site sits in the middle branch: $\varepsilon \approx 0.003 < p < 0.1 \ll \tfrac12$,
+with a mean margin $1/\bar p \approx 66$ in favor of HET over ALT-hom. **This is
+the 0.00% ALT-hom / het-only pattern, derived.** It is a property of the prior on
+rare alleles, so it would persist at higher depth until $p$ approached $\tfrac12$
+— it is *not* removed by adding reads.
+
+### 1.5 Why the count caller escapes this
+
+The consequence is specific to a caller whose prior is the cohort HWE frequency.
+The count / BetaBinomial emission used by the ancestry callers does **not** inherit
+it: its per-state prior is the breeding-design expectation (BC2S2/BC2S3 $f_1,f_2$),
+and its "genotype" is the ancestry state decoded by the HMM, not a per-site MAP
+under a rare-allele frequency prior. That is the concrete reason the hard `GT`
+path is dead while the AD-count path recovers the donor footprint.
+
+---
+
+## 2. Outbred-donor dilution — most "variant" sites are silent per cross
+
+Even setting the caller aside, the *signal itself* is far weaker than the naive
+`{REF=0, HET=0.5, HOM=1.0}` alt-fraction model, because teosinte donors are
+**outbred and heterozygous**, not inbred lines.
+
+### 2.1 Panel provenance
+
+The reference allele model is the Grzybowski (2023) resequencing panel
+(`##source="schnable2021"`), filtered to biallelic SNPs with
+`--min-af 0.05:minor` and intersected to the BZea HQ sites. **Not imputed.** So
+panel sites are *common* teosinte-vs-B73 variants — segregating in the species,
+but not fixed in any one accession.
+
+### 2.2 Transmission model
+
+The recurrent-parent (B73) gamete is REF (dose 0) at every panel site. A donor
+individual has genotype $\{0/0, 0/1, 1/1\}$ with per-site frequencies
+$\{f_0, f_1, f_2\}$; the gamete it contributes to the cross carries the **donor
+(ALT) allele** with probability — the **transmitted donor dose** —
+
+$$
+d \;=\; f_2 + \tfrac12 f_1 .
+$$
+
+A panel site "distinguishes the donor gamete from B73" only when the gamete
+carries ALT, i.e. with probability $d$. Everything else looks like B73.
+
+### 2.3 Panel data
+
+Per-donor-species genotype composition at panel sites (217-sample teosinte panel;
+each row is the per-individual average):
+
+| donor species | $f_0$ (REF) | $f_1$ (HET) | $f_2$ (ALT-hom) | het\|non-ref | **$d=f_2+\tfrac12 f_1$** |
+|---|---:|---:|---:|---:|---:|
+| parviglumis (Zv) | 64.2% | 15.2% | 20.6% | 42.5% | **0.282** |
+| mexicana (Zx) | 57.7% | 18.8% | 23.6% | 44.3% | **0.330** |
+| luxurians (Zl) | 62.5% | 8.3% | 29.2% | 22.2% | 0.333 |
+| diploperennis (Zd) | 59.4% | 12.1% | 28.5% | 29.9% | 0.346 |
+| nicaraguensis (Zn) | 64.5% | 8.3% | 27.2% | 23.3% | 0.313 |
+
+The heterozygosity is genuine (parviglumis per-sample het: median **19.4%**, Q1–Q3
+11.3–21.0%, so not an artifact of panel het-undercalling). Two facts dominate:
+
+- **$f_0 \approx 60\%$** — most panel sites are *not segregating in a given donor*
+  (they are variants private to other teosinte lineages, kept by the union-style
+  ascertainment); the donor gamete is REF there, indistinguishable from B73.
+- of the sites that *are* non-REF, ~40% (parvi/mex) are heterozygous → the gamete
+  loses the donor allele half the time.
+
+Net: **$d \approx 0.28$–$0.35$** — only about **one panel site in three** carries
+the donor allele in a transmitted gamete (fewer for the less-diverse donors). This
+is the quantified form of "~1/5 of variant sites are actually variant between the
+gametes."
+
+### 2.4 The emission signal is compressed, not at {0, ½, 1}
+
+Expected per-bin alternate-**read** fraction by NIL ancestry state, folding in the
+dose $d$ (het sites emit an alt read w.p. ½; ref/ref sites w.p. $\varepsilon$):
+
+$$
+\mathbb{E}[\text{alt frac}] \approx
+\begin{cases}
+\varepsilon & \text{REF/REF (no introgression)} &\approx 0\\[2pt]
+\tfrac{d}{2} + (1-\tfrac{d}{2})\varepsilon \approx \dfrac{d}{2} & \textbf{donor HET} &\approx 0.14\text{–}0.17\\[2pt]
+d & \text{donor HOM} &\approx 0.28\text{–}0.35 .
+\end{cases}
+$$
+
+So the three ancestry states live at roughly $\{0,\;0.15,\;0.30\}$ in
+alt-fraction space, **not** $\{0,\;0.5,\;1.0\}$:
+
+- REF-vs-HET separation is $\approx 0.15$ over an $\approx 0$ floor — a low-SNR
+  *elevation above baseline*, which is exactly why the binned Gaussian-emission
+  HMM is the right shape but low-confidence;
+- HET-vs-HOM separation is $\approx 0.15$ ($0.15$ vs $0.30$) — barely resolvable,
+  which is why the caller is het-biased and rarely finds donor-hom.
+
+### 2.5 The site-selection ceiling
+
+Restricting to sites where the donor is **fixed-ALT** ($f_2\to1$, $d\to1$) would
+restore the clean $\{0, \tfrac12, 1\}$ model. But "fixed in *this* donor" cannot be
+known without the **donor accession's own genotypes**, which we do not have; the
+`--min-af 0.05:minor` species panel identifies *common* variants, not
+accession-fixed ones. This is a more basic reference-data gap than phasing/LD:
+without the donor genotype we cannot even label which markers are informative for a
+given cross. It is the fundamental reason low-coverage genotype-imputation results
+from human aDNA or inbred-founder PHGs do not transfer here.
+
+---
+
+## 3. Consequences
+
+- **Fit the emission means, don't assume them.** The state means are
+  $\approx\{0,\,d/2,\,d\}$ with a per-donor $d$; a fixed $\{ \varepsilon, \tfrac12,
+  1-\varepsilon\}$ emission is mis-specified. This is why RTIGER's per-taxon
+  `fit_means` outperforms the fixed-mean count emission on this data.
+- **Prefer donor-enriched sites where possible.** Selecting sites with high
+  species-level $f_2$ raises $d$ toward 1 and widens state separation, up to the
+  accession ceiling in §2.5.
+- **Report honestly.** The donor *footprint* (where introgression is) is
+  recoverable; the het-vs-donor-hom split is marginal ($0.15$ vs $0.30$); per-site
+  zygosity is not recoverable and should not be claimed. For B1/anthocyanin QTL the
+  mapping unit is the **segment/dosage genotype**, obtained by projecting the
+  decoded ancestry state onto the markers within a segment — not per-marker calls.
+
+---
+
+## Reproduce
+
+```bash
+D=/Volumes/rsstu/users/r/rrellan/BZea/bzeaseq/50K/results/joint
+
+# §1.4 cohort alt-allele frequency spectrum (justifies p small)
+bcftools query -f '%AC\t%AN\n' "$D/cohort.vcf.gz" \
+ | awk '$1!="."&&$2>0{p=$1/$2;n++;s+=p;if(p<.01)b++} END{print "mean AF",s/n,"  frac<0.01",b/n}'
+
+# §2.3 per-species donor dose d = f2 + 0.5*f1  (ref_<species>.txt = panel sample lists)
+bcftools view -S ref_Z__parviglumis.txt --force-samples "$D/bzea_50K_ref_panel.vcf.gz" \
+ | bcftools query -f '[%GT\n]' | awk -F'[/|]' '
+   {n++; if($1=="."||$2==".")next; if($1==0&&$2==0)r++; else if($1==$2)a++; else h++}
+   END{c=r+h+a; printf "REF %.3f HET %.3f ALT %.3f  d=%.3f\n",r/c,h/c,a/c,(a+0.5*h)/c}'
+```
+
+---
+*Analysis 2026-07-02, `cohort.vcf.gz` / `bzea_50K_ref_panel.vcf.gz` (read-only mount).
+Companion to [snp50k-cohort-provenance.md](snp50k-cohort-provenance.md). Panel:
+Grzybowski et al. 2023, `--min-af 0.05:minor`, not imputed.*

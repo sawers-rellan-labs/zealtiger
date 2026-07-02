@@ -84,6 +84,12 @@ data/maizegdb_consensus_map/   (input)
 - **SNP50K is raw pileup, not imputed**; hard `GT` is 70% missing / 0% ALT-hom
   at ~0.4×, so callers run on allele **counts**. Provenance + genotype-content
   analysis in [snp50k-cohort-provenance.md](snp50k-cohort-provenance.md).
+- **Zygosity is not site-callable** here, for two derivable reasons: the caller's
+  rare-allele prior forces every non-REF call to HET (0% ALT-hom by a $1/p\approx66$
+  margin), and outbred-donor dilution compresses the ancestry-state alt-fraction to
+  $\approx\{0,0.15,0.30\}$ not $\{0,\tfrac12,1\}$ (transmitted donor dose
+  $d\approx0.3$). Math + data in
+  [snp50k-genotype-identifiability.md](snp50k-genotype-identifiability.md).
 - **RTIGER rigidity is in *informative* markers**; recommended **r ≈ 8–10**.
   See [09](09-rigidity-selection.md).
 - **Reproducibility**: global seed `20260609`, recorded in `run_metadata.json`.
