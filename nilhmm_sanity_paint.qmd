@@ -80,29 +80,48 @@ and [`snp50k_genotype_identifiability` §2.1/§2.6/§3](snp50k_genotype_identifi
 # 1. Setup — engine, paths, samples
 
 ```{r setup}
-suppressMessages({ devtools::load_all("agent/nilhmm", quiet = TRUE)
-                   library(data.table); library(ggplot2) })
+suppressMessages({
+  devtools::load_all("agent/nilhmm", quiet = TRUE)
+  library(data.table)
+  library(ggplot2)
+})
 Z <- "/Users/fvrodriguez/Desktop/zealtiger"
 # mount points drift (rsstu-root vs BZea-share); pick the first path that exists.
-pick <- function(...) { for (p in c(...)) if (file.exists(p)) return(p); c(...)[[1]] }
-CAS <- pick("/Volumes/rsstu/users/r/rrellan/tlaloc/cassini",
-            "/Volumes/tlaloc/cassini", "/Volumes/cassini")
-MNT <- pick("/Volumes/rsstu/users/r/rrellan/BZea/bzeaseq/ancestry",
-            "/Volumes/BZea/bzeaseq/ancestry")
+pick <- function(...) {
+  for (p in c(...)) if (file.exists(p)) {
+    return(p)
+  }
+  c(...)[[1]]
+}
+CAS <- pick(
+  "/Volumes/rsstu/users/r/rrellan/tlaloc/cassini",
+  "/Volumes/tlaloc/cassini", "/Volumes/cassini"
+)
+MNT <- pick(
+  "/Volumes/rsstu/users/r/rrellan/BZea/bzeaseq/ancestry",
+  "/Volumes/BZea/bzeaseq/ancestry"
+)
 
 # samples: control + 10 vary-skim NILs (ordered by skim lambda)
 mem <- fread(file.path(Z, "results/sim_calibration/coverage_sweep_members.csv"))[sweep == "vary_skim"][order(vary_cov)]
 mem[, tax := sub("\\..*", "", nil)]
-tax2dir <- c(Zx = "mexicana/pangene", Zl = "luxurians/pangene", Zd = "diploperennis/pangene",
-             Zv = "parviglumis/pangene", Zh = "huehuetenangensis/pangene")
+tax2dir <- c(
+  Zx = "mexicana/pangene", Zl = "luxurians/pangene", Zd = "diploperennis/pangene",
+  Zv = "parviglumis/pangene", Zh = "huehuetenangensis/pangene"
+)
 mem[, adir := tax2dir[tax]]
 # wrapped left-hand label: cov + FULL pedigree string, then skim/brb plate ids
 wraplab <- function(cov, ped, skim, brb) sprintf("%s\n%s\nskim:%s\nbrb:%s", cov, ped, skim, brb)
 rows <- rbind(
-  data.table(rowlab = wraplab("B73 ctrl", "B73 (control)", "PN10_SID893", "PN3_SID213"),
-             skim = "PN10_SID893", brb = "PN3_SID213", adir = "mexicana/pangene"),
-  mem[, .(rowlab = wraplab(sprintf("%.2f×", vary_cov), nil, skim_name, brb_name),
-          skim = skim_name, brb = brb_name, adir)])
+  data.table(
+    rowlab = wraplab("B73 ctrl", "B73 (control)", "PN10_SID893", "PN3_SID213"),
+    skim = "PN10_SID893", brb = "PN3_SID213", adir = "mexicana/pangene"
+  ),
+  mem[, .(
+    rowlab = wraplab(sprintf("%.2f×", vary_cov), nil, skim_name, brb_name),
+    skim = skim_name, brb = brb_name, adir
+  )]
+)
 ```
 
 # 2. ATLAS: competitive-mapping ancestry (GOOGA-shadow)
@@ -163,20 +182,44 @@ decode each chromosome through the `gt`-emission geometric-duration HMM.
 
 ```{r atlas}
 g2p <- fread(file.path(CAS, "data/pangene/gene_to_pangene.tsv"))[species == "B73", .(gene, pan_gene)]
-co  <- fread(file.path(CAS, "data/meta/b73_gene_coords.tsv"), header = FALSE,
-             col.names = c("gene", "chr", "start", "end"))
-gmap <- merge(g2p, co, by = "gene"); gmap[, chr := as.integer(sub("chr", "", chr))]
+co <- fread(file.path(CAS, "data/meta/b73_gene_coords.tsv"),
+  header = FALSE,
+  col.names = c("gene", "chr", "start", "end")
+)
+gmap <- merge(g2p, co, by = "gene")
+gmap[, chr := as.integer(sub("chr", "", chr))]
 gmap <- unique(gmap[!is.na(chr)], by = "pan_gene")[, .(pan_gene, chr, pos = end)]
-gcall <- function(nr, nd) { nt <- nr + nd; fr <- fifelse(nt > 0, nr / nt, 0); fd <- fifelse(nt > 0, nd / nt, 0)
-  g <- rep(3L, length(nt)); ok <- nt >= 5L; g[ok & fr >= .95] <- 0L; g[ok & fd >= .95] <- 2L
-  g[ok & fr >= .25 & fd >= .25] <- 1L; g }
-gtmodel <- nilHMM:::fit(list(), emission_gt(), duration_geometric(1e-3), design_priors("BC2S3"))
+gcall <- function(nr, nd) {
+  nt <- nr + nd
+  fr <- fifelse(nt > 0, nr / nt, 0)
+  fd <- fifelse(nt > 0, nd / nt, 0)
+  g <- rep(3L, length(nt))
+  ok <- nt >= 5L
+  g[ok & fr >= .95] <- 0L
+  g[ok & fd >= .95] <- 2L
+  g[ok & fr >= .25 & fd >= .25] <- 1L
+  g
+}
+gtmodel <- nilHMM:::fit(
+  list(), emission_gt(), duration_geometric(1e-3), design_priors("BC2S3")
+)
 atlas_seg <- function(brb, adir) {
-  f <- file.path(CAS, "results", adir, paste0(brb, ".pangene_counts.tsv")); if (!file.exists(f)) return(NULL)
-  ct <- merge(fread(f), gmap, by = "pan_gene"); ct[, g := gcall(n_recur, n_donor)]; ct <- ct[order(chr, pos)]
-  rbindlist(lapply(sort(unique(ct$chr)), function(cc) { d <- ct[chr == cc]
-    p <- nilHMM:::decode(gtmodel, list(g = d$g)); r <- rle(p); e <- cumsum(r$lengths); s <- c(1L, head(e, -1) + 1L)
-    data.table(chr = cc, start_bp = d$pos[s], end_bp = d$pos[e], state = r$values) })) }
+  f <- file.path(CAS, "results", adir, paste0(brb, ".pangene_counts.tsv"))
+  if (!file.exists(f)) {
+    return(NULL)
+  }
+  ct <- merge(fread(f), gmap, by = "pan_gene")
+  ct[, g := gcall(n_recur, n_donor)]
+  ct <- ct[order(chr, pos)]
+  rbindlist(lapply(sort(unique(ct$chr)), function(cc) {
+    d <- ct[chr == cc]
+    p <- nilHMM:::decode(gtmodel, list(g = d$g))
+    r <- rle(p)
+    e <- cumsum(r$lengths)
+    s <- c(1L, head(e, -1) + 1L)
+    data.table(chr = cc, start_bp = d$pos[s], end_bp = d$pos[e], state = r$values)
+  }))
+}
 ```
 
 # 3. binhmm (corrected) on the dense skim bins
@@ -190,71 +233,151 @@ priors + collapse guards. This replaces the free K=3 GMM (which always invents a
 
 ```{r binhmm}
 binhmm_gauss <- function(skim, design = "BC2S2", stay = 0.995) {
-  f <- file.path(MNT, paste0(skim, "_bin_genotypes.tsv")); if (!file.exists(f)) return(NULL)
-  d <- fread(f); dt <- data.table(chr = as.integer(sub("chr", "", d$CONTIG)), bin = d$BIN_POS,
-    af = d$ALT_FREQ, s = d$BIN_START, e = d$BIN_END)[order(chr, bin)]
+  f <- file.path(MNT, paste0(skim, "_bin_genotypes.tsv"))
+  if (!file.exists(f)) {
+    return(NULL)
+  }
+  d <- fread(f)
+  dt <- data.table(
+    chr = as.integer(sub("chr", "", d$CONTIG)), bin = d$BIN_POS,
+    af = d$ALT_FREQ, s = d$BIN_START, e = d$BIN_END
+  )[order(chr, bin)]
   af <- dt$af
-  pri <- design_priors(design); START <- c(1 - pri$f_1 - pri$f_2, pri$f_1, pri$f_2)
-  trans <- matrix((1 - stay) / 2, 3, 3); diag(trans) <- stay
-  seg_all <- function(state) rbindlist(lapply(sort(unique(dt$chr)), function(cc) {
-    i <- which(dt$chr == cc); i <- i[order(dt$bin[i])]; p <- state[i]
-    rr <- rle(p); rr$values[rr$values > 0L & rr$lengths < 2L] <- 0L; p <- inverse.rle(rr)  # drop 1-bin donor specks
-    r <- rle(p); e <- cumsum(r$lengths); s <- c(1L, head(e, -1) + 1L)
-    data.table(chr = cc, start_bp = dt$s[i][s], end_bp = dt$e[i][e], state = r$values) }))
+  pri <- design_priors(design)
+  START <- c(1 - pri$f_1 - pri$f_2, pri$f_1, pri$f_2)
+  trans <- matrix((1 - stay) / 2, 3, 3)
+  diag(trans) <- stay
+  seg_all <- function(state) {
+    rbindlist(lapply(sort(unique(dt$chr)), function(cc) {
+      i <- which(dt$chr == cc)
+      i <- i[order(dt$bin[i])]
+      p <- state[i]
+      rr <- rle(p)
+      rr$values[rr$values > 0L & rr$lengths < 2L] <- 0L
+      p <- inverse.rle(rr) # drop 1-bin donor specks
+      r <- rle(p)
+      e <- cumsum(r$lengths)
+      s <- c(1L, head(e, -1) + 1L)
+      data.table(chr = cc, start_bp = dt$s[i][s], end_bp = dt$e[i][e], state = r$values)
+    }))
+  }
 
-  base_bins <- af[af <= stats::quantile(af, 0.6)]       # bulk = REF baseline (NILs mostly REF)
-  ref_mean <- mean(base_bins); sd_base <- max(1e-3, sd(base_bins))   # REF anchored at the FLOOR (not 0)
-  hi <- af[af > ref_mean + 4 * sd_base]                 # bins clearly above the baseline floor
-  if (length(hi) < 4) return(seg_all(rep(0L, length(af))))            # collapse guard: no donor -> all REF
+  # bulk of the bins = REF baseline (NILs are mostly REF)
+  base_bins <- af[af <= stats::quantile(af, 0.6)]
+  ref_mean <- mean(base_bins)
+  sd_base <- max(1e-3, sd(base_bins)) # anchor REF at the FLOOR (not 0)
+  hi <- af[af > ref_mean + 4 * sd_base] # bins clearly above the floor
+  if (length(hi) < 4) {
+    # collapse guard: no donor signal -> call everything REF
+    return(seg_all(rep(0L, length(af))))
+  }
 
-  alt_mean <- as.numeric(stats::quantile(hi, 0.75))     # seed ALT from data
-  het_mean <- ref_mean + (alt_mean - ref_mean) / 2      # HET midway between floor and ALT
-  # Floor the REF width to the signal scale: a hyper-tight baseline (high coverage)
-  # must NOT reject mildly-elevated single bins into donor -> anti-fragmentation.
+  alt_mean <- as.numeric(stats::quantile(hi, 0.75)) # seed ALT from data
+  het_mean <- ref_mean + (alt_mean - ref_mean) / 2 # HET midway floor..ALT
+  # Floor REF width to the signal scale: a hyper-tight baseline (high coverage)
+  # must not push mildly-elevated single bins into donor (anti-fragmentation).
   sd_ref <- max(sd_base, (alt_mean - ref_mean) / 6)
-  means <- c(ref_mean, het_mean, alt_mean); sds <- c(sd_ref, max(sd_ref, sd(hi)), max(sd_ref, sd(hi)))
-  emit <- function(m, s) vapply(1:3, function(k) stats::dnorm(af, m[k], max(s[k], 1e-3), log = TRUE), numeric(length(af)))
+  means <- c(ref_mean, het_mean, alt_mean)
+  sds <- c(sd_ref, max(sd_ref, sd(hi)), max(sd_ref, sd(hi)))
+  # per-bin log-emission: dnorm of alt_frac under each of the 3 state means
+  emit <- function(m, s) {
+    vapply(
+      1:3,
+      function(k) stats::dnorm(af, m[k], max(s[k], 1e-3), log = TRUE),
+      numeric(length(af))
+    )
+  }
   path <- integer(length(af))
-  for (it in 1:8) {                                     # hard-EM: Viterbi -> refit HET/ALT means (REF fixed at 0)
-    le <- emit(means, sds); np <- integer(length(af))
-    for (cc in unique(dt$chr)) { i <- which(dt$chr == cc); i <- i[order(dt$bin[i])]
-      np[i] <- viterbi_log_cpp(log(START), log(trans), le[i, , drop = FALSE]) }
+  for (it in 1:8) { # hard-EM: Viterbi -> refit HET/ALT means (REF fixed at 0)
+    le <- emit(means, sds)
+    np <- integer(length(af))
+    for (cc in unique(dt$chr)) {
+      i <- which(dt$chr == cc)
+      i <- i[order(dt$bin[i])]
+      np[i] <- viterbi_log_cpp(log(START), log(trans), le[i, , drop = FALSE])
+    }
     if (identical(np, path)) break
     path <- np
-    for (k in 2:3) if (any(path == k - 1L)) { means[k] <- mean(af[path == k - 1L]); sds[k] <- max(sd_ref, sd(af[path == k - 1L])) }
+    for (k in 2:3) {
+      if (any(path == k - 1L)) {
+        means[k] <- mean(af[path == k - 1L])
+        sds[k] <- max(sd_ref, sd(af[path == k - 1L]))
+      }
+    }
   }
   # collapse guards: fold a state whose mean isn't separated from the REF floor
-  if (means[2] < ref_mean + 4 * sd_ref) path[path == 1L] <- 0L   # HET indistinct from floor
-  if (means[3] < ref_mean + 4 * sd_ref) path[path == 2L] <- 0L   # ALT indistinct from floor
-  seg_all(path) }
+  # HET indistinct from floor
+  if (means[2] < ref_mean + 4 * sd_ref) path[path == 1L] <- 0L
+  # ALT indistinct from floor
+  if (means[3] < ref_mean + 4 * sd_ref) path[path == 2L] <- 0L
+  seg_all(path)
+}
 ```
 
 # 4. Count / RTIGER via the engine
 
 ```{r engine}
-find1 <- function(dir, s) { f <- list.files(dir, paste0("^", s, "\\.tsv$"), full.names = TRUE, recursive = TRUE); if (length(f)) f[1] else NA }
-eng <- function(path, ...) { if (is.na(path) || !file.exists(path)) return(NULL)
-  as.data.table(call_ancestry(read_counts(path), ...))[, .(chr, start_bp, end_bp, state)] }
-SK50 <- file.path(Z, "data/rtiger_50K")   # parent of counts/ (NILs) + counts_checks/B73/ (control); find1 recurses
+find1 <- function(dir, s) {
+  f <- list.files(dir, paste0("^", s, "\\.tsv$"), full.names = TRUE, recursive = TRUE)
+  if (length(f)) f[1] else NA
+}
+eng <- function(path, ...) {
+  if (is.na(path) || !file.exists(path)) {
+    return(NULL)
+  }
+  seg <- as.data.table(call_ancestry(read_counts(path), ...))
+  seg[, .(chr, start_bp, end_bp, state)]
+}
+# parent of counts/ (NILs) + counts_checks/B73/ (control); find1 recurses
+SK50 <- file.path(Z, "data/rtiger_50K")
 BRBW <- file.path(Z, "results/sim_calibration/brbseq_ks_wideseq/counts")
 ```
 
 # 5. Assemble all tracks
 
 ```{r assemble}
-methods <- c("Skim-binhmm", "Skim-nNIL", "Skim-rtiger", "BrB-nNIL", "BrB-rtiger", "BrB-atlas")
-grab <- function(fn) tryCatch(fn, error = function(e) { message("  ! ", conditionMessage(e)); NULL })
+methods <- c(
+  "Skim-binhmm", "Skim-nNIL", "Skim-rtiger",
+  "BrB-nNIL", "BrB-rtiger", "BrB-atlas"
+)
+
+# run a caller, returning NULL (with a message) instead of aborting on error
+grab <- function(fn) {
+  tryCatch(fn, error = function(e) {
+    message("  ! ", conditionMessage(e))
+    NULL
+  })
+}
+
 all <- list()
 for (i in seq_len(nrow(rows))) {
-  rl <- rows$rowlab[i]; sk <- rows$skim[i]; br <- rows$brb[i]; ad <- rows$adir[i]
+  rl <- rows$rowlab[i]
+  sk <- rows$skim[i]
+  br <- rows$brb[i]
+  ad <- rows$adir[i]
+
+  sk_counts <- find1(SK50, sk) # skim 50K panel counts
+  brb_counts <- file.path(BRBW, paste0(br, ".tsv")) # wideseq-thinned BRB counts
+
   tr <- list(
     `Skim-binhmm` = grab(binhmm_gauss(sk)),
-    `Skim-nNIL`   = grab(eng(find1(SK50, sk), caller = "nnil",   design = "BC2S2", r = 1e-4, err = 0.01)),
-    `Skim-rtiger` = grab(eng(find1(SK50, sk), caller = "rtiger", r = 5L)),
-    `BrB-nNIL`    = grab(eng(file.path(BRBW, paste0(br, ".tsv")), caller = "nnil", design = "BC2S3", r = 1e-8, fit_means = TRUE)),
-    `BrB-rtiger`  = grab(eng(file.path(BRBW, paste0(br, ".tsv")), caller = "rtiger", r = 7L)),
-    `BrB-atlas`   = grab(atlas_seg(br, ad)))
-  for (m in names(tr)) if (!is.null(tr[[m]]) && nrow(tr[[m]])) all[[length(all) + 1L]] <- tr[[m]][, `:=`(rowlab = rl, method = m)]
+    `Skim-nNIL` = grab(eng(sk_counts,
+      caller = "nnil", design = "BC2S2", r = 1e-4, err = 0.01
+    )),
+    `Skim-rtiger` = grab(eng(sk_counts, caller = "rtiger", r = 5L)),
+    `BrB-nNIL` = grab(eng(brb_counts,
+      caller = "nnil", design = "BC2S3", r = 1e-8, fit_means = TRUE
+    )),
+    `BrB-rtiger` = grab(eng(brb_counts, caller = "rtiger", r = 7L)),
+    `BrB-atlas` = grab(atlas_seg(br, ad))
+  )
+
+  # keep the non-empty tracks, tagging each with its row label and method
+  for (m in names(tr)) {
+    if (!is.null(tr[[m]]) && nrow(tr[[m]])) {
+      all[[length(all) + 1L]] <- tr[[m]][, `:=`(rowlab = rl, method = m)]
+    }
+  }
 }
 df <- rbindlist(all)
 df[, .N, by = method]
@@ -263,28 +386,46 @@ df[, .N, by = method]
 # 6. Paint
 
 ```{r paint, fig.width=16, fig.height=11, dpi=130}
-yb <- data.table(method = methods, k = 5:0)   # top -> bottom
+yb <- data.table(method = methods, k = 5:0) # top -> bottom
 df <- merge(df, yb, by = "method")
 df[, `:=`(ylo = k / 6 + 0.01, yhi = (k + 1) / 6 - 0.01)]
-df[, rowlab := factor(rowlab, levels = c(rows$rowlab[1], rev(rows$rowlab[-1])))]  # B73 ctrl on top, then skim-cov desc (switch='y')
+# B73 ctrl on top, then skim-cov descending (facet switch = 'y')
+df[, rowlab := factor(rowlab, levels = c(rows$rowlab[1], rev(rows$rowlab[-1])))]
 df[, chr := factor(chr, levels = 1:10, labels = paste0("chr", 1:10))]
 df[, state := factor(state, 0:2, c("REF", "HET", "ALT"))]
 pal <- c(REF = "gold", HET = "springgreen4", ALT = "purple4")
 p <- ggplot(df, aes(xmin = start_bp / 1e6, xmax = end_bp / 1e6, ymin = ylo, ymax = yhi, fill = state)) +
-  geom_rect() + facet_grid(rowlab ~ chr, scales = "free_x", space = "free_x", switch = "y") +
+  geom_rect() +
+  facet_grid(rowlab ~ chr, scales = "free_x", space = "free_x", switch = "y") +
   scale_fill_manual(values = pal, drop = FALSE) +
-  scale_y_continuous(breaks = (5:0) / 6 + 1 / 12, labels = methods, position = "right",
-                     expand = expansion(mult = 0.01)) +
-  labs(title = "nilHMM sanity paint — vary-skim sweep (B73 control + 10 NILs)",
-       subtitle = "6 tracks = data source × nilHMM caller (2 sources: Skim, BrB | 4 callers: binhmm, nNIL, RTIGER, ATLAS) | ordered by source then caller | all nilHMM, no Julia",
-       x = "Position (Mb)", fill = "Genotype") +
+  scale_y_continuous(
+    breaks = (5:0) / 6 + 1 / 12, labels = methods, position = "right",
+    expand = expansion(mult = 0.01)
+  ) +
+  labs(
+    title = "nilHMM sanity paint — vary-skim sweep (B73 control + 10 NILs)",
+    subtitle = "6 tracks = data source × nilHMM caller (2 sources: Skim, BrB | 4 callers: binhmm, nNIL, RTIGER, ATLAS) | ordered by source then caller | all nilHMM, no Julia",
+    x = "Position (Mb)", fill = "Genotype"
+  ) +
   ggpubr::theme_classic2(base_size = 8) +
-  theme(plot.title = element_text(size = 12), plot.subtitle = element_text(size = 12), legend.position = "bottom",
-        legend.text = element_text(size = 12), legend.title = element_text(size = 12),
-        panel.spacing.x = unit(0.04, "lines"), panel.spacing.y = unit(0.15, "lines"),
-        strip.background = element_blank(), strip.text.y.left = element_text(angle = 0, hjust = 1, size = 12, lineheight = 0.9),
-        axis.text.y.right = element_text(size = 11), axis.ticks.y = element_blank(),
-        axis.title.x = element_blank(), axis.text.x = element_blank(), axis.ticks.x = element_blank())
+  theme(
+    plot.title = element_text(size = 12),
+    plot.subtitle = element_text(size = 12),
+    legend.position = "bottom",
+    legend.text = element_text(size = 12),
+    legend.title = element_text(size = 12),
+    panel.spacing.x = unit(0.04, "lines"),
+    panel.spacing.y = unit(0.15, "lines"),
+    strip.background = element_blank(),
+    strip.text.y.left = element_text(
+      angle = 0, hjust = 1, size = 12, lineheight = 0.9
+    ),
+    axis.text.y.right = element_text(size = 11),
+    axis.ticks.y = element_blank(),
+    axis.title.x = element_blank(),
+    axis.text.x = element_blank(),
+    axis.ticks.x = element_blank()
+  )
 ggsave(file.path(Z, "agent/nilhmm_sanity_paint.png"), p, width = 16, height = 11, dpi = 130, limitsize = FALSE)
 fwrite(df, file.path(Z, "agent/nilhmm_sanity_paint_segments.tsv"), sep = "\t")
 p
