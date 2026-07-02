@@ -78,8 +78,12 @@ Skim-binhmm keeps the full ~27.6 M density.
 suppressMessages({ devtools::load_all("agent/nilhmm", quiet = TRUE)
                    library(data.table); library(ggplot2) })
 Z <- "/Users/fvrodriguez/Desktop/zealtiger"
-CAS <- "/Volumes/rsstu/users/r/rrellan/tlaloc/cassini"
-MNT <- "/Volumes/rsstu/users/r/rrellan/BZea/bzeaseq/ancestry"
+# mount points drift (rsstu-root vs BZea-share); pick the first path that exists.
+pick <- function(...) { for (p in c(...)) if (file.exists(p)) return(p); c(...)[[1]] }
+CAS <- pick("/Volumes/rsstu/users/r/rrellan/tlaloc/cassini",
+            "/Volumes/tlaloc/cassini", "/Volumes/cassini")
+MNT <- pick("/Volumes/rsstu/users/r/rrellan/BZea/bzeaseq/ancestry",
+            "/Volumes/BZea/bzeaseq/ancestry")
 
 # samples: control + 10 vary-skim NILs (ordered by skim lambda)
 mem <- fread(file.path(Z, "results/sim_calibration/coverage_sweep_members.csv"))[sweep == "vary_skim"][order(vary_cov)]
@@ -96,11 +100,53 @@ rows <- rbind(
           skim = skim_name, brb = brb_name, adir)])
 ```
 
-# 2. ATLAS machinery (GOOGA-shadow)
+# 2. ATLAS: competitive-mapping ancestry (GOOGA-shadow)
 
-Gene-level recurrent/donor read counts on the cassini pangene are hard-called to
-a genotype (`≥95%` one parent → homozygous, both `≥25%` → HET, min 5 reads),
-mapped to B73 gene coordinates, and smoothed by a geometric-duration HMM.
+**ATLAS** = **A**ncestry by **T**ranscript-**L**evel **A**lignment **S**cores.
+(The name is a mnemonic that also keeps the *Cassini* cartography lineage — an
+atlas is a book of maps; **`cassini`** is the Nextflow/Slurm pipeline that
+produces the counts ATLAS consumes.)
+
+**The basic principle is competitive mapping: count the reads that match each
+founder genome.** Where the SNP-panel callers read an *allele fraction* at
+predefined variant sites, ATLAS instead aligns each transcript read against
+**both founder references at once** — B73 (the recurrent parent) and the
+teosinte **donor** transcriptome — and lets the **alignment scores** decide
+which parent that read came from. Per read, the best alignment score (with a
+margin `k` on the score gap `ΔAS`) votes the read as **REF**, **DONOR**, or
+**AMBIGUOUS**. A read that maps equally well to both parents landed on sequence
+that is *identical* between them (conserved — at ~2 % B73-vs-donor divergence
+this is ~98 % of positions), so it carries no ancestry information: **AMBIGUOUS
+= non-informative → dropped** (it is *not* a HET call). Summing the informative
+votes over a gene gives the two competitive-mapping counts, `n_recur`
+(B73-matching reads) and `n_donor` (donor-matching reads); ancestry is then just
+"which founder's genome captured the reads at this gene."
+
+**GOOGA is the template.** GOOGA (Fishman lab, *PLoS Genet* 2024,
+[pgen.1011072](https://doi.org/10.1371/journal.pgen.1011072)) is a *Mimulus* F2
+genetic-map-building pipeline whose ancestry step is **threshold-then-HMM**.
+ATLAS is a "GOOGA-shadow": it ports that step onto the shared nilHMM engine —
+
+1. **Per-gene hard call from the count fractions** (GOOGA `s2.py`, verbatim):
+   `n_recur + n_donor < 5` → missing; recurrent fraction `≥ 0.95` → **REF** (AA);
+   donor fraction `≥ 0.95` → **ALT / donor-hom** (BB); *both* parents `≥ 0.25`
+   → **HET** (AB); otherwise missing. (Thresholds `0.95` / `0.25`, min 5 reads.)
+2. **Place each gene at its B73 coordinate** and order it along the chromosome.
+3. **Smooth with the engine's categorical genotype-error (`gt`) emission +
+   geometric-duration HMM** — the same duration/rigidity layer as every other
+   caller, but a *categorical confusion* emission instead of count/BetaBinomial.
+
+Why categorical and not a count model: these are **3′ RNA (BRB-seq) reads**, so
+a gene's read depth is driven by **expression**, not coverage, and
+**allele-specific expression** pushes a true HET's donor fraction off 0.5 — both
+confound a count/BetaBinomial emission. Discretizing to a hard genotype *first*
+(exactly what GOOGA, itself an eQTL/ASE pipeline, does) makes the emission
+**expression-agnostic**. Memory: `cassini-googa-caller`,
+`feedback-reproduce-from-source`.
+
+The code below is the consumer-side staging: read the cassini pangene counts per
+donor species, apply the GOOGA hard call, map genes to B73 coordinates, and
+decode each chromosome through the `gt`-emission geometric-duration HMM.
 
 ```{r atlas}
 g2p <- fread(file.path(CAS, "data/pangene/gene_to_pangene.tsv"))[species == "B73", .(gene, pan_gene)]
