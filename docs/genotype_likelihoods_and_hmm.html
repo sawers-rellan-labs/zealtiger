@@ -2366,7 +2366,11 @@ window.Quarto = {
 </header>
 
 
-<p>This note answers a specific methodological question: <em>can genotype likelihoods (GLs), accumulated across a gene / haplotype stretch / fixed bin, rescue genotype-call confidence at ultra-low coverage?</em> It is the reviewer question the nilHMM paper must preempt.</p>
+<p>At ~0.4× coverage the SNP50K genotype matrix looks pathological: 70% of cells are missing, of the rest <strong>97% are hom-REF</strong>, essentially <strong>none are hom-ALT</strong>, and wherever a minority (ALT) read appears the site is overwhelmingly called <strong>heterozygous</strong> (the depth-split below). Taken at face value that reads as a genome that is almost entirely B73 with a thin, ubiquitous sprinkle of heterozygosity — which is <em>not</em> what a BC2S3 NIL is. This note asks the two questions that pattern forces:</p>
+<ol type="1">
+<li><strong>What produced it — the reads, or the caller?</strong> Why does a single ALT read become a HET call; when is that the right call, and when is it just the genotype prior asserting itself?</li>
+<li><strong>Can per-site genotype confidence be recovered downstream?</strong> Does accumulating genotype likelihoods (GLs) across a gene / haplotype stretch / fixed bin rescue the calls, or is the information simply not there?</li>
+</ol>
 <div class="callout callout-style-default callout-note callout-titled" title="Motivation — the pattern this note explains">
 <div class="callout-header d-flex align-content-center">
 <div class="callout-icon-container">
@@ -2436,7 +2440,7 @@ window.Quarto = {
 <p>A lone ALT read is ~1,000× more likely to be called <strong>HET</strong> than hom-<strong>ALT</strong> — the <em>opposite</em> of the single-read likelihood, which favors hom-ALT 2:1 (§1). Why the prior overturns the read, and why that is a <strong>caller choice</strong> (bcftools/GLIMPSE vs GATK), is the subject of §2. Full counts + provenance: <a href="https://github.com/sawers-rellan-labs/zealtiger/blob/main/docs/snp50k-cohort-provenance.md">snp50k-cohort-provenance</a>.</p>
 </div>
 </div>
-<p><strong>Short answer.</strong> GLs are the correct currency, and accumulation across a stretch <em>does</em> help — but only for a <strong>shared latent state</strong> (the ancestry of the segment), which the count-based HMM already does because the read counts <em>are</em> the GL’s sufficient statistic. Accumulation does <strong>not</strong> manufacture per-site zygosity information, and the dilution ceiling (<code>d ≈ 0.3</code>, <a href="snp50k_genotype_identifiability.html">snp50k-genotype-identifiability.md</a>) is unchanged by moving from counts to GLs.</p>
+<p><strong>Short answer.</strong> <em>(1)</em> The pattern is the <strong>caller’s prior, not biology</strong>: a MAP / HWE caller (<code>bcftools</code>, GLIMPSE, …) turns any lone minority read into a HET because the rare-allele prior overturns the 2:1 single-read likelihood for hom-ALT; GATK, being maximum-likelihood, instead scatters spurious hom-ALT. Neither is trustworthy per site at this depth. <em>(2)</em> GLs are the correct currency, and accumulation across a stretch <em>does</em> help — but only for a <strong>shared latent state</strong> (the ancestry of the segment), which the count-based HMM already exploits because the read counts <em>are</em> the GL’s sufficient statistic. Accumulation does <strong>not</strong> manufacture per-site zygosity information, and the dilution ceiling (<code>d ≈ 0.3</code>, <a href="snp50k_genotype_identifiability.html">snp50k-genotype-identifiability.md</a>) is unchanged by moving from counts to GLs.</p>
 <p>Notation: biallelic site, reference (B73) allele <span class="math inline">\(A\)</span>, alternate (donor) allele <span class="math inline">\(B\)</span>; genotypes <span class="math inline">\(\{AA, AB, BB\}=\{0/0, 0/1, 1/1\}\)</span>; per-base error <span class="math inline">\(\varepsilon = 10^{-Q/10}\)</span>.</p>
 <hr>
 <section id="the-single-site-genotype-likelihood-identical-core-in-gatk-angsd-samtools" class="level2">
