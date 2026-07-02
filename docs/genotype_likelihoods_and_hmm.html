@@ -2381,7 +2381,44 @@ window.Quarto = {
 </div>
 </div>
 <div class="callout-body-container callout-body">
-<p>The SNP50K cohort (1,439 skim NILs, ~0.4×) was genotyped with a posterior / HWE caller (<code>bcftools call -mv</code>). Splitting its 73 M genotype cells by read depth lays bare the pattern this note exists to explain — <strong>at a single read, 448,805 cells are called HET but only 355 hom-ALT</strong>, against 15.9 M REF:</p>
+<p>The SNP50K cohort (1,439 skim NILs, ~0.4×) was genotyped with a posterior / HWE caller (<code>bcftools call -mv</code>). Across all 1,439 × 50,995 = 73,381,805 genotype cells:</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>class</th>
+<th style="text-align: right;">count</th>
+<th style="text-align: right;">% of all</th>
+<th style="text-align: right;">% of called</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>REF-hom <code>0/0</code></td>
+<td style="text-align: right;">21,168,920</td>
+<td style="text-align: right;">28.85</td>
+<td style="text-align: right;">97.02</td>
+</tr>
+<tr class="even">
+<td>HET</td>
+<td style="text-align: right;">648,539</td>
+<td style="text-align: right;">0.88</td>
+<td style="text-align: right;">2.97</td>
+</tr>
+<tr class="odd">
+<td>ALT-hom</td>
+<td style="text-align: right;">1,001</td>
+<td style="text-align: right;">0.00</td>
+<td style="text-align: right;">0.00</td>
+</tr>
+<tr class="even">
+<td>missing <code>./.</code></td>
+<td style="text-align: right;">51,563,345</td>
+<td style="text-align: right;">70.27</td>
+<td style="text-align: right;">—</td>
+</tr>
+</tbody>
+</table>
+<p>Splitting the same cells by read depth shows <em>why</em> — <strong>at a single read, 448,805 cells are called HET but only 355 hom-ALT</strong>, against 15.9 M REF:</p>
 <table class="caption-top table">
 <thead>
 <tr class="header">

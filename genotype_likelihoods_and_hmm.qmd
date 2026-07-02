@@ -26,8 +26,17 @@ questions that pattern forces:
 
 ::: {.callout-note title="Motivation — the pattern this note explains"}
 The SNP50K cohort (1,439 skim NILs, ~0.4×) was genotyped with a posterior / HWE
-caller (`bcftools call -mv`). Splitting its 73 M genotype cells by read depth
-lays bare the pattern this note exists to explain — **at a single read, 448,805
+caller (`bcftools call -mv`). Across all 1,439 × 50,995 = 73,381,805 genotype
+cells:
+
+| class          | count       | % of all | % of called |
+|----------------|------------:|---------:|------------:|
+| REF-hom `0/0`  | 21,168,920  |    28.85 |       97.02 |
+| HET            |    648,539  |     0.88 |        2.97 |
+| ALT-hom        |      1,001  |     0.00 |        0.00 |
+| missing `./.`  | 51,563,345  |    70.27 |        —    |
+
+Splitting the same cells by read depth shows *why* — **at a single read, 448,805
 cells are called HET but only 355 hom-ALT**, against 15.9 M REF:
 
 | depth | REF        | HET     | ALT | missing     |
