@@ -44,9 +44,33 @@ P(\text{alt}\mid 1/1) = 1-\varepsilon .
 \end{cases}
 $$
 
+These numbers come from the **diploid-averaging** likelihood
+$P(\text{read}\mid G=\{A_1,A_2\}) = \tfrac12 P(\text{read}\mid A_1) + \tfrac12 P(\text{read}\mid A_2)$
+with per-base $P(b\mid A)=1-\varepsilon$ if $b=A$ and $\varepsilon$ (more precisely
+$\varepsilon/3$) otherwise. Here $\varepsilon$ is a per-read error placeholder.
+
+> **Which likelihood model?** The *structure* above (het pinned at $\tfrac12$;
+> the mismatch/error term for the two homozygotes) is the **GATK / "dragon"**
+> model, and at **depth 1** it coincides with what samtools/bcftools (Li 2011) and
+> ANGSD's GATK-model compute — so the single-read conclusion here is
+> caller-independent. The models *do* differ in general
+> ([ANGSD GL page](https://www.popgen.dk/angsd/index.php/Genotype_Likelihoods)):
+> samtools/Li-2011 adds a between-read dependency/overdispersion term that only
+> bites at depth $\ge 2$; SOAPsnp uses empirical base-quality calibration matrices;
+> callers differ in how $\varepsilon$ is derived (raw vs recalibrated base
+> qualities, mapping quality). None of that changes the depth-1 story: any diploid
+> model averages the two alleles, so **one read fixes the het likelihood at
+> $\approx\tfrac12$ and yields at most a $\sim2{:}1$ likelihood ratio** — the
+> ceiling is a property of diploid averaging, not of a particular caller. The full
+> per-caller comparison and the PL/GQ mechanics are in
+> [genotype-likelihoods-and-hmm.md](genotype-likelihoods-and-hmm.md).
+
 By likelihood alone, an **alt** read favors $1/1$. If genotype calling used the
 maximum-likelihood genotype we would therefore see homozygous-ALT calls. We see
-**none** (1,001 in 73.4M). So the likelihood is not what determines the call.
+**none** (1,001 in 73.4M). So the likelihood is not what determines the call — and
+the specific posterior/prior step below (§1.2) is the **bcftools `call -mv`**
+model; GATK and ANGSD apply the prior at a different stage (again, see the
+companion doc).
 
 ### 1.2 The posterior carries an allele-frequency prior
 
