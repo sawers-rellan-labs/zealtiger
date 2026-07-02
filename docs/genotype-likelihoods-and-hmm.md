@@ -48,7 +48,7 @@ why the heterozygote likelihood of any single read is pinned near $\tfrac12$.
   prior — despite GATK's docs writing "$P(\text{Genotype}\mid\text{Data})$".
 - **GQ** $=$ (2nd-smallest PL) $-$ (smallest PL), capped at 99. Here **GQ = 3**.
 
-So *by likelihood alone*, one alt read points to **$BB$ (homozygous-alt), GQ 3** —
+So *by likelihood alone*, one alt read points to **BB (homozygous-alt), GQ 3** —
 a $\approx 2{:}1$ call ($\tfrac{1-\varepsilon}{1/2}\approx 2 \Rightarrow 3$ PL).
 **That 3-PL likelihood ratio is the entire information content of one read.** No
 downstream step adds to it; it can only be combined with a prior or with *other
@@ -98,7 +98,7 @@ preserves it):
 | **BC2S2** (bulked skim) | 0.844 | 0.0625 | 0.0938 | 40 : 60 |
 | **BC2S3** (nominal NIL) | 0.859 | 0.0312 | 0.1094 | 22 : 78 |
 
-Note the sign: **$f_{BB} > f_{AB}$** — by design, an introgressed locus is
+Note the sign — $f_{BB} > f_{AB}$ — by design, an introgressed locus is
 *more often donor-homozygous than heterozygous* (78% vs 22% for BC2S3), because
 selfing removes heterozygosity. (This corrects a claim in an earlier draft that the
 introgression is "mostly het" — the *design* expects mostly donor-hom; the callers

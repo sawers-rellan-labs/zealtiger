@@ -170,18 +170,22 @@ $\{f_0, f_1, f_2\}$; the gamete it contributes to the cross carries the **donor
 (ALT) allele** with probability — the **transmitted donor dose** —
 
 $$
-d \;=\; f_2 + \tfrac12 f_1 .
+d \;=\; 0\cdot f_0 \;+\; \tfrac{1}{2}\cdot f_1 \;+\; 1\cdot f_2 \;=\; f_2 + \tfrac{1}{2}\, f_1 .
 $$
 
-A panel site "distinguishes the donor gamete from B73" only when the gamete
-carries ALT, i.e. with probability $d$. Everything else looks like B73.
+Each term is (probability the gamete carries ALT given the donor genotype) $\times$
+(genotype frequency): a $0/0$ donor never transmits ALT, a $0/1$ donor transmits it
+half the time, a $1/1$ donor always. So $d$ is simply the **donor's ALT-allele
+frequency** at panel sites. A panel site "distinguishes the donor gamete from B73"
+only when the gamete carries ALT, i.e. with probability $d$; everything else looks
+like B73.
 
 ### 2.3 Panel data
 
 Per-donor-species genotype composition at panel sites (217-sample teosinte panel;
 each row is the per-individual average):
 
-| donor species | $f_0$ (REF) | $f_1$ (HET) | $f_2$ (ALT-hom) | het\|non-ref | **$d=f_2+\tfrac12 f_1$** |
+| donor species | f₀ (REF) | f₁ (HET) | f₂ (ALT-hom) | het\|non-ref | **d = f₂ + ½·f₁** |
 |---|---:|---:|---:|---:|---:|
 | parviglumis (Zv) | 64.2% | 15.2% | 20.6% | 42.5% | **0.282** |
 | mexicana (Zx) | 57.7% | 18.8% | 23.6% | 44.3% | **0.330** |
@@ -192,13 +196,13 @@ each row is the per-individual average):
 The heterozygosity is genuine (parviglumis per-sample het: median **19.4%**, Q1–Q3
 11.3–21.0%, so not an artifact of panel het-undercalling). Two facts dominate:
 
-- **$f_0 \approx 60\%$** — most panel sites are *not segregating in a given donor*
+- **f₀ ≈ 60%** — most panel sites are *not segregating in a given donor*
   (they are variants private to other teosinte lineages, kept by the union-style
   ascertainment); the donor gamete is REF there, indistinguishable from B73.
 - of the sites that *are* non-REF, ~40% (parvi/mex) are heterozygous → the gamete
   loses the donor allele half the time.
 
-Net: **$d \approx 0.28$–$0.35$** — only about **one panel site in three** carries
+Net: **d ≈ 0.28–0.35** — only about **one panel site in three** carries
 the donor allele in a transmitted gamete (fewer for the less-diverse donors). This
 is the quantified form of "~1/5 of variant sites are actually variant between the
 gametes."
@@ -260,7 +264,7 @@ Three things the reads confirm:
    $d$, and both land at $\approx 0.3$–$0.4$ against the panel's $0.28$–$0.35$
    (Zl essentially exact: 0.329 vs 0.333). Two fully independent measurements —
    donor-panel genotype composition and NIL read fractions — agree that
-   **$d\approx 0.3$, not $\approx 1$.** The reads run slightly high, consistent with
+   **d ≈ 0.3, not ≈ 1.** The reads run slightly high, consistent with
    (i) the specific donor accessions carrying more alt than the species average and
    (ii) HET segments absorbing some true-HOM markers (see next point).
 3. **The HET/HOM split is not clean — as predicted.** Under the model $2\times$HET
