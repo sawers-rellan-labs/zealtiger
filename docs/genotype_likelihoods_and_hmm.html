@@ -2367,6 +2367,75 @@ window.Quarto = {
 
 
 <p>This note answers a specific methodological question: <em>can genotype likelihoods (GLs), accumulated across a gene / haplotype stretch / fixed bin, rescue genotype-call confidence at ultra-low coverage?</em> It is the reviewer question the nilHMM paper must preempt.</p>
+<div class="callout callout-style-default callout-note callout-titled" title="Motivation — the pattern this note explains">
+<div class="callout-header d-flex align-content-center">
+<div class="callout-icon-container">
+<i class="callout-icon"></i>
+</div>
+<div class="callout-title-container flex-fill">
+<span class="screen-reader-only">Note</span>Motivation — the pattern this note explains
+</div>
+</div>
+<div class="callout-body-container callout-body">
+<p>The SNP50K cohort (1,439 skim NILs, ~0.4×) was genotyped with a posterior / HWE caller (<code>bcftools call -mv</code>). Splitting its 73 M genotype cells by read depth lays bare the pattern this note exists to explain — <strong>at a single read, 448,805 cells are called HET but only 355 hom-ALT</strong>, against 15.9 M REF:</p>
+<table class="caption-top table">
+<thead>
+<tr class="header">
+<th>depth</th>
+<th style="text-align: right;">REF</th>
+<th style="text-align: right;">HET</th>
+<th style="text-align: right;">ALT</th>
+<th style="text-align: right;">missing</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>0</td>
+<td style="text-align: right;">40,524</td>
+<td style="text-align: right;">1</td>
+<td style="text-align: right;">0</td>
+<td style="text-align: right;">51,563,345</td>
+</tr>
+<tr class="even">
+<td>1</td>
+<td style="text-align: right;">15,868,677</td>
+<td style="text-align: right;">448,805</td>
+<td style="text-align: right;">355</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="odd">
+<td>2</td>
+<td style="text-align: right;">4,057,642</td>
+<td style="text-align: right;">154,596</td>
+<td style="text-align: right;">138</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="even">
+<td>3–5</td>
+<td style="text-align: right;">1,184,345</td>
+<td style="text-align: right;">44,361</td>
+<td style="text-align: right;">343</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="odd">
+<td>6–10</td>
+<td style="text-align: right;">17,559</td>
+<td style="text-align: right;">727</td>
+<td style="text-align: right;">163</td>
+<td style="text-align: right;">0</td>
+</tr>
+<tr class="even">
+<td>&gt;10</td>
+<td style="text-align: right;">173</td>
+<td style="text-align: right;">49</td>
+<td style="text-align: right;">2</td>
+<td style="text-align: right;">0</td>
+</tr>
+</tbody>
+</table>
+<p>A lone ALT read is ~1,000× more likely to be called <strong>HET</strong> than hom-<strong>ALT</strong> — the <em>opposite</em> of the single-read likelihood, which favors hom-ALT 2:1 (§1). Why the prior overturns the read, and why that is a <strong>caller choice</strong> (bcftools/GLIMPSE vs GATK), is the subject of §2. Full counts + provenance: <a href="https://github.com/sawers-rellan-labs/zealtiger/blob/main/docs/snp50k-cohort-provenance.md">snp50k-cohort-provenance</a>.</p>
+</div>
+</div>
 <p><strong>Short answer.</strong> GLs are the correct currency, and accumulation across a stretch <em>does</em> help — but only for a <strong>shared latent state</strong> (the ancestry of the segment), which the count-based HMM already does because the read counts <em>are</em> the GL’s sufficient statistic. Accumulation does <strong>not</strong> manufacture per-site zygosity information, and the dilution ceiling (<code>d ≈ 0.3</code>, <a href="snp50k_genotype_identifiability.html">snp50k-genotype-identifiability.md</a>) is unchanged by moving from counts to GLs.</p>
 <p>Notation: biallelic site, reference (B73) allele <span class="math inline">\(A\)</span>, alternate (donor) allele <span class="math inline">\(B\)</span>; genotypes <span class="math inline">\(\{AA, AB, BB\}=\{0/0, 0/1, 1/1\}\)</span>; per-base error <span class="math inline">\(\varepsilon = 10^{-Q/10}\)</span>.</p>
 <hr>
@@ -2528,7 +2597,7 @@ P(G \mid \text{reads}) \;\propto\; \underbrace{P(\text{reads}\mid G)}_{\text{GL 
 = \frac{p(1-p)}{(1-\varepsilon)\cdot p^2}
 = \frac{1-p}{(1-\varepsilon)\cdot p} \approx \frac1p \approx 66 ,
 \]</span></p>
-<p>matching the table’s <span class="math inline">\(0.810/0.012 \approx 67\)</span>. The rare-allele prior overturns the <span class="math inline">\(2{:}1\)</span> likelihood — it collapses the ALT-hom posterior to ~1% and hands 81% to the heterozygote, even though the read’s <em>likelihood</em> most favored <span class="math inline">\(BB\)</span>. <strong>The call is the prior’s, not the read’s.</strong> This is the 97% REF / 0.00% ALT-hom pattern in the SNP50K matrix (<a href="https://github.com/sawers-rellan-labs/zealtiger/blob/main/docs/snp50k-cohort-provenance.md">snp50k-cohort-provenance.md</a>).</p>
+<p>matching the table’s <span class="math inline">\(0.810/0.012 \approx 67\)</span>. The rare-allele prior overturns the <span class="math inline">\(2{:}1\)</span> likelihood — it collapses the ALT-hom posterior to ~1% and hands 81% to the heterozygote, even though the read’s <em>likelihood</em> most favored <span class="math inline">\(BB\)</span>. <strong>The call is the prior’s, not the read’s.</strong> This is exactly the <strong>depth-1 row of the motivating table above</strong> — 448,805 HET vs 355 ALT calls on single reads — and the overall 97% REF / 0.00% ALT-hom pattern in the SNP50K matrix (<a href="https://github.com/sawers-rellan-labs/zealtiger/blob/main/docs/snp50k-cohort-provenance.md">snp50k-cohort-provenance.md</a>).</p>
 <p><strong>Posterior callers inherit this, and most assume HWE.</strong> bcftools <code>call -m</code>, freebayes, ANGSD <code>-doPost</code>, and the imputation tools Beagle and GLIMPSE are all <strong>posterior callers</strong>: each weights the genotype likelihood by a prior and reports the genotype that maximizes the product, the <strong>maximum-a-posteriori (MAP)</strong> estimate.</p>
 <p><span class="math display">\[
 \hat G = \arg\max_G P(G\mid\text{data}) = \arg\max_G P(\text{data}\mid G)\,\pi(G) .

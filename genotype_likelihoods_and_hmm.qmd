@@ -14,6 +14,28 @@ This note answers a specific methodological question: *can genotype likelihoods
 genotype-call confidence at ultra-low coverage?* It is the reviewer question the
 nilHMM paper must preempt.
 
+::: {.callout-note title="Motivation — the pattern this note explains"}
+The SNP50K cohort (1,439 skim NILs, ~0.4×) was genotyped with a posterior / HWE
+caller (`bcftools call -mv`). Splitting its 73 M genotype cells by read depth
+lays bare the pattern this note exists to explain — **at a single read, 448,805
+cells are called HET but only 355 hom-ALT**, against 15.9 M REF:
+
+| depth | REF        | HET     | ALT | missing     |
+|-------|-----------:|--------:|----:|------------:|
+| 0     |     40,524 |       1 |   0 | 51,563,345  |
+| 1     | 15,868,677 | 448,805 | 355 |           0 |
+| 2     |  4,057,642 | 154,596 | 138 |           0 |
+| 3–5   |  1,184,345 |  44,361 | 343 |           0 |
+| 6–10  |     17,559 |     727 | 163 |           0 |
+| >10   |        173 |      49 |   2 |           0 |
+
+A lone ALT read is ~1,000× more likely to be called **HET** than hom-**ALT** —
+the *opposite* of the single-read likelihood, which favors hom-ALT 2:1 (§1).
+Why the prior overturns the read, and why that is a **caller choice**
+(bcftools/GLIMPSE vs GATK), is the subject of §2. Full counts + provenance:
+[snp50k-cohort-provenance](https://github.com/sawers-rellan-labs/zealtiger/blob/main/docs/snp50k-cohort-provenance.md).
+:::
+
 **Short answer.** GLs are the correct currency, and accumulation across a stretch
 *does* help — but only for a **shared latent state** (the ancestry of the segment),
 which the count-based HMM already does because the read counts *are* the GL's
@@ -106,8 +128,9 @@ $$
 matching the table's $0.810/0.012 \approx 67$. The rare-allele prior overturns the
 $2{:}1$ likelihood — it collapses the ALT-hom posterior to ~1% and hands 81% to the
 heterozygote, even though the read's *likelihood* most favored $BB$. **The call is
-the prior's, not the read's.** This is the 97% REF / 0.00% ALT-hom pattern in the
-SNP50K matrix
+the prior's, not the read's.** This is exactly the **depth-1 row of the motivating
+table above** — 448,805 HET vs 355 ALT calls on single reads — and the overall
+97% REF / 0.00% ALT-hom pattern in the SNP50K matrix
 ([snp50k-cohort-provenance.md](https://github.com/sawers-rellan-labs/zealtiger/blob/main/docs/snp50k-cohort-provenance.md)).
 
 **Posterior callers inherit this, and most assume HWE.** bcftools `call -m`,
