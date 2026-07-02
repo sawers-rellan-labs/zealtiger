@@ -87,18 +87,18 @@ The posterior is $\propto L\cdot P$. For a single **alt** read:
 
 | genotype | posterior $\propto$ |
 |---|---|
-| $0/0$ | $\varepsilon\,(1-p)^2$ |
+| $0/0$ | $\varepsilon\cdot(1-p)^2$ |
 | $0/1$ | $\tfrac12\cdot 2p(1-p) = p(1-p)$ |
-| $1/1$ | $(1-\varepsilon)\,p^2$ |
+| $1/1$ | $(1-\varepsilon)\cdot p^2$ |
 
 ### 1.3 The decision boundaries
 
 **HET vs ALT-hom.** $0/1$ is called over $1/1$ whenever
 
 $$
-p(1-p) > (1-\varepsilon)\,p^2
+p(1-p) > (1-\varepsilon)\cdot p^2
 \;\Longleftrightarrow\;
-\frac{P(0/1)}{P(1/1)} = \frac{1-p}{(1-\varepsilon)\,p}\approx\frac1p > 1
+\frac{P(0/1)}{P(1/1)} = \frac{1-p}{(1-\varepsilon)\cdot p}\approx\frac1p > 1
 \;\Longleftrightarrow\; p < \frac{1}{2-\varepsilon}\approx \tfrac12 .
 $$
 

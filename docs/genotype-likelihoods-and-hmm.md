@@ -79,8 +79,8 @@ $\pi(AA,AB,BB)=((1-p)^2, 2p(1-p), p^2)$. For one alt read:
 
 $$
 \frac{P(AB\mid\text{read})}{P(BB\mid\text{read})}
-= \frac{\tfrac12\cdot 2p(1-p)}{(1-\varepsilon)\,p^2}
-= \frac{1-p}{(1-\varepsilon)\,p} \approx \frac1p \approx 66 .
+= \frac{\tfrac12\cdot 2p(1-p)}{(1-\varepsilon)\cdot p^2}
+= \frac{1-p}{(1-\varepsilon)\cdot p} \approx \frac1p \approx 66 .
 $$
 
 The prior overturns the $2{:}1$ likelihood and forces the call to **HET** — this is
