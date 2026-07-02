@@ -48,7 +48,7 @@ why the heterozygote likelihood of any single read is pinned near $\tfrac12$.
 | genotype | likelihood $P(\text{read}\mid G)$ | value | Phred $-10\log_{10}L$ | normalized PL |
 |---|---|---:|---:|---:|
 | $AA$ | $\varepsilon/3$ | 0.0033 | 24.8 | **25** |
-| $AB$ | $\tfrac12\!\cdot\!\tfrac{\varepsilon}{3} + \tfrac12(1-\varepsilon)$ | ≈0.498 | 3.0 | **3** |
+| $AB$ | $\tfrac12\!\cdot\!\tfrac{\varepsilon}{3} + \tfrac12(1-\varepsilon)$ | 0.498 | 3.0 | **3** |
 | $BB$ | $1-\varepsilon$ | 0.99 | 0.04 | **0** |
 
 - **PL** $= -10\log_{10} L$, normalized by subtracting the smallest so the best
