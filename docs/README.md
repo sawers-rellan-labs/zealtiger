@@ -85,16 +85,16 @@ data/maizegdb_consensus_map/   (input)
   at ~0.4×, so callers run on allele **counts**. Provenance + genotype-content
   analysis in [snp50k-cohort-provenance.md](snp50k-cohort-provenance.md).
 - **Zygosity is not site-callable** here, for two derivable reasons: the caller's
-  rare-allele prior forces every non-REF call to HET (0% ALT-hom by a $1/p\approx66$
+  rare-allele prior forces every non-REF call to HET (0% ALT-hom, ~66:1 prior
   margin), and outbred-donor dilution compresses the ancestry-state alt-fraction to
-  $\approx\{0,0.15,0.30\}$ not $\{0,\tfrac12,1\}$ (transmitted donor dose
-  $d\approx0.3$). Math + data in
-  [snp50k-genotype-identifiability.md](snp50k-genotype-identifiability.md).
+  ~{0, 0.15, 0.30} not {0, ½, 1} (transmitted donor dose d≈0.3). Math + data
+  (Quarto/MathJax) in
+  [snp50k_genotype_identifiability.html](snp50k_genotype_identifiability.html).
 - **Genotype likelihoods won't rescue site calls; the count emission already *is*
   the GL.** Single-site GL/PL/GQ for GATK/ANGSD/bcftools, the HWE-vs-breeding
   prior swap (which *flips* a 1-read call het↔donor-hom), and why accumulating GLs
   in an HMM helps the *segment* not the *site* (and GATK's PairHMM is a different
-  HMM): [genotype-likelihoods-and-hmm.md](genotype-likelihoods-and-hmm.md).
+  HMM): [genotype_likelihoods_and_hmm.html](genotype_likelihoods_and_hmm.html).
 - **RTIGER rigidity is in *informative* markers**; recommended **r ≈ 8–10**.
   See [09](09-rigidity-selection.md).
 - **Reproducibility**: global seed `20260609`, recorded in `run_metadata.json`.

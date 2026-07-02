@@ -1,8 +1,17 @@
-# Why the SNP50K skim cannot resolve zygosity — two mechanisms, with the math
+---
+title: "Why the SNP50K skim cannot resolve zygosity — two mechanisms, with the math"
+author: "Fausto Rodríguez-Zapata"
+date: "2026-07-02"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    embed-resources: true
+---
 
 This note derives, and backs with the cohort/panel data, *why* the SNP50K
 genotype matrix looks the way it does — 97% REF / **0.00% ALT-hom** / 70% missing
-among 73.4M cells (see [snp50k-cohort-provenance.md](snp50k-cohort-provenance.md))
+among 73.4M cells (see [snp50k-cohort-provenance.md](https://github.com/sawers-rellan-labs/zealtiger/blob/main/docs/snp50k-cohort-provenance.md))
 — and why that shape is **not** simply "coverage too low." There are two distinct
 causes, and both are calculable:
 
@@ -22,7 +31,7 @@ Notation: at a biallelic panel site the reference allele is the **B73** allele
 ($\approx 0.003$–$0.01$ from B73 controls). $p$ = alternate-allele frequency at
 the site across the cohort.
 
----
+------
 
 ## 1. The het-inflation is a prior effect, not a likelihood effect
 
@@ -63,7 +72,7 @@ $\varepsilon/3$) otherwise. Here $\varepsilon$ is a per-read error placeholder.
 > $\approx\tfrac12$ and yields at most a $\sim2{:}1$ likelihood ratio** — the
 > ceiling is a property of diploid averaging, not of a particular caller. The full
 > per-caller comparison and the PL/GQ mechanics are in
-> [genotype-likelihoods-and-hmm.md](genotype-likelihoods-and-hmm.md).
+> [genotype-likelihoods-and-hmm.md](genotype_likelihoods_and_hmm.html).
 
 By likelihood alone, an **alt** read favors $1/1$. If genotype calling used the
 maximum-likelihood genotype we would therefore see homozygous-ALT calls. We see
@@ -146,7 +155,7 @@ and its "genotype" is the ancestry state decoded by the HMM, not a per-site MAP
 under a rare-allele frequency prior. That is the concrete reason the hard `GT`
 path is dead while the AD-count path recovers the donor footprint.
 
----
+------
 
 ## 2. Outbred-donor dilution — most "variant" sites are silent per cross
 
@@ -234,7 +243,7 @@ Note the label "donor HET" above is the state the caller *reports* most, not the
 one the design expects most: by the BC2S3 single-locus frequencies donor-**hom** is
 actually the more common introgression genotype ($f_{BB}=0.109 > f_{AB}=0.031$) —
 the caller under-reports it purely because it is undetectable at $0.4\times$. See
-[genotype-likelihoods-and-hmm.md](genotype-likelihoods-and-hmm.md) §2.
+[genotype-likelihoods-and-hmm.md](genotype_likelihoods_and_hmm.html) §2.
 
 ### 2.5 Empirical validation — $d$ from the real read fractions
 
@@ -289,7 +298,7 @@ without the donor genotype we cannot even label which markers are informative fo
 given cross. It is the fundamental reason low-coverage genotype-imputation results
 from human aDNA or inbred-founder PHGs do not transfer here.
 
----
+------
 
 ## 3. Consequences
 
@@ -306,7 +315,7 @@ from human aDNA or inbred-founder PHGs do not transfer here.
   mapping unit is the **segment/dosage genotype**, obtained by projecting the
   decoded ancestry state onto the markers within a segment — not per-marker calls.
 
----
+------
 
 ## Reproduce
 
@@ -324,7 +333,7 @@ bcftools view -S ref_Z__parviglumis.txt --force-samples "$D/bzea_50K_ref_panel.v
    END{c=r+h+a; printf "REF %.3f HET %.3f ALT %.3f  d=%.3f\n",r/c,h/c,a/c,(a+0.5*h)/c}'
 ```
 
----
+------
 *Analysis 2026-07-02, `cohort.vcf.gz` / `bzea_50K_ref_panel.vcf.gz` (read-only mount).
-Companion to [snp50k-cohort-provenance.md](snp50k-cohort-provenance.md). Panel:
+Companion to [snp50k-cohort-provenance.md](https://github.com/sawers-rellan-labs/zealtiger/blob/main/docs/snp50k-cohort-provenance.md). Panel:
 Grzybowski et al. 2023, `--min-af 0.05:minor`, not imputed.*

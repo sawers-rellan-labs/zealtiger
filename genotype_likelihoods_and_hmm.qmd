@@ -1,4 +1,13 @@
-# Genotype likelihoods, priors, and their use in an ancestry HMM
+---
+title: "Genotype likelihoods, priors, and their use in an ancestry HMM"
+author: "Fausto Rodríguez-Zapata"
+date: "2026-07-02"
+format:
+  html:
+    toc: true
+    toc-depth: 3
+    embed-resources: true
+---
 
 This note answers a specific methodological question: *can genotype likelihoods
 (GLs), accumulated across a gene / haplotype stretch / fixed bin, rescue
@@ -10,14 +19,14 @@ nilHMM paper must preempt.
 which the count-based HMM already does because the read counts *are* the GL's
 sufficient statistic. Accumulation does **not** manufacture per-site zygosity
 information, and the dilution ceiling (`d ≈ 0.3`,
-[snp50k-genotype-identifiability.md](snp50k-genotype-identifiability.md)) is
+[snp50k-genotype-identifiability.md](snp50k_genotype_identifiability.html)) is
 unchanged by moving from counts to GLs.
 
 Notation: biallelic site, reference (B73) allele $A$, alternate (donor) allele $B$;
 genotypes $\{AA, AB, BB\}=\{0/0, 0/1, 1/1\}$; per-base error
 $\varepsilon = 10^{-Q/10}$.
 
----
+------
 
 ## 1. The single-site genotype likelihood — identical core in GATK, ANGSD, samtools
 
@@ -54,7 +63,7 @@ a $\approx 2{:}1$ call ($\tfrac{1-\varepsilon}{1/2}\approx 2 \Rightarrow 3$ PL).
 downstream step adds to it; it can only be combined with a prior or with *other
 sites*.
 
----
+------
 
 ## 2. Likelihood → posterior: where the prior lives, and what swapping it does
 
@@ -85,7 +94,7 @@ $$
 
 The prior overturns the $2{:}1$ likelihood and forces the call to **HET** — this is
 the 97% REF / 0.00% ALT-hom pattern in the SNP50K matrix
-([snp50k-cohort-provenance.md](snp50k-cohort-provenance.md)).
+([snp50k-cohort-provenance.md](https://github.com/sawers-rellan-labs/zealtiger/blob/main/docs/snp50k-cohort-provenance.md)).
 
 ### Breeding prior — the single-locus NIL genotype frequencies
 
@@ -122,7 +131,7 @@ counteracts the coverage-induced het-bias), **but it only relabels the default �
 it adds no zygosity information.** The data still speaks at only $\approx 3$ PL. One
 read cannot resolve het from hom under *any* prior; the prior decides the tie.
 
----
+------
 
 ## 3. From one site to a stretch: what accumulation can and cannot do
 
@@ -168,7 +177,7 @@ quality weighting** (down-weight low-$Q$ bases rather than counting equally) and
 mapping-quality / multiallelic handling. The information axis is the same:
 $(n_{\text{ref}}, n_{\text{alt}})$ and their qualities.
 
----
+------
 
 ## 4. Two different HMMs — do not conflate GATK's PairHMM
 
@@ -185,7 +194,7 @@ GATK implements the alignment PairHMM, **not** the along-genome ancestry HMM. "T
 already do this" is true only for the alignment step; it is not a reusable
 component for ancestry segmentation. Keep the two distinct in the paper.
 
----
+------
 
 ## 5. What survives — the information ceiling
 
@@ -199,7 +208,7 @@ Three limits no GL/HMM refinement removes:
 1. **The signal is compressed, not hidden by hard-calling.** Outbred-donor dilution
    puts the states at alt-fractions $\approx\{0,\,d/2,\,d\}=\{0,\,0.15,\,0.30\}$
    with $d\approx0.3$ (empirically confirmed,
-   [snp50k-genotype-identifiability.md](snp50k-genotype-identifiability.md) §2.5).
+   [snp50k-genotype-identifiability.md](snp50k_genotype_identifiability.html) §2.5).
    GLs cannot create information the reads do not carry.
 2. **Het vs donor-hom stays weak** — $0.15$ vs $0.30$ separation. A breeding prior
    ($f_{BB}>f_{AB}$) helps counteract the coverage het-bias, but does not resolve
@@ -215,7 +224,7 @@ count-emission caller already does. They rescue the **segment/haplotype** call (
 the imputed marker genotypes), not the isolated site, and they do not lift the
 dilution ceiling.
 
----
+------
 
 ## References
 
@@ -225,6 +234,6 @@ dilution ceiling.
 - Li H. (2011) *A statistical framework for SNP calling…* Bioinformatics 27:2987 (samtools/bcftools GL model).
 - Jensen et al. (2020) sorghum PHG (`data/jensen2020.txt`); Hui et al. (2020) aDNA imputation (`data/hui2020.txt`).
 
----
-*Companion to [snp50k-genotype-identifiability.md](snp50k-genotype-identifiability.md)
-and [snp50k-cohort-provenance.md](snp50k-cohort-provenance.md). 2026-07-02.*
+------
+*Companion to [snp50k-genotype-identifiability.md](snp50k_genotype_identifiability.html)
+and [snp50k-cohort-provenance.md](https://github.com/sawers-rellan-labs/zealtiger/blob/main/docs/snp50k-cohort-provenance.md). 2026-07-02.*
