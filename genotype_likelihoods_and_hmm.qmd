@@ -228,11 +228,45 @@ dilution ceiling.
 
 ## References
 
-- ANGSD genotype-likelihood models — <https://www.popgen.dk/angsd/index.php/Genotype_Likelihoods>
-- GATK, *Calculation of PL and GQ by HaplotypeCaller and GenotypeGVCFs* —
-  <https://gatk.broadinstitute.org/hc/en-us/articles/360035890451>
-- Li H. (2011) *A statistical framework for SNP calling…* Bioinformatics 27:2987 (samtools/bcftools GL model).
-- Jensen et al. (2020) sorghum PHG (`data/jensen2020.txt`); Hui et al. (2020) aDNA imputation (`data/hui2020.txt`).
+**Genotype-likelihood models and callers**
+
+1. Li H (2011). A statistical framework for SNP calling, mutation discovery,
+   association mapping and population genetical parameter estimation from
+   sequencing data. *Bioinformatics* **27**(21):2987–2993.
+   [doi:10.1093/bioinformatics/btr509](https://doi.org/10.1093/bioinformatics/btr509).
+   — the samtools/bcftools GL model.
+2. Korneliussen TS, Albrechtsen A, Nielsen R (2014). ANGSD: Analysis of Next
+   Generation Sequencing Data. *BMC Bioinformatics* **15**:356.
+   [doi:10.1186/s12859-014-0356-4](https://doi.org/10.1186/s12859-014-0356-4).
+   — GL-model taxonomy + likelihood-propagation framework; software page:
+   <https://www.popgen.dk/angsd/index.php/Genotype_Likelihoods>.
+3. Poplin R, Ruano-Rubio V, DePristo MA, *et al.* (2017). Scaling accurate genetic
+   variant discovery to tens of thousands of samples. *bioRxiv* 201178.
+   [doi:10.1101/201178](https://doi.org/10.1101/201178). — GATK HaplotypeCaller.
+4. DePristo MA, Banks E, Poplin R, *et al.* (2011). A framework for variation
+   discovery and genotyping using next-generation DNA sequencing data.
+   *Nature Genetics* **43**(5):491–498.
+   [doi:10.1038/ng.806](https://doi.org/10.1038/ng.806). — the GATK framework;
+   PL/GQ mechanics documented at
+   <https://gatk.broadinstitute.org/hc/en-us/articles/360035890451>.
+
+**Linkage / imputation models**
+
+5. Li N, Stephens M (2003). Modeling linkage disequilibrium and identifying
+   recombination hotspots using single-nucleotide polymorphism data.
+   *Genetics* **165**(4):2213–2233.
+   [doi:10.1093/genetics/165.4.2213](https://doi.org/10.1093/genetics/165.4.2213).
+   — the haplotype-mosaic (Li–Stephens) model behind panel imputation (§3a).
+6. Jensen SE, Charles JR, Muleta K, *et al.* (2020). A sorghum practical haplotype
+   graph facilitates genome-wide imputation and cost-effective genomic prediction.
+   *The Plant Genome* **13**(1):e20009.
+   [doi:10.1002/tpg2.20009](https://doi.org/10.1002/tpg2.20009).
+   — the founder-graph (PHG) route (§3, §5).
+7. Hui R, D’Atanasio E, Cassidy LM, Scheib CL, Kivisild T (2020). Evaluating
+   genotype imputation pipeline for ultra-low coverage ancient genomes.
+   *Scientific Reports* **10**:18542.
+   [doi:10.1038/s41598-020-75387-w](https://doi.org/10.1038/s41598-020-75387-w).
+   — reference-panel imputation at ultra-low coverage (§3a).
 
 ------
 *Companion to [snp50k-genotype-identifiability.md](snp50k_genotype_identifiability.html)

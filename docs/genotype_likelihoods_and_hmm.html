@@ -2596,12 +2596,19 @@ P(S \mid \text{reads}_{1:n}) \;\propto\; \pi(S)\prod_{j=1}^{n}
 </section>
 <section id="references" class="level2">
 <h2 class="anchored" data-anchor-id="references">References</h2>
-<ul>
-<li>ANGSD genotype-likelihood models — <a href="https://www.popgen.dk/angsd/index.php/Genotype_Likelihoods" class="uri">https://www.popgen.dk/angsd/index.php/Genotype_Likelihoods</a></li>
-<li>GATK, <em>Calculation of PL and GQ by HaplotypeCaller and GenotypeGVCFs</em> — <a href="https://gatk.broadinstitute.org/hc/en-us/articles/360035890451" class="uri">https://gatk.broadinstitute.org/hc/en-us/articles/360035890451</a></li>
-<li>Li H. (2011) <em>A statistical framework for SNP calling…</em> Bioinformatics 27:2987 (samtools/bcftools GL model).</li>
-<li>Jensen et al. (2020) sorghum PHG (<code>data/jensen2020.txt</code>); Hui et al. (2020) aDNA imputation (<code>data/hui2020.txt</code>).</li>
-</ul>
+<p><strong>Genotype-likelihood models and callers</strong></p>
+<ol type="1">
+<li>Li H (2011). A statistical framework for SNP calling, mutation discovery, association mapping and population genetical parameter estimation from sequencing data. <em>Bioinformatics</em> <strong>27</strong>(21):2987–2993. <a href="https://doi.org/10.1093/bioinformatics/btr509">doi:10.1093/bioinformatics/btr509</a>. — the samtools/bcftools GL model.</li>
+<li>Korneliussen TS, Albrechtsen A, Nielsen R (2014). ANGSD: Analysis of Next Generation Sequencing Data. <em>BMC Bioinformatics</em> <strong>15</strong>:356. <a href="https://doi.org/10.1186/s12859-014-0356-4">doi:10.1186/s12859-014-0356-4</a>. — GL-model taxonomy + likelihood-propagation framework; software page: <a href="https://www.popgen.dk/angsd/index.php/Genotype_Likelihoods" class="uri">https://www.popgen.dk/angsd/index.php/Genotype_Likelihoods</a>.</li>
+<li>Poplin R, Ruano-Rubio V, DePristo MA, <em>et al.</em> (2017). Scaling accurate genetic variant discovery to tens of thousands of samples. <em>bioRxiv</em> 201178. <a href="https://doi.org/10.1101/201178">doi:10.1101/201178</a>. — GATK HaplotypeCaller.</li>
+<li>DePristo MA, Banks E, Poplin R, <em>et al.</em> (2011). A framework for variation discovery and genotyping using next-generation DNA sequencing data. <em>Nature Genetics</em> <strong>43</strong>(5):491–498. <a href="https://doi.org/10.1038/ng.806">doi:10.1038/ng.806</a>. — the GATK framework; PL/GQ mechanics documented at <a href="https://gatk.broadinstitute.org/hc/en-us/articles/360035890451" class="uri">https://gatk.broadinstitute.org/hc/en-us/articles/360035890451</a>.</li>
+</ol>
+<p><strong>Linkage / imputation models</strong></p>
+<ol start="5" type="1">
+<li>Li N, Stephens M (2003). Modeling linkage disequilibrium and identifying recombination hotspots using single-nucleotide polymorphism data. <em>Genetics</em> <strong>165</strong>(4):2213–2233. <a href="https://doi.org/10.1093/genetics/165.4.2213">doi:10.1093/genetics/165.4.2213</a>. — the haplotype-mosaic (Li–Stephens) model behind panel imputation (§3a).</li>
+<li>Jensen SE, Charles JR, Muleta K, <em>et al.</em> (2020). A sorghum practical haplotype graph facilitates genome-wide imputation and cost-effective genomic prediction. <em>The Plant Genome</em> <strong>13</strong>(1):e20009. <a href="https://doi.org/10.1002/tpg2.20009">doi:10.1002/tpg2.20009</a>. — the founder-graph (PHG) route (§3, §5).</li>
+<li>Hui R, D’Atanasio E, Cassidy LM, Scheib CL, Kivisild T (2020). Evaluating genotype imputation pipeline for ultra-low coverage ancient genomes. <em>Scientific Reports</em> <strong>10</strong>:18542. <a href="https://doi.org/10.1038/s41598-020-75387-w">doi:10.1038/s41598-020-75387-w</a>. — reference-panel imputation at ultra-low coverage (§3a).</li>
+</ol>
 <hr>
 <p><em>Companion to <a href="snp50k_genotype_identifiability.html">snp50k-genotype-identifiability.md</a> and <a href="https://github.com/sawers-rellan-labs/zealtiger/blob/main/docs/snp50k-cohort-provenance.md">snp50k-cohort-provenance.md</a>. 2026-07-02.</em></p>
 </section>
